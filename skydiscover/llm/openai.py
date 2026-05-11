@@ -104,6 +104,8 @@ class OpenAILLM(LLMInterface):
                 provider = "DeepSeek"
             elif "api.mistral.ai" in api_base_str:
                 provider = "Mistral"
+            elif "openrouter.ai" in api_base_str:
+                provider = "OpenRouter"
             else:
                 provider = "OpenAI"
             logger.info(f"{provider} LLM: {self.model}")

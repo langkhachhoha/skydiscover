@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import yaml
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,10 @@ _PROVIDERS: Dict[str, tuple] = {
     "deepseek": ("https://api.deepseek.com/v1", ["DEEPSEEK_API_KEY"]),
     "mistral": ("https://api.mistral.ai/v1", ["MISTRAL_API_KEY"]),
     "cohere": ("https://api.cohere.com/v1", ["CO_API_KEY", "COHERE_API_KEY"]),
+    "openrouter": (
+        "https://openrouter.ai/api/v1",
+        ["OPENROUTER_API_KEY", "API_KEY", "OPENAI_API_KEY"],
+    ),
     "huggingface": (None, ["HF_TOKEN", "HUGGINGFACE_API_KEY"]),
     "ollama": (None, []),
     "vllm": (None, []),
@@ -83,7 +88,7 @@ def _resolve_api_key_from_env(env_vars: Optional[List[str]] = None) -> Optional[
         key = os.environ.get(var)
         if key:
             return key
-    return os.environ.get("OPENAI_API_KEY")
+    return os.environ.get("OPENAI_API_KEY") or os.environ.get("API_KEY")
 
 
 def _expand_env_vars(text: str) -> str:
@@ -816,6 +821,8 @@ class Config:
 
 def load_config(config_path: Optional[Union[str, Path]] = None) -> Config:
     """Load configuration from a YAML file or use defaults"""
+    load_dotenv()
+
     if config_path:
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file not found: {config_path}")
