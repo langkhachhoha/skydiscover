@@ -175,6 +175,8 @@ Evaluator implementations:
 
 For CI without Docker, pass a Python evaluator file directly. Passing a directory containing `Dockerfile` and `evaluate.sh` will invoke Docker.
 
+Bundled Docker evaluator directories usually contain a `requirements.txt` next to `evaluator.py`. For native runs, install those dependencies into the active environment with `scripts/install_benchmark_requirements.py` and pass the Python evaluator file instead of the evaluator directory. This preserves the dependency setup without using Docker for benchmarks whose Dockerfile only performs Python package installation.
+
 ## Benchmarks
 
 Benchmarks live in `benchmarks/`. A normal benchmark includes:

@@ -15,6 +15,19 @@ Install base dependencies:
 uv sync
 ```
 
+Install dependencies for a benchmark/evaluator before a native non-Docker run:
+
+```bash
+uv run python scripts/install_benchmark_requirements.py benchmarks/math/circle_packing
+```
+
+You can pass either the benchmark directory or the evaluator file:
+
+```bash
+uv run python scripts/install_benchmark_requirements.py \
+  benchmarks/math/signal_processing/evaluator/evaluator.py
+```
+
 For math benchmarks with heavier dependencies:
 
 ```bash
@@ -90,6 +103,15 @@ Docker evaluator:
 ```
 
 The difference matters. If the evaluator argument is a directory with `Dockerfile` and `evaluate.sh`, SkyDiscover uses Docker. If it is a Python file with `evaluate(program_path)`, SkyDiscover runs it in the host Python environment.
+
+Most bundled Dockerfiles only install `requirements.txt` and then run the same Python evaluator through `evaluate.sh`. For those benchmarks, native mode is:
+
+```bash
+uv run python scripts/install_benchmark_requirements.py <benchmark-or-evaluator-path>
+uv run skydiscover-run <initial_program> <path/to/evaluator.py> ...
+```
+
+This does not cover Dockerfiles that install system packages or download runtime files. `kernelbench` is one example: its Dockerfile installs `git` and `curl` and downloads `run_and_check.py`, so native execution needs extra setup beyond Python packages.
 
 ## GitHub Actions Smoke Test
 

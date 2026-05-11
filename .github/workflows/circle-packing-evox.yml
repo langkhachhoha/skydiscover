@@ -43,7 +43,10 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: uv sync
+        run: |
+          uv sync
+          uv run python scripts/install_benchmark_requirements.py \
+            benchmarks/math/circle_packing
 
       - name: Run EvoX on circle_packing
         env:
