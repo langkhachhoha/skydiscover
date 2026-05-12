@@ -507,6 +507,47 @@ class GEPANativeDatabaseConfig(DatabaseConfig):
     random_seed: Optional[int] = 42
 
 
+@dataclass
+class FOREDatabaseConfig(DatabaseConfig):
+    """Configuration for FORE (Fertility-Oriented Reflective Evolution).
+
+    See FORE_METHOD_PLAN.md sections 2 and 4.7 for the math and hyperparameter
+    rationale behind each field.
+    """
+
+    # Population
+    population_size: int = 80
+    random_seed: Optional[int] = 42
+
+    # NIG prior on Delta+ (positive offspring improvement)
+    prior_mu_0: float = 0.0
+    prior_kappa_0: float = 2.0
+    prior_alpha_0: float = 2.0
+    prior_beta_0: float = 0.5
+
+    # Clustering on strategy-description tokens (Jaccard)
+    cluster_similarity_threshold: float = 0.55
+
+    # POV / fertility multiplier
+    k_remaining: int = 100
+    fertility_alpha: float = 0.7
+    fertility_k_max: int = 20
+
+    # POV structural prior weights
+    w_novelty: float = 0.3
+    w_rarity: float = 0.2
+    w_age_penalty: float = 0.01
+    w_negative_penalty: float = 0.2
+    delta_normalization: float = 1.0
+
+    # Reflective review triggers / scheduling
+    review_rate_threshold: float = 0.1
+    review_window: int = 12
+    pov_floor: float = 0.0
+    review_cooldown: int = 20
+    review_uses: int = 3
+
+
 _DB_CONFIG_BY_TYPE: Dict[str, type] = {
     "evox": EvoxDatabaseConfig,
     "beam_search": BeamSearchDatabaseConfig,
@@ -516,6 +557,7 @@ _DB_CONFIG_BY_TYPE: Dict[str, type] = {
     "openevolve_native": OpenEvolveNativeDatabaseConfig,
     "gepa_native": GEPANativeDatabaseConfig,
     "claude_code": ClaudeCodeConfig,
+    "fore": FOREDatabaseConfig,
 }
 
 

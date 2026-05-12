@@ -1,0 +1,37 @@
+# Current Solution Information
+- Main Metrics:
+{metrics}
+- Focus areas: {improvement_areas}
+
+# Program Generation History
+## Previous Attempts
+
+{previous_attempts}
+
+{other_context_programs}
+
+# Current Solution
+{current_program}
+
+{fore_guidance}
+
+# Task
+Suggest improvements to the program that will improve its COMBINED_SCORE.
+The system maintains diversity across these dimensions: score, code structure, strategy family.
+A modest score with a structurally novel strategy can still be a valuable stepping stone.
+
+Provide the complete new program solution.
+
+IMPORTANT: Make sure your rewritten program maintains the same inputs and outputs
+as the original program, but with improved internal implementation.
+
+```{language}
+# Your rewritten program here
+```
+
+**CRITICAL**: Be thoughtful about your changes and explain your reasoning thoroughly.
+
+# FORE strategy block (required)
+{fore_meta_instructions}
+
+{timeout_warning}

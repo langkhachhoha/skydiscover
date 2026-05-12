@@ -1,0 +1,64 @@
+# FORE — Fertility-Oriented Reflective Evolution
+#
+# Starter config. Copy this into your benchmark folder and fill in the
+# system_message. See FORE_METHOD_PLAN.md for the design notes.
+
+max_iterations: 100
+checkpoint_interval: 10
+log_level: "INFO"
+random_seed: 42
+
+llm:
+  models:
+    - name: "openai/gpt-5"
+      weight: 1.0
+  api_base: "https://openrouter.ai/api/v1"
+  temperature: 0.7
+  max_tokens: 16384
+  timeout: 600
+
+search:
+  type: "fore"
+  num_context_programs: 4
+  database:
+    population_size: 80
+    random_seed: 42
+
+    # NIG prior on Delta+
+    prior_mu_0: 0.0
+    prior_kappa_0: 2.0
+    prior_alpha_0: 2.0
+    prior_beta_0: 0.5
+
+    # Cluster + POV
+    cluster_similarity_threshold: 0.55
+    k_remaining: 100
+    fertility_alpha: 0.7
+    fertility_k_max: 20
+
+    # Structural prior weights for POV
+    w_novelty: 0.3
+    w_rarity: 0.2
+    w_age_penalty: 0.01
+    w_negative_penalty: 0.2
+
+    # Reflective review
+    review_rate_threshold: 0.1
+    review_window: 12
+    pov_floor: 0.0
+    review_cooldown: 20
+    review_uses: 3
+
+prompt:
+  system_message: |
+    <REPLACE WITH YOUR PROBLEM-SPECIFIC SYSTEM MESSAGE>
+
+evaluator:
+  timeout: 360
+  cascade_evaluation: true
+  cascade_thresholds:
+    - 0.3
+    - 0.6
+
+diff_based_generation: true
+max_solution_length: 60000

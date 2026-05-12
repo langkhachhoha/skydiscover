@@ -22,6 +22,8 @@ from skydiscover.search.default_discovery_controller import (
 )
 from skydiscover.search.evox.controller import CoEvolutionController
 from skydiscover.search.evox.database.search_strategy_db import SearchStrategyDatabase
+from skydiscover.search.fore.controller import FOREController
+from skydiscover.search.fore.database import FOREDatabase
 from skydiscover.search.gepa_native.controller import GEPANativeController
 from skydiscover.search.gepa_native.database import GEPANativeDatabase
 from skydiscover.search.openevolve_native.database import OpenEvolveNativeDatabase
@@ -75,3 +77,7 @@ register_controller("gepa_native", GEPANativeController)
 # Claude Code: single-agent baseline running Claude CLI in a container
 register_database("claude_code", ClaudeCodeDatabase)
 register_controller("claude_code", ClaudeCodeController)
+
+# FORE: Fertility-Oriented Reflective Evolution
+register_database("fore", FOREDatabase)
+register_controller("fore", FOREController)
