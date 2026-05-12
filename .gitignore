@@ -9,6 +9,8 @@ dist/
 build/
 .eggs/
 
+circle_packing_fore_25727558464/
+
 # Virtual environments
 .venv/
 venv/

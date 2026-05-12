@@ -47,6 +47,7 @@ def is_openai_reasoning_model(model_name: str, api_base: str) -> bool:
     is_openai_api = (
         any(api_base_lower.startswith(p) for p in _OPENAI_API_PREFIXES)
         or ".openai.azure.com" in api_base_lower
+        or "openrouter.ai" in api_base_lower
     )
     return is_openai_api and model_name.lower().startswith(REASONING_MODEL_PREFIXES)
 
