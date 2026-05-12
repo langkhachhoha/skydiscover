@@ -6,7 +6,7 @@ on:
       iterations:
         description: "Number of FORE iterations to run"
         required: false
-        default: "2"
+        default: "100"
       model:
         description: "OpenRouter model id routed through SkyDiscover"
         required: false
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   circle-packing:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 720
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENAI_API_BASE: https://openrouter.ai/api/v1
