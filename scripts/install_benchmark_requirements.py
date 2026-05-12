@@ -9,6 +9,8 @@ them into the current Python environment.
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +61,21 @@ def _candidate_requirements(path: Path) -> list[Path]:
     return result
 
 
+def _installer_command(req: Path) -> list[str]:
+    """Pick the best available installer for the current interpreter.
+
+    ``uv sync`` creates venvs without pip, so ``python -m pip`` blows up in
+    CI. Prefer ``uv pip install`` when ``uv`` is on PATH (it targets the
+    active venv by default and matches how the rest of the repo installs
+    things); otherwise fall back to ``python -m pip``.
+    """
+    uv = shutil.which("uv")
+    if uv:
+        env_python = os.environ.get("UV_PYTHON") or sys.executable
+        return [uv, "pip", "install", "--python", env_python, "-r", str(req)]
+    return [sys.executable, "-m", "pip", "install", "-r", str(req)]
+
+
 def _install(requirements: list[Path], dry_run: bool) -> None:
     if not requirements:
         print("No requirements.txt files found.")
@@ -68,7 +85,7 @@ def _install(requirements: list[Path], dry_run: bool) -> None:
         print(f"Installing {req.relative_to(_repo_root())}")
         if dry_run:
             continue
-        subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(req)], check=True)
+        subprocess.run(_installer_command(req), check=True)
 
 
 def main() -> int:
