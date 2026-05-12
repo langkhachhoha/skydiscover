@@ -513,7 +513,7 @@ async def generate_variation_operators(
 # ------------------------------------------------------------------
 # CLI
 # ------------------------------------------------------------------
-DEFAULT_CLI_MODEL = "gpt-5-mini"
+DEFAULT_CLI_MODEL = "openrouter/openai/gpt-5-mini"
 DEFAULT_CLI_MAX_TOKENS = 8000
 DEFAULT_CLI_TIMEOUT = 300
 
@@ -577,8 +577,12 @@ def main():
 
     model_cfg = LLMModelConfig(
         name=DEFAULT_CLI_MODEL,
-        api_base="https://api.openai.com/v1",
-        api_key=os.environ.get("OPENAI_API_KEY", ""),
+        api_base="https://openrouter.ai/api/v1",
+        api_key=(
+            os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("API_KEY")
+            or os.environ.get("OPENAI_API_KEY", "")
+        ),
         max_tokens=DEFAULT_CLI_MAX_TOKENS,
         timeout=DEFAULT_CLI_TIMEOUT,
         retries=3,

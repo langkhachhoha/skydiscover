@@ -71,7 +71,11 @@ class FOREDatabase(ProgramDatabase):
         self.cluster_similarity_threshold = float(
             getattr(config, "cluster_similarity_threshold", 0.55)
         )
-        self.k_remaining_init = int(getattr(config, "k_remaining", 100))
+        # ``k_remaining_init`` is the POV horizon. 0 = auto (resolved later
+        # via ``configure_for_max_iterations`` once the controller knows the
+        # actual run length); we seed with a safe non-zero fallback so the
+        # database is usable even if the controller forgets to call it.
+        self.k_remaining_init = int(getattr(config, "k_remaining", 0)) or 100
         self.fertility_alpha = float(getattr(config, "fertility_alpha", 0.7))
         self.fertility_k_max = int(getattr(config, "fertility_k_max", 20))
 
@@ -83,11 +87,24 @@ class FOREDatabase(ProgramDatabase):
         self.delta_normalization = float(getattr(config, "delta_normalization", 1.0))
 
         # --- Review triggers ---
+        # ``review_window`` and ``review_cooldown`` use 0 as a sentinel for
+        # "auto-scale from max_iterations"; controller resolves them via
+        # ``configure_for_max_iterations``. Fallback non-zero defaults keep
+        # the database usable if the controller does not call it.
         self.review_rate_threshold = float(getattr(config, "review_rate_threshold", 0.1))
-        self.review_window = int(getattr(config, "review_window", 12))
+        self.review_window = int(getattr(config, "review_window", 0)) or 12
+        self.review_window_ratio = float(getattr(config, "review_window_ratio", 0.10))
         self.pov_floor = float(getattr(config, "pov_floor", 0.0))
-        self.review_cooldown = int(getattr(config, "review_cooldown", 20))
+        self.review_cooldown = int(getattr(config, "review_cooldown", 0)) or 20
+        self.review_cooldown_ratio = float(getattr(config, "review_cooldown_ratio", 0.10))
         self.review_uses = int(getattr(config, "review_uses", 3))
+
+        # Track whether the values came from explicit user config (so we do
+        # not overwrite them in ``configure_for_max_iterations``). The
+        # underlying config field is 0 when the user wants auto-scaling.
+        self._review_window_explicit = int(getattr(config, "review_window", 0)) > 0
+        self._review_cooldown_explicit = int(getattr(config, "review_cooldown", 0)) > 0
+        self._k_remaining_explicit = int(getattr(config, "k_remaining", 0)) > 0
 
         # --- RNG ---
         seed = getattr(config, "random_seed", 42)
@@ -124,6 +141,35 @@ class FOREDatabase(ProgramDatabase):
             self.cluster_similarity_threshold,
             self.k_remaining_init,
         )
+
+    def configure_for_max_iterations(self, max_iterations: int) -> Dict[str, int]:
+        """Resolve review/POV horizons from the actual run length.
+
+        Called by ``FOREController.run_discovery`` once the true
+        ``max_iterations`` is known (which may differ from the config value
+        when the runner overrides it). Mirrors the evox pattern of scaling
+        the stagnation switch interval as a fraction of total iterations.
+        """
+        max_iterations = max(1, int(max_iterations))
+        applied: Dict[str, int] = {}
+
+        if not self._review_cooldown_explicit:
+            self.review_cooldown = max(1, int(max_iterations * self.review_cooldown_ratio))
+            applied["review_cooldown"] = self.review_cooldown
+        if not self._review_window_explicit:
+            self.review_window = max(1, int(max_iterations * self.review_window_ratio))
+            applied["review_window"] = self.review_window
+        if not self._k_remaining_explicit:
+            self.k_remaining_init = max_iterations
+            applied["k_remaining"] = self.k_remaining_init
+
+        if applied:
+            logger.info(
+                "FORE auto-scaled from max_iterations=%d: %s",
+                max_iterations,
+                ", ".join(f"{k}={v}" for k, v in applied.items()),
+            )
+        return applied
 
     # ==================================================================
     # ProgramDatabase interface

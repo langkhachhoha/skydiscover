@@ -529,7 +529,9 @@ class FOREDatabaseConfig(DatabaseConfig):
     cluster_similarity_threshold: float = 0.55
 
     # POV / fertility multiplier
-    k_remaining: int = 100
+    # k_remaining: budget horizon for the POV fertility multiplier.
+    # 0 = auto (resolved to max_iterations at run_discovery time).
+    k_remaining: int = 0
     fertility_alpha: float = 0.7
     fertility_k_max: int = 20
 
@@ -540,11 +542,15 @@ class FOREDatabaseConfig(DatabaseConfig):
     w_negative_penalty: float = 0.2
     delta_normalization: float = 1.0
 
-    # Reflective review triggers / scheduling
+    # Reflective review triggers / scheduling.
+    # review_window and review_cooldown default to 0 = auto, resolved to
+    # max(1, int(max_iterations * review_*_ratio)) by FOREController.
     review_rate_threshold: float = 0.1
-    review_window: int = 12
+    review_window: int = 0
+    review_window_ratio: float = 0.10
     pov_floor: float = 0.0
-    review_cooldown: int = 20
+    review_cooldown: int = 0
+    review_cooldown_ratio: float = 0.10
     review_uses: int = 3
 
 

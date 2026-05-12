@@ -32,7 +32,9 @@ search:
 
     # Cluster + POV
     cluster_similarity_threshold: 0.55
-    k_remaining: 100
+    # k_remaining: 0 = auto (= max_iterations). Override with a positive int
+    # to pin the POV horizon regardless of run length.
+    k_remaining: 0
     fertility_alpha: 0.7
     fertility_k_max: 20
 
@@ -42,11 +44,16 @@ search:
     w_age_penalty: 0.01
     w_negative_penalty: 0.2
 
-    # Reflective review
+    # Reflective review. review_window / review_cooldown = 0 means
+    # auto-scale to max(1, int(max_iterations * review_*_ratio)) at run
+    # time (mirrors evox's DEFAULT_SWITCH_RATIO = 0.10). Set a positive
+    # int to override.
     review_rate_threshold: 0.1
-    review_window: 12
+    review_window: 0
+    review_window_ratio: 0.10
     pov_floor: 0.0
-    review_cooldown: 20
+    review_cooldown: 0
+    review_cooldown_ratio: 0.10
     review_uses: 3
 
 prompt:

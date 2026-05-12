@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 class FOREController(DiscoveryController):
     """FORE-aware discovery controller."""
 
+    # Fraction of total iterations used to auto-scale review_cooldown and
+    # review_window when the config leaves them at 0 (the "auto" sentinel).
+    # Mirrors evox's DEFAULT_SWITCH_RATIO so stagnation handling tracks the
+    # length of the run instead of a magic constant.
+    DEFAULT_REVIEW_RATIO = 0.10
+
     def __init__(self, controller_input: DiscoveryControllerInput):
         super().__init__(controller_input)
         # Override the context builder set up by the base class.
@@ -64,8 +70,12 @@ class FOREController(DiscoveryController):
         self._fore_log_path: Optional[str] = None
         self._setup_fore_logging()
 
-        logger.info("FOREController initialized (review_cooldown=%d)",
-                    getattr(self.config.search.database, "review_cooldown", 20))
+        logger.info(
+            "FOREController initialized (review_cooldown=%d, review_window=%d, k_remaining=%d — may be auto-scaled at run_discovery)",
+            getattr(self.database, "review_cooldown", 0),
+            getattr(self.database, "review_window", 0),
+            getattr(self.database, "k_remaining_init", 0),
+        )
 
     # ------------------------------------------------------------------
     # Logging
@@ -91,6 +101,45 @@ class FOREController(DiscoveryController):
                 f.write(json.dumps(event, default=str) + "\n")
         except Exception as e:  # noqa: BLE001
             logger.debug("FORE: failed to write log event: %s", e)
+
+    # ------------------------------------------------------------------
+    # Run hook — wire actual max_iterations into review/POV horizons
+    # ------------------------------------------------------------------
+
+    async def run_discovery(
+        self,
+        start_iteration: int,
+        max_iterations: int,
+        checkpoint_callback=None,
+        post_process_result: Optional[bool] = True,
+        retry_times: Optional[int] = 3,
+    ):
+        """Resolve review/POV horizons from the actual run length, then run.
+
+        ``max_iterations`` may differ from ``self.config.max_iterations``
+        (the runner / CLI can override it). We propagate any per-database
+        ratio overrides too, falling back to ``DEFAULT_REVIEW_RATIO``.
+        """
+        try:
+            db = self.database
+            # Allow controller-level default to seed both ratios when the
+            # config dataclass leaves them unset (e.g. older configs).
+            if getattr(db, "review_cooldown_ratio", 0.0) <= 0.0:
+                db.review_cooldown_ratio = self.DEFAULT_REVIEW_RATIO
+            if getattr(db, "review_window_ratio", 0.0) <= 0.0:
+                db.review_window_ratio = self.DEFAULT_REVIEW_RATIO
+            if hasattr(db, "configure_for_max_iterations"):
+                db.configure_for_max_iterations(max_iterations)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("FORE: could not auto-scale review horizons: %s", e)
+
+        return await super().run_discovery(
+            start_iteration=start_iteration,
+            max_iterations=max_iterations,
+            checkpoint_callback=checkpoint_callback,
+            post_process_result=post_process_result,
+            retry_times=retry_times,
+        )
 
     # ------------------------------------------------------------------
     # Per-iteration hook
