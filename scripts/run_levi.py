@@ -16,7 +16,7 @@ processes can re-import it and unpickle the closure cleanly.
 
 Usage::
 
-    uv run python scripts/run_levi_example.py \\
+    uv run python scripts/run_levi.py \\
         --example-dir levi/examples/circle_packing \\
         --evals 100
 """

@@ -1,12 +1,15 @@
 name: LEVI (reusable)
 
 # Reusable workflow that runs LEVI on a self-contained example directory
-# (anything under levi/examples/<name>/ with a problem.py exporting
-# PROBLEM_DESCRIPTION, FUNCTION_SIGNATURE, score_fn, ...).
+# under ./levi/examples/<name>/ (problem.py exports PROBLEM_DESCRIPTION,
+# FUNCTION_SIGNATURE, score_fn, ...).
+#
+# The LEVI framework is vendored in-repo at ./levi/ (plain directory), not a
+# submodule. Checkout uses submodules: recursive only so other repo submodules
+# (e.g. benchmarks) still initialize when present.
 #
 # Per-problem workflows should call this with `uses:` and pass `example_dir`
-# plus whatever budget knobs they want exposed as inputs. The leaf workflow
-# is then ~15 lines — no copy-paste of setup steps.
+# plus whatever budget knobs they want exposed as inputs.
 
 on:
   workflow_dispatch:
@@ -88,10 +91,14 @@ jobs:
       OUTPUT_DIR: outputs/github-actions/levi_${{ github.run_id }}
 
     steps:
-      - name: Checkout (with submodules)
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Verify in-tree LEVI
+        run: |
+          test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml (LEVI is tracked in-repo)"; exit 1; }
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
