@@ -261,7 +261,7 @@ class PunctuatedEquilibrium:
                 heavy_model,
                 prompt=[{"role": "user", "content": prompt}],
                 temperature=self.pe_config.temperature,
-                max_tokens=4096,
+                # max_tokens=4096,
                 timeout=300,
                 **extras,
             )
@@ -393,7 +393,7 @@ class PunctuatedEquilibrium:
                         model,
                         prompt=[{"role": "user", "content": variant_prompt}],
                         temperature=self.pe_config.temperature,
-                        max_tokens=4096,
+                        # max_tokens=4096,
                         timeout=300,
                     )
                     return {
