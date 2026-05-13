@@ -9,7 +9,7 @@ name: LEVI (reusable)
 # is then ~15 lines — no copy-paste of setup steps.
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       example_dir:
         description: "Path to the LEVI example dir (e.g. levi/examples/circle_packing)"
@@ -65,9 +65,6 @@ on:
         required: false
         type: string
         default: "600"
-    secrets:
-      OPENROUTER_API_KEY:
-        required: true
 
 jobs:
   levi:
