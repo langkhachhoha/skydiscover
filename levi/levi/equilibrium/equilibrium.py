@@ -266,7 +266,7 @@ class PunctuatedEquilibrium:
                 **extras,
             )
             content = response.text
-            logger.info(f"[PE] Paradigm shift response: {content}")
+            logger.info(f"[PE] Paradigm shift response: {response}")
             cost = response.cost
             logger.info(f"[PE] Paradigm shift cost: {cost}")
             stats["total_cost"] += cost
