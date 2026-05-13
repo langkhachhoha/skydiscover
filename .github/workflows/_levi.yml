@@ -106,7 +106,7 @@ jobs:
             exit 1
           fi
 
-      - name: Install LEVI (vendored submodule)
+      - name: Install LEVI (vendored in-repo)
         working-directory: levi
         run: uv sync
 

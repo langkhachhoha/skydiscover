@@ -1,0 +1,97 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "levi"
+version = "0.1.0"
+description = "Levi: Evolutionary optimization framework for algorithms"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy>=2.3.5",
+    "litellm>=1.81.16",
+    "scikit-learn>=1.4.0",
+    "colorama>=0.4.6",
+    "dspy>=3.1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.11.0",
+]
+example-eplb = [
+    "torch>=2.9.1",
+]
+example-llm-sql = [
+    "pandas>=2.3.3",
+]
+example-viz = [
+    "graphviz>=0.21",
+    "matplotlib>=3.10.8",
+]
+example-cloudcast = [
+    "networkx>=3.0",
+]
+example-ifbench = [
+    "nltk>=3.9",
+    "datasets>=3.0",
+    "litellm>=1.50",
+    "spacy>=3.7",
+    "emoji>=2.0",
+    "syllapy>=0.7",
+    "langdetect>=1.0.9",
+    "immutabledict>=4.0",
+    "packaging>=24.0",
+]
+examples = [
+    "torch>=2.9.1",
+    "pandas>=2.3.3",
+    "graphviz>=0.21",
+    "matplotlib>=3.10.8",
+    "networkx>=3.0",
+    "nltk>=3.9",
+    "datasets>=3.0",
+    "litellm>=1.50",
+    "spacy>=3.7",
+    "emoji>=2.0",
+    "syllapy>=0.7",
+    "langdetect>=1.0.9",
+    "immutabledict>=4.0",
+    "packaging>=24.0",
+]
+example-hover = [
+    "bm25s>=0.3.6",
+    "datasets<4",
+    "pystemmer>=3.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["levi"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["UP045", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.8",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.3",
+]

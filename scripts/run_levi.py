@@ -133,7 +133,7 @@ def main() -> int:
     # inherit sys.path (fork on Linux, explicit transfer on spawn) and
     # therefore be able to unpickle score_fn.
     sys.path.insert(0, str(example_dir))
-    # Also make the vendored LEVI submodule importable.
+    # Also make the vendored LEVI tree importable.
     sys.path.insert(0, str(REPO_ROOT / "levi"))
 
     problem = importlib.import_module(args.problem_module)

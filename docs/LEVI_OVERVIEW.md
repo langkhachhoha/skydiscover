@@ -1,8 +1,7 @@
 # LEVI — Detailed Overview
 
 This document is a deep, self-contained note on how the LEVI framework
-(`./levi/`, vendored as a git submodule under
-[`levi/`](../levi/)) actually works, so future-me does
+(`./levi/`, vendored in-repo under [`levi/`](../levi/)) actually works, so future-me does
 not need to re-read the source from scratch. It also explains how LEVI links
 into SkyDiscover's existing ADRS problems via
 [`scripts/run_levi_skydiscover.py`](../scripts/run_levi_skydiscover.py).
