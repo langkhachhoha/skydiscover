@@ -65,6 +65,16 @@ on:
         required: false
         type: string
         default: "600"
+      init_variants_per_seed:
+        description: "Init Phase 2 — variants per diverse seed (Levi default 20). Blank keeps default. Total LLM variants ≈ this × (# seeds after Phase 1)."
+        required: false
+        type: string
+        default: ""
+      init_diverse_seeds:
+        description: "Init Phase 1 — diverse seed count target (Levi default 4). Blank keeps default."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   levi:
@@ -103,6 +113,13 @@ jobs:
       - name: Run LEVI on ${{ inputs.example_dir }}
         working-directory: levi
         run: |
+          INIT_OPTS=""
+          if [ -n "${{ inputs.init_variants_per_seed }}" ]; then
+            INIT_OPTS="$INIT_OPTS --init-variants-per-seed ${{ inputs.init_variants_per_seed }}"
+          fi
+          if [ -n "${{ inputs.init_diverse_seeds }}" ]; then
+            INIT_OPTS="$INIT_OPTS --init-diverse-seeds ${{ inputs.init_diverse_seeds }}"
+          fi
           uv run python ../scripts/run_levi.py \
             --example-dir "../${{ inputs.example_dir }}" \
             --problem-module "${{ inputs.problem_module }}" \
@@ -115,7 +132,8 @@ jobs:
             --workers "${{ inputs.workers }}" \
             --eval-processes "${{ inputs.eval_processes }}" \
             --eval-timeout "${{ inputs.eval_timeout }}" \
-            --output-dir "../${{ env.OUTPUT_DIR }}"
+            --output-dir "../${{ env.OUTPUT_DIR }}" \
+            $INIT_OPTS
 
       - name: Append summary
         if: always()

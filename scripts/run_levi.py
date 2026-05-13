@@ -90,6 +90,26 @@ def _parse_args() -> argparse.Namespace:
         "--eval-timeout", default="600", help="Per-candidate evaluation timeout (seconds)."
     )
     p.add_argument(
+        "--init-diverse-seeds",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Init phase: how many algorithmically diverse seeds to aim for (Levi default 4; "
+            "often +1 when no seed_program). Omit to use Levi defaults."
+        ),
+    )
+    p.add_argument(
+        "--init-variants-per-seed",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Init phase: variants per seed after diversity phase (Levi default 20). "
+            "Total variant LLM calls ≈ this × (number of diverse seeds). Omit for Levi default."
+        ),
+    )
+    p.add_argument(
         "--output-dir",
         default=None,
         help="Where to drop snapshot.json + summary.json (default: outputs/levi/<example>/<ts>).",
@@ -157,25 +177,43 @@ def main() -> int:
     print(f"[levi] target_score  = {target_score}")
     print(f"[levi] output_dir    = {output_dir}")
 
-    result = levi.evolve_code(
-        problem.PROBLEM_DESCRIPTION,
-        function_signature=problem.FUNCTION_SIGNATURE,
-        seed_program=getattr(problem, "SEED_PROGRAM", None),
-        score_fn=problem.score_fn,
-        inputs=inputs,
-        paradigm_model=args.large_model,
-        mutation_model=args.small_model,
-        budget_evals=evals,
-        budget_dollars=dollars,
-        budget_seconds=seconds,
-        target_score=target_score,
-        pipeline=levi.PipelineConfig(
+    init_updates: dict = {}
+    if args.init_diverse_seeds is not None:
+        init_updates["n_diverse_seeds"] = args.init_diverse_seeds
+    if args.init_variants_per_seed is not None:
+        init_updates["n_variants_per_seed"] = args.init_variants_per_seed
+    base_init = levi.InitConfig()
+    effective_init = base_init.model_copy(update=init_updates) if init_updates else base_init
+    if init_updates:
+        evolve_init = effective_init
+        print(f"[levi] init diverse seeds      = {effective_init.n_diverse_seeds}")
+        print(f"[levi] init variants per seed  = {effective_init.n_variants_per_seed}")
+    else:
+        evolve_init = None
+
+    evolve_kw: dict = {
+        "problem_description": problem.PROBLEM_DESCRIPTION,
+        "function_signature": problem.FUNCTION_SIGNATURE,
+        "seed_program": getattr(problem, "SEED_PROGRAM", None),
+        "score_fn": problem.score_fn,
+        "inputs": inputs,
+        "paradigm_model": args.large_model,
+        "mutation_model": args.small_model,
+        "budget_evals": evals,
+        "budget_dollars": dollars,
+        "budget_seconds": seconds,
+        "target_score": target_score,
+        "pipeline": levi.PipelineConfig(
             n_llm_workers=workers,
             n_eval_processes=eval_processes,
             eval_timeout=eval_timeout,
         ),
-        output_dir=str(output_dir),
-    )
+        "output_dir": str(output_dir),
+    }
+    if evolve_init is not None:
+        evolve_kw["init"] = evolve_init
+
+    result = levi.evolve_code(**evolve_kw)
 
     summary = {
         "example_dir": str(example_dir),
@@ -192,6 +230,10 @@ def main() -> int:
         },
         "small_model": args.small_model,
         "large_model": args.large_model,
+        "init": {
+            "n_diverse_seeds": effective_init.n_diverse_seeds,
+            "n_variants_per_seed": effective_init.n_variants_per_seed,
+        },
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (output_dir / "best_program.py").write_text(result.best_program or "")
