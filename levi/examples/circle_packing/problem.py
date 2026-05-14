@@ -51,6 +51,7 @@ Your solution must complete within **600 seconds**.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time 
 
 def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
     '''
