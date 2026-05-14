@@ -45,6 +45,7 @@ from .config import (
     PromptOptConfig,
     ProxyBenchmarkConfig,
     PunctuatedEquilibriumConfig,
+    SalConfig,
     SamplerModelPair,
 )
 from .core import EvaluationResult, MetricDict, Program
@@ -118,6 +119,7 @@ __all__ = [
     "PunctuatedEquilibriumConfig",
     "PromptOptConfig",
     "ProxyBenchmarkConfig",
+    "SalConfig",
     # Methods
     "evolve_code",
     "evolve_prompts",
