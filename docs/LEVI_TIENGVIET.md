@@ -258,88 +258,270 @@ Nửa cuối run **không cải thiện gì** nhưng vẫn tiêu ~$1.0 và 2h.
 
 ---
 
-## 10. Hướng cải thiện đề xuất (1 hướng khả thi nhất)
+## 9.5. Đọc kĩ code — 5 “lỗ hổng tiềm năng” chưa được khai thác
 
-> **Mục tiêu bạn đã đặt lại**: tối ưu theo **tiền/thời gian** thay vì theo số iteration.
-> Vậy bài toán đúng là: *“Mỗi đồng tiêu thêm, có còn tạo ra điểm số mới không?”*
+Bốn quan sát ở mục 9 là **triệu chứng**. Khi đọc kỹ code, mình tìm ra **nguyên nhân** — và may mắn, mỗi cái đều sửa rất nhẹ.
 
-### Tên gọi đề xuất: **Cost-Aware Levi** — bộ điều khiển ROI thời gian thực
+### Lỗ hổng #1 — Prompt PE có 3 giai đoạn (early/mid/late) nhưng **chỉ early được dùng**
 
-#### Ý tưởng 1 dòng
-> Quan sát “điểm tăng / chi phí” (ROI) trong cửa sổ thời gian gần đây, và **tự động** (a) giãn nhịp paradigm shift khi không hoàn vốn, (b) tái phân bổ trọng số sampler theo ROI, (c) dừng sớm khi ROI dự báo dưới ngưỡng.
-
-#### Vì sao hướng này phù hợp?
-
-- **Không phá codebase**: chỉ thêm 1 component mới (`ROIController`) trong [pipeline/state.py](../levi/levi/pipeline/state.py) + đọc thêm trong `_pe_monitor()` và `llm_producer`. ~200 dòng code, có cờ bật/tắt.
-- **Trực tiếp khớp với mục tiêu mới (tối ưu theo cost/time)** — không phải “một sampler khác nữa”.
-- **Có sẵn dữ liệu cho ablation**: log của bạn đã chứng minh tồn tại waste; chỉ cần lặp lại với controller bật và đo lại.
-- **Câu chuyện paper rõ**: *“Knowing when to stop spending matters more than knowing how to spend”* — tự nhiên đối chiếu với chính luận điểm gốc của Levi (“diversity là vấn đề kiến trúc, không phải model”). Bài kết luận: *“cost-allocation cũng là vấn đề kiến trúc”*.
-
-#### Cụ thể có 3 “nút” (knobs), tất cả đều dựa vào cùng 1 tín hiệu ROI
-
-Định nghĩa **ROI gần đây** trong cửa sổ trượt $W$ giây hoặc $K$ đô-la:
-
-$$\text{ROI}(t) = \frac{\Delta \text{best\_score trong cửa sổ}}{\Delta \text{cost trong cửa sổ}}$$
-
-(Có sẵn `score_history` và `cumulative_cost` từng entry trong state — không cần thêm storage mới.)
-
-**Knob A — Gate PE bằng ROI** (thay vì interval cố định)
+[equilibrium/prompts.py:146-152](../levi/levi/equilibrium/prompts.py#L146-L152):
+```python
+def get_budget_stage(budget_progress: float) -> str:
+    """Always returns 'early' ..."""
+    return "early"
 ```
-trigger PE  ⇐  (eval_count - last_pe_eval_count ≥ min_gap)
-        AND   (ROI gần đây < ε_pe  HOẶC  cell_entropy plateau)
+
+Code có sẵn 3 prompt rất khác nhau (`early` = đập bỏ, làm cái mới; `mid` = lai ghép điểm mạnh; `late` = mổ xẻ điểm yếu cụ thể của best). Nhưng hàm trả về luôn “early”. Trong log của bạn, cả 8 PE — kể cả PE #8 khi archive đã chín — đều nhận prompt “hãy phát minh paradigm mới”. Đáng ra ở PE #6 trở đi nên là “tinh chỉnh điểm yếu cụ thể của best (2.6002)”.
+
+### Lỗ hổng #2 — Mutation prompt **không bao giờ nhìn thấy best score**
+
+[artifacts/code.py:114-137](../levi/levi/artifacts/code.py#L114-L137): `build_mutation_prompt` chỉ ghép `Problem + Signature + v1 (parent) + v2 (inspiration) + meta-advice`. Không có:
+- `best_score_so_far`
+- mã của elite tốt nhất (trừ khi sampler ngẫu nhiên chọn đúng nó)
+- “score trajectory” gần đây
+
+Hệ quả: model nhỏ làm mutation không biết “mình đang đứng cách kỷ lục bao xa”. Nó cứ sửa parent có sẵn, dễ rơi vào clone (như log cho thấy hàng loạt `score: 2.5415696271225667` lặp lại).
+
+### Lỗ hổng #3 — Inspirations cùng sampler, không có “đối chứng”
+
+[pipeline/producer.py:67-73](../levi/levi/pipeline/producer.py#L67-L73):
+```python
+n_parents = config.pipeline.n_parents + config.pipeline.n_inspirations  # = 1 + 1 = 2
+sample = pool.sample(sampler_name, n_parents=n_parents, ...)
+...
+inspirations = [p for p in sample.inspirations if random.random() < 0.8]
 ```
-PE chỉ fire khi mutation đang “đứng yên”. Khi mutation đang ăn điểm → khỏi tốn gpt-5.
 
-**Knob B — Tái phân bổ sampler theo ROI**
-Mỗi sampler-model-pair lưu thêm `cost_spent` và `best_score_delta_caused`. Sau mỗi cửa sổ, cập nhật weight ∝ EMA của (Δbest / $). Sampler nào hay tạo NEW BEST cho mỗi $ chi → nâng weight; sampler “rỗng” → giảm. Giữ floor để không xoá hẳn (vẫn explore).
+Cả parent lẫn inspiration đều do **cùng 1 sampler** chọn. Với sampler softmax T=0.3 thì cả hai đều là elite điểm cao → context lặp lại, không có “con kém điểm khác hành vi để đối chiếu”. Producer cũng KHÔNG bao giờ chủ động ghép thêm **elite ở xa về hành vi**.
 
-**Knob C — Stop projection (kết thúc sớm)**
-Khi ROI trượt $W$ lần liên tiếp dưới ngưỡng $\epsilon_{\text{stop}}$, *dự báo* rằng nửa budget còn lại có xác suất < $p$ tạo NEW BEST → fire stop event.
-Bạn vẫn giữ snapshot, vẫn có “resume” nếu sau này muốn tiếp.
+Đáng chú ý: hàm `pool.select_most_diverse(...)` đã tồn tại trong code (farthest-first traversal trên feature vector) — nhưng không được dùng trong producer.
 
-#### Ablation gọn, sạch cho paper
+### Lỗ hổng #4 — Meta-advice **chỉ phòng thủ**, không tấn công
 
-| Setting | PE trigger | Sampler weights | Stop |
+[pipeline/consumer.py:34-65](../levi/levi/pipeline/consumer.py#L34-L65): prompt nói thẳng:
+> “Focus ONLY on Failure Prevention. You do NOT see successful solutions. Your job is purely defensive.”
+
+Trong 13 lần meta-advice của bạn, model chỉ học “tránh shape mismatch”, “tránh overlap”. Nó không bao giờ được cho biết “best score đã nhảy từ 2.564 → 2.600 nhờ chiến lược interior-point + Halton — hãy đẩy hướng đó”.
+
+### Lỗ hổng #5 — Sampler weights tĩnh, không có bandit feedback
+
+[pool/cvt_map_elites.py:643-655](../levi/levi/pool/cvt_map_elites.py#L643-L655): `get_weighted_sampler_config()` chọn theo weight cố định khai báo ở init. Levi auto-sinh 4 cặp `(qwen, softmax_T)` với `weight=1.0` đều nhau.
+
+Trong log, **cả 2 NEW BEST đều rơi vào T=0.3**. T=1.2 (high-explore) gần như không tạo NEW BEST. Nhưng weight vẫn 1:1:1:1 từ đầu đến cuối. Đã có sẵn `update_sampler(name, cell, success)` — ghi đếm per-cell success — nhưng nó chỉ phục vụ UCB nội bộ, **không loop về lại weight giữa các sampler**.
+
+### Còn 1 cờ chưa dùng
+
+`pe_config.reasoning_effort` mặc định None → gpt-5 ở PE chạy reasoning mặc định. Code đã có nhánh `extras["reasoning_effort"] = ...` ([equilibrium/equilibrium.py:251-258](../levi/levi/equilibrium/equilibrium.py#L251-L258)). Khi tiền không quan trọng → bật `"high"` ở PE late-stage là “miễn phí” về độ rủi ro.
+
+> **Kết**: Levi đang chạy với **prompt nghèo context, không có đối chứng, meta-advice phòng thủ thuần, weight cố định**, và **prompt PE “late” bị code chặn**. 5 điểm này không phải bug nghiêm trọng, chỉ là tiềm năng chưa khai thác. Mỗi cái sửa ~10–80 dòng. Đó là mảnh đất của hướng đề xuất bên dưới.
+
+---
+
+## 10. Hướng cải thiện đề xuất — *Stagnation-Adaptive Levi (SAL)*
+
+> **Mục tiêu đúng của bạn** (đã sửa lại): tăng **chất lượng best score**, đặc biệt thoát local optimum (giảm cái “tail 400 evals không sinh ra gì” và để PE thật sự tạo bước nhảy). Tiền không quan trọng, **thời gian là ràng buộc**.
+
+### Ý tưởng 1 câu
+> Định nghĩa **một tín hiệu “độ đứng yên” $s(t) \in [0,1]$** rồi dùng nó để **điều khiển đồng thời 4 thứ**: chọn prompt PE, làm giàu context mutation, tái phân bổ weight sampler, và kích hoạt “PE phá rào” khi nặng quá.
+
+Bốn cơ chế chia sẻ chung 1 tín hiệu — nên ablation rất sạch (bật/tắt từng cái) và mỗi cái độc lập về code.
+
+### 10.1 Tín hiệu lõi — `stagnation depth` $s(t)$
+
+Có 2 thành phần, hợp lại thành 1 số ∈ [0,1]:
+
+$$s(t) = \underbrace{\min\!\left(1,\ \frac{n_{\text{since-best}}}{\tau}\right)}_{\text{độ dài plateau}} \cdot \underbrace{\exp\!\left(-\frac{\sigma_W(t)}{\sigma_0}\right)}_{\text{phương sai gần đây cạn}}$$
+
+trong đó:
+- $n_{\text{since-best}}$ = số eval từ lần NEW BEST gần nhất (đã có sẵn trong `state.score_history`).
+- $\tau$ = ngưỡng plateau (ví dụ 80 evals).
+- $\sigma_W(t)$ = độ lệch chuẩn của best-score trên cửa sổ $W$ eval cuối.
+- $\sigma_0$ = chuẩn hoá ban đầu (ước lượng từ init phase).
+
+Trực giác: $s\!\to\!0$ khi đang ăn điểm tốt; $s\!\to\!1$ khi cả hai điều xảy ra — *(a)* không có NEW BEST đã lâu *và* *(b)* score gần như đóng băng (phương sai sụt). Cách dùng tích (×) ép buộc CẢ HAI điều phải đúng — tránh dương tính giả khi mới chỉ một trong hai.
+
+Tính $s(t)$ rẻ ($O(W)$), gọi mỗi 5–10 eval một lần. Lưu vào `state.stagnation_depth`.
+
+### 10.2 Bốn cơ chế dùng chung tín hiệu này
+
+#### **Cơ chế A — Sửa lỗ hổng #1: chọn prompt PE theo $s(t)$**
+
+Thay [equilibrium/prompts.py:146-152](../levi/levi/equilibrium/prompts.py#L146-L152) một dòng:
+```python
+def get_budget_stage(budget_progress, stagnation=0.0):
+    if stagnation < 0.3: return "early"   # đập bỏ, làm mới
+    if stagnation < 0.7: return "mid"     # lai ghép
+    return "late"                          # mổ xẻ điểm yếu cụ thể của best
+```
+
+Khi `s` cao, model PE được nhắc *“archive đã chín, hãy mổ xẻ điểm yếu của lời giải tốt nhất”* thay vì *“đập đi làm lại”*. Code sẵn rồi, chỉ bị tắt.
+
+**Đính kèm**: nhét thêm vào prompt PE (~10 dòng trong `build_paradigm_shift_prompt`):
+```
+Best score: {best}
+Evals since last best: {n_since_best}  
+Stagnation depth: {s:.2f}
+Per-example failures of current best: {top_3_failure_modes}
+```
+
+Để model gpt-5 thấy *“stuck ở 2.6002, các example còn fail là ...”*. Đây là tăng cường thông tin trực tiếp.
+
+#### **Cơ chế B — Sửa lỗ hổng #2 & #3: context mutation có “đối chứng” khi $s$ cao**
+
+Trong [pipeline/producer.py](../levi/levi/pipeline/producer.py), sửa khoảng dòng 65–75:
+```python
+parent = sample.parent
+inspirations = list(sample.inspirations)
+
+if s >= 0.5:
+    # luôn nhét global-best (nếu nó không phải parent)
+    best_elite = pool.best()
+    if best_elite is not parent: inspirations.append(best_elite)
+    # nhét 1 elite XA về hành vi (farthest-first)
+    far = pool.select_most_diverse_from(parent, k=1)
+    inspirations.extend(far)
+
+parents = [parent] + inspirations[: min(3, len(inspirations))]
+```
+
+Tức là khi đang stuck, prompt mutation sẽ thấy:
+- **v1**: parent từ sampler (như cũ)
+- **v2**: global-best (luôn có, lỗ hổng #2 đã vá)
+- **v3**: elite ở xa nhất về hành vi (đối chứng — lỗ hổng #3 đã vá)
+
+Model nhỏ giờ có 1 context “tốt nhất + đối lập + parent”, dễ học “khoảng cách đến best là gì” hơn là chỉ thấy 2 elite na ná. Hàm `select_most_diverse` đã có sẵn, chỉ cần wrap thêm 5 dòng.
+
+Có thể trộn thêm `best_score_so_far` vào header prompt (tăng 1 dòng).
+
+#### **Cơ chế C — Sửa lỗ hổng #4: meta-advice 2 mặt (tấn công + phòng thủ)**
+
+Hiện tại meta-advice mỗi 50 evals chỉ phòng thủ. Khi $s$ thấp (đang ăn điểm) → giữ nguyên prompt phòng thủ. Khi $s \ge 0.5$ → đổi sang prompt **tấn công**:
+
+```
+You are a strategist for a code-evolution system.
+Recent best went from {best_prev} to {best_now}; stagnant for {n_since_best} evals.
+Top-3 accepted improvements in this window came from these code patterns: {patterns}.
+Current top failure modes on best: {top_failures}.
+
+Suggest 3 specific algorithmic levers to explore next (NOT bug-fixes — strategic moves).
+```
+
+Để tạo `{patterns}`, đã có `score_history` ghi rõ accepted/rejected + sampler — chỉ cần thêm 1 tổng hợp nhỏ.
+
+Meta-advice giờ là tín hiệu “đang đứng yên ở đâu, gợi ý hướng đi mới” thay vì chỉ “tránh lỗi cũ”. Cost vẫn ~$0.0002/lần (như log).
+
+#### **Cơ chế D — Sửa lỗ hổng #5: Thompson sampling weight cho sampler**
+
+Đây là **phần toán chính**. Thay weight cố định bằng **bandit Beta-Bernoulli** trên từng cặp `(sampler, model)`:
+
+- State mỗi arm $i$: $(\alpha_i, \beta_i)$, khởi tạo $(1, 1)$ (Beta uniform prior).
+- Reward định nghĩa **theo NEW BEST** (cho khớp với mục tiêu thoát local opt, không chỉ tỉ lệ accept):
+$$r_i = \begin{cases} 1 & \text{nếu NEW BEST} \\ 0.3 & \text{nếu accepted thường} \\ 0 & \text{ngược lại} \end{cases}$$
+- Cập nhật: $\alpha_i \mathrel{+}= r_i$, $\beta_i \mathrel{+}= (1 - r_i)$.
+- Chọn arm: **Thompson sampling**, $\theta_i \sim \text{Beta}(\alpha_i, \beta_i)$, lấy $\arg\max_i \theta_i$.
+
+Đặt weight ban đầu cho mỗi arm: $w_{\min} = 0.05$ (đảm bảo mọi arm vẫn có cơ hội). Hiệu chỉnh theo $s(t)$:
+
+$$w_i = w_{\min} + (1 - w_{\min}) \cdot \frac{\theta_i^{1 + s(t)}}{\sum_j \theta_j^{1 + s(t)}}$$
+
+Khi $s$ thấp ($\approx 0$): mũ = 1 → trộn nhẹ. Khi $s$ cao ($\to 1$): mũ = 2 → arm tốt nhất được nâng mạnh (vì đang stuck, cần ưu tiên hướng đã chứng minh ăn điểm).
+
+Toán này:
+- **Quy nạp Bayes chuẩn** (Beta-Bernoulli là conjugate prior cho phần thưởng nhị phân; soft-Bernoulli 0.3 vẫn hợp lệ).
+- **Đảm bảo exploration**: $w_{\min}$ là floor; Thompson sampling tự nó cũng explore khi posterior chưa chắc.
+- **Khớp với mục tiêu**: reward nặng cho NEW BEST → bandit ưu tiên cặp “hay tạo bước nhảy”, không phải cặp “hay accept lặt vặt”.
+
+Cắm vào [pool/cvt_map_elites.py](../levi/levi/pool/cvt_map_elites.py): thêm `SamplerArm` (alpha, beta), sửa `get_weighted_sampler_config()` để dùng Thompson + reweight theo $s$. ~80 dòng.
+
+#### **Cơ chế E (tuỳ chọn) — “PE phá rào” khi $s \ge 0.8$**
+
+Khi 2 PE liên tiếp không tạo NEW BEST **và** $s \ge 0.8$:
+- Tăng `n_clusters` $3 \to 6$ (đa dạng đại diện hơn).
+- Chọn đại diện cluster bằng **farthest-first** thay vì max-score (đẩy gpt-5 đối diện những elite “lạ” chứ không phải elite điểm cao na ná).
+- Bật `reasoning_effort="high"`.
+- Dùng prompt `late` đã vá ở Cơ chế A.
+
+Tiền không quan trọng, đây là “lá bài cuối” — kích hoạt thưa thớt nên không tốn nhiều.
+
+### 10.3 Tóm lại đề xuất bằng 1 sơ đồ
+
+```
+                       ┌────────────────────────┐
+                       │  TÍN HIỆU s(t)         │
+                       │  (plateau × σ-collapse)│
+                       └───────────┬────────────┘
+                                   │
+              ┌─────────┬──────────┼──────────┬──────────┐
+              ▼         ▼          ▼          ▼          ▼
+            [A]        [B]        [C]        [D]        [E]
+       PE prompt   Mutation   Meta-advice  Sampler    Hard-PE
+       early→mid   context     phòng thủ   weight     (n_clusters,
+       →late       +best       ↔ tấn công  Thompson   farthest-rep,
+                  +farthest                 (Beta)    reasoning=high)
+```
+
+Mỗi mũi tên đều **đọc trực tiếp dữ liệu sẵn có** (`score_history`, `pool.get_elites()`, `update_sampler` counts) — không phải thu thập thêm state mới.
+
+### 10.4 Ablation và metric cho paper
+
+| Setting | Prompt PE | Mutation ctx | Meta-advice | Sampler weight | Hard-PE |
+|---|---|---|---|---|---|
+| Baseline (Levi gốc) | early luôn | parent + 1 insp | phòng thủ | uniform | không |
+| **+A** | A theo $s$ | — | — | — | — |
+| **+A+B** | A | B | — | — | — |
+| **+A+B+C** | A | B | C | — | — |
+| **+A+B+C+D** | A | B | C | D (Thompson) | — |
+| **Full (E)** | A | B | C | D | E |
+
+Bài học: mỗi cơ chế *độc lập về cài đặt* nhưng *chia sẻ tín hiệu* — ablation kể được câu chuyện “thông tin → quyết định → bước nhảy”.
+
+**Metrics chính** (đo trên cùng budget thời gian, tiền tự do):
+1. **Best-score-cuối-run** (chủ chốt).
+2. **Time-to-first-improvement-after-plateau** — xác suất phá local opt sau khi đã đứng.
+3. **% PE tạo NEW BEST** (hiện 0/8 = 0%).
+4. **Plateau-tail %** (hiện 50% — nửa run sau khi NEW BEST cuối).
+5. **Behavior diversity của archive** (entropy occupancy) — kiểm tra D không “tham” quá.
+
+**Benchmark đề xuất**:
+- circle_packing (đã có sẵn dữ liệu baseline → so trực tiếp).
+- 2 ADRS tasks (vd. transaction_scheduling, một bài graph).
+- 3 seed, mỗi setting × benchmark.
+
+Kỳ vọng định lượng (dựa vào pattern log):
+- Cơ chế A + B đủ để tăng best score circle_packing từ 2.600 lên 2.61–2.62 (gap đến SOTA ~2.635).
+- Cơ chế D giảm ~30–50% time-to-first-improvement nhờ Thompson bám T thấp hơn.
+- Cơ chế E + late prompt: kỳ vọng có ít nhất 1 PE/run thực sự tạo NEW BEST (hiện 0%).
+
+### 10.5 Lộ trình code (~2 tuần, không phá API)
+
+| Ngày | Việc | File chính | LOC |
 |---|---|---|---|
-| **Baseline** (Levi gốc) | fixed interval=10 | uniform | only when budget hit |
-| **+A** | ROI-gated | uniform | budget |
-| **+A+B** | ROI-gated | ROI-weighted | budget |
-| **+A+B+C** (full) | ROI-gated | ROI-weighted | early-stop on flat ROI |
+| 1 | Thêm `state.stagnation_depth` + hàm tính $s(t)$ + 1 unit test | [state.py](../levi/levi/pipeline/state.py) | ~40 |
+| 2 | Cơ chế A: sửa `get_budget_stage` + nhét score-trajectory vào prompt | [prompts.py](../levi/levi/equilibrium/prompts.py), [code.py](../levi/levi/artifacts/code.py) | ~30 |
+| 3 | Cơ chế B: gắn global-best + farthest-elite vào producer khi $s\ge 0.5$ | [producer.py](../levi/levi/pipeline/producer.py), [cvt_map_elites.py](../levi/levi/pool/cvt_map_elites.py) | ~50 |
+| 4 | Cơ chế C: prompt meta-advice 2 chế độ + tổng hợp “top accepted patterns” | [consumer.py](../levi/levi/pipeline/consumer.py) | ~60 |
+| 5–6 | Cơ chế D: Thompson Beta-Bernoulli bandit cho sampler weights | [cvt_map_elites.py](../levi/levi/pool/cvt_map_elites.py) | ~80 |
+| 7 | Cơ chế E: hard-PE branch trong runner | [runner.py](../levi/levi/pipeline/runner.py), [equilibrium.py](../levi/levi/equilibrium/equilibrium.py) | ~40 |
+| 8 | Cờ config thống nhất `levi_sal.{enabled, tau, sigma0, w_min, ...}` | [config/models.py](../levi/levi/config/models.py) | ~30 |
+| 9–13 | Chạy ablation matrix (6 setting × 3 bench × 3 seed) | CI | — |
+| 14 | Plot + draft workshop paper | — | — |
 
-Chạy trên ít nhất 3 benchmark (circle_packing + 2 ADRS), 3 seed, **budget cố định theo $ và theo time** (chính là mục tiêu mới của bạn). Metrics:
-1. Best-score-tại-budget (so sánh ở cùng $/time).
-2. Cost-to-reach-X (tiền cần để chạm ngưỡng best score của baseline).
-3. % chi phí dành cho PE.
-4. Plateau-tail (% budget tiêu sau lần NEW BEST cuối).
+Tổng: **~330 dòng**, mỗi cơ chế có cờ riêng, mặc định OFF — đúng tinh thần “không phá codebase, dễ tích hợp”.
 
-Kết quả kỳ vọng (dựa vào pattern log circle_packing):
-- Knob A: tiết kiệm ~30–40% chi phí PE mà không mất điểm.
-- Knob B: tăng tốc đến điểm best (vì T=0.3 thường hot trên circle_packing, được nâng weight sớm).
-- Knob C: cắt 30–50% tail không sinh giá trị → câu story chính của paper.
+### 10.6 Vì sao hướng này là khả thi nhất
 
-#### Lộ trình triển khai (~1–2 tuần)
-
-1. **Ngày 1–2**: Thêm `ROIController` đọc từ `state.score_history`. Đưa cờ `cost_aware.enabled` vào [config/models.py](../levi/levi/config/models.py). Mặc định `False` (an toàn).
-2. **Ngày 3**: Cắm Knob A vào `_pe_monitor()` (thay điều kiện `eval_count % interval == 0` bằng `controller.should_fire_pe()`).
-3. **Ngày 4**: Cắm Knob B — chỉnh weight trong `pool.get_weighted_sampler_config()` theo controller. Giữ EMA, có floor.
-4. **Ngày 5**: Cắm Knob C — emit `state.early_stop=True` khi ROI projection < ngưỡng; runner check ở `_wait_for_completion()`.
-5. **Ngày 6–10**: Chạy ablation matrix (3 bench × 4 setting × 3 seed) trên CI; thu `summary.json`.
-6. **Ngày 11–14**: Vẽ 4 plot chính, viết draft paper workshop (4–6 trang).
-
-#### Vì sao không chọn các hướng trong [LEVI_RESEARCH_DIRECTIONS.md](LEVI_RESEARCH_DIRECTIONS.md)?
-
-- **Direction 1 (CUSUM trigger cho PE)**: Tốt nhưng vẫn iteration-thinking. Cost-Aware Levi *bao* được nó (Knob A là superset của CUSUM + ROI-aware).
-- **Direction 2 (warm-start centroids)**: Đòi hỏi matrix transfer n×n, khó kể chuyện gọn theo budget-thinking.
-- **Direction 3 (LLM-proposed behavior axes)**: 4–6 tuần, rủi ro cao, không gắn trực tiếp với budget.
-
-Cost-Aware Levi vừa là D1 mở rộng, vừa có 2 knob nữa, đúng tinh thần “tối ưu cost/time” bạn vừa nêu.
+- **Mỗi cơ chế gắn vào 1 lỗ hổng đã chứng minh tồn tại** (mục 9.5), không phải lý thuyết suông.
+- **Chia sẻ 1 tín hiệu** ($s(t)$) → câu chuyện paper gọn (“stagnation depth là chìa khoá”). Đúng kiểu workshop paper.
+- **Toán nhỏ nhưng chuẩn** (Beta-Bernoulli + Thompson), không cần training, không cần thêm GPU.
+- **Đối ngẫu với luận điểm gốc của Levi** (“diversity là vấn đề kiến trúc”): đề xuất bổ sung *“context và quyết định cũng là vấn đề kiến trúc — đặc biệt khi đang stuck”*.
+- **Không động vào public API** (`evolve_code`, `LeviConfig` chỉ thêm trường con).
 
 ---
 
 ## 11. Tóm lại trong 5 dòng
 
 - Levi = **kệ MAP-Elites theo hành vi** + **2 thợ song song** (mutation nhỏ rẻ, paradigm shift lớn đắt) + **gói lời khuyên rút kinh nghiệm** (meta-advice).
-- Mutation chạy liên tục, PE fire định kỳ, meta-advice cập nhật mỗi 50 evals.
-- Log circle_packing cho thấy điểm best đạt ở 13% thời gian, sau đó 87% budget không sinh thêm gì — và PE đang đốt 40% chi phí mà không tạo NEW BEST nào.
-- Hướng cải thiện đề xuất: **Cost-Aware Levi** — gate PE bằng ROI, tái phân bổ sampler theo ROI, dừng sớm khi ROI cạn.
-- Đây là 1–2 tuần code, không phá API, có ablation 4-cell sạch, và là cách tự nhiên nhất để chuyển bài toán từ “tối ưu theo iteration” sang “tối ưu theo $/giây” mà bạn vừa đặt.
+- Log circle_packing cho thấy điểm best đạt ở 13% thời gian, sau đó 87% budget không sinh thêm gì — và PE 0/8 lần tạo NEW BEST.
+- Đọc kĩ code lộ ra 5 lỗ hổng chưa khai thác: prompt PE “late” bị code chặn, mutation prompt không có best score, inspirations không có đối chứng, meta-advice chỉ phòng thủ, sampler weights tĩnh.
+- Đề xuất **Stagnation-Adaptive Levi (SAL)**: 1 tín hiệu lõi $s(t)$ điều khiển đồng thời 4 cơ chế (A–D), thêm cơ chế “phá rào” (E) khi quá nặng. Toán phụ trợ là **Thompson sampling Beta-Bernoulli** trên sampler weights, reward nặng cho NEW BEST.
+- ~330 dòng code, không phá API, ablation 6-cell sạch, có dữ liệu kỳ vọng định lượng cụ thể từ chính log circle_packing của bạn.
