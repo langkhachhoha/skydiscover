@@ -142,18 +142,7 @@ jobs:
             --output-dir "../${{ env.OUTPUT_DIR }}" \
             $INIT_OPTS
 
-      - name: Append summary
-        if: always()
-        run: |
-          summary="${{ env.OUTPUT_DIR }}/summary.json"
-          if [ -f "$summary" ]; then
-            echo "### LEVI run summary — ${{ inputs.example_dir }}" >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "No summary.json produced — check job logs." >> "$GITHUB_STEP_SUMMARY"
-          fi
+
 
       - name: Upload run artifacts
         if: always()
