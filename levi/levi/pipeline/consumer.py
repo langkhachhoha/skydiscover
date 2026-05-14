@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable
 from typing import Optional
 
@@ -61,6 +62,83 @@ Keep it SHORT and DIRECT:
 **Avoid These Errors:**
 - [Error pattern]: [How to fix]
 - [Error pattern]: [How to fix]
+
+---
+
+{metrics_data}
+"""
+
+
+# SAL Cơ chế C — Offensive meta-advice prompt. Used in place of the defensive
+# template when stagnation depth s(t) ≥ context_threshold. The model is asked
+# to produce STRATEGIC suggestions (not bug fixes) given the run's trajectory.
+META_ADVISOR_OFFENSIVE_PROMPT = """You are a search strategist for an evolutionary code optimization system.
+
+## Why you are being called now
+The archive has STAGNATED. The recent window shows no improvement to the best
+score. Your advice is injected into the next batch of mutation prompts; the
+goal is to PUSH past the plateau, not just to avoid bugs.
+
+## What you're given
+- The trajectory of the best score so far.
+- Stagnation depth s(t) ∈ [0,1] (0 = healthy, 1 = fully stuck).
+- Per-sampler accept counts in the recent window (which samplers actually
+  produced improvements).
+- The top recurring error modes (so you can mention them in passing — but
+  bug-fix advice is NOT the focus here).
+
+## Your Task: Write Strategic Lessons (150–200 words max)
+
+Propose 3 concrete *algorithmic levers* the mutators should explore next.
+Each lever must be:
+1. **Concrete** — name a technique, parameter, or structural change.
+2. **Actionable in code** — could be tried in the next mutation.
+3. **Different from what already worked** — avoid retracing the current best.
+
+If applicable, also mention which sampler/temperature has been producing the
+recent improvements so subsequent calls can lean on it.
+
+## Output Format
+**Strategic moves to explore (do not just bug-fix):**
+- [Lever 1]: …
+- [Lever 2]: …
+- [Lever 3]: …
+
+If error rate is high, append ONE sentence on the dominant failure mode.
+
+---
+
+{metrics_data}
+"""
+
+
+META_ADVISOR_OFFENSIVE_PROMPT = """You are a strategist for an evolutionary code optimization system.
+
+## Your Role
+The search has STAGNATED — many evaluations have produced no NEW BEST score.
+Your task is to recommend **strategic moves** (not bug fixes) that future mutations should try.
+
+## What You're Given
+- **Best score so far** and how long it has been stuck
+- **Stagnation depth s(t)** ∈ [0,1] — current plateau pressure
+- **Recent accept patterns** — which samplers / models / cells produced accepts
+- **Top failure modes** of the current best (per-example weak spots)
+- **Previous lessons** (so you can refine, not repeat)
+
+## Your Task: Write 150–200 words of *offensive* guidance
+1. **Diagnose the plateau** — what is limiting further improvement on the best solution?
+2. **Suggest 3 concrete algorithmic levers** to try next. Examples:
+   - "Try a different optimizer (e.g. interior-point instead of gradient ascent)"
+   - "Add a final polish phase that refines borderline constraints"
+   - "Explore a structurally different initialization"
+3. **Keep it actionable** — name techniques, parameter ranges, library functions if useful.
+4. **Avoid generic platitudes** ("be careful", "test thoroughly"). Speak in concrete moves.
+
+## Output Format
+**Strategic Moves to Try:**
+- [Lever 1]: [Why it might break the plateau]
+- [Lever 2]: [Why it might break the plateau]
+- [Lever 3]: [Why it might break the plateau]
 
 ---
 
@@ -134,9 +212,17 @@ async def eval_consumer(
             except Exception as e:
                 result = {"error": str(e)}
 
+            sal_bandit_active = (
+                config.sal.enabled and config.sal.enable_d_thompson
+            )
+
             async with archive_lock:
                 if "cascade_rejected" in result:
                     pool.update_sampler(item["sampler"], item["source_cell"], success=False)
+                    if sal_bandit_active:
+                        pool.update_bandit(
+                            item["sampler"], item["model"], accepted=False, is_new_best=False
+                        )
                     state.record_reject()
                     if component_selector is not None and item.get("target") is not None:
                         component_selector.update(item["target"], accepted=False)
@@ -149,6 +235,10 @@ async def eval_consumer(
                     score, score_error = coerce_score(result)
                     if score_error is not None:
                         pool.update_sampler(item["sampler"], item["source_cell"], success=False)
+                        if sal_bandit_active:
+                            pool.update_bandit(
+                                item["sampler"], item["model"], accepted=False, is_new_best=False
+                            )
                         state.record_error(score_error)
                         label = _model_label(item)
                         logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {score_error[:50]}")
@@ -176,6 +266,23 @@ async def eval_consumer(
 
                         is_new_best = score > state.best_score_so_far
 
+                        # SAL Cơ chế D — update Thompson Beta posterior + NEW BEST
+                        # counter on the (sampler, model) arm that produced this
+                        # offspring. Disabled-by-default arms are silently
+                        # skipped inside the pool.
+                        if config.sal.enabled and config.sal.enable_d_thompson:
+                            pool.update_bandit(
+                                item["sampler"],
+                                item["model"],
+                                accepted=accepted,
+                                is_new_best=is_new_best,
+                            )
+
+                        # SAL — keep state.eval_count_at_last_best fresh so the
+                        # stagnation signal is computed cheaply elsewhere.
+                        if is_new_best:
+                            state.eval_count_at_last_best = state.eval_count
+
                         state.record_score(
                             score=score,
                             accepted=accepted,
@@ -199,6 +306,13 @@ async def eval_consumer(
                         )
                 else:
                     pool.update_sampler(item["sampler"], item["source_cell"], success=False)
+                    if config.sal.enabled and config.sal.enable_d_thompson:
+                        pool.update_bandit(
+                            item["sampler"],
+                            item["model"],
+                            accepted=False,
+                            is_new_best=False,
+                        )
                     state.record_error(result["error"])
                     label = _model_label(item)
                     logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {result['error'][:50]}")
@@ -227,6 +341,8 @@ def _format_metrics_for_llm(
     progress_pct: float,
     problem_description: str = "",
     function_signature: str = "",
+    *,
+    sal_extras: dict | None = None,
 ) -> str:
     total = metrics.get("acceptances", 0) + metrics.get("rejections", 0) + metrics.get("errors", 0)
     error_count = metrics.get("errors", 0)
@@ -245,6 +361,28 @@ def _format_metrics_for_llm(
 - Rejections: {metrics.get("rejections", 0)}
 - Errors/Failures: {error_count}"""
 
+    # SAL Cơ chế C — offensive context block when stagnant.
+    if sal_extras:
+        data += "\n\n## Search Trajectory"
+        best_score = sal_extras.get("best_score")
+        if best_score is not None:
+            data += f"\n- Current best score: {best_score:.17g}"
+        evals_since_best = sal_extras.get("evals_since_best")
+        if evals_since_best is not None:
+            data += f"\n- Evaluations since last NEW BEST: {evals_since_best}"
+        stagnation = sal_extras.get("stagnation")
+        if stagnation is not None:
+            data += f"\n- Stagnation depth s(t): {stagnation:.2f}"
+        recent_best_delta = sal_extras.get("recent_best_delta")
+        if recent_best_delta is not None:
+            data += f"\n- Best score Δ in recent window: {recent_best_delta:+.6g}"
+
+        per_sampler = sal_extras.get("per_sampler_accepts") or {}
+        if per_sampler:
+            data += "\n\n## Per-sampler accepts in recent window"
+            for sampler_name, count in sorted(per_sampler.items(), key=lambda x: -x[1]):
+                data += f"\n- {sampler_name}: {count}"
+
     if top_errors:
         data += "\n\n## Most Common Errors (across entire run):\n"
         for err, count in top_errors:
@@ -256,6 +394,30 @@ def _format_metrics_for_llm(
     return data
 
 
+def _gather_sal_meta_extras(state: PipelineState, window: int = 50) -> dict:
+    """Collect trajectory data for the offensive meta-advice prompt."""
+    history = state.score_history
+    if not history:
+        return {}
+
+    recent = history[-window:]
+    per_sampler: dict[str, int] = {}
+    for entry in recent:
+        if entry.accepted and entry.sampler:
+            per_sampler[entry.sampler] = per_sampler.get(entry.sampler, 0) + 1
+
+    recent_best_delta = None
+    if len(recent) >= 2:
+        recent_best_delta = recent[-1].best_score - recent[0].best_score
+
+    return {
+        "best_score": state.best_score_so_far if math.isfinite(state.best_score_so_far) else None,
+        "evals_since_best": state.evals_since_best(),
+        "recent_best_delta": recent_best_delta,
+        "per_sampler_accepts": per_sampler,
+    }
+
+
 async def _generate_meta_advice(config: LeviConfig, state: PipelineState) -> None:
     if not config.meta_advice.model:
         return
@@ -265,10 +427,27 @@ async def _generate_meta_advice(config: LeviConfig, state: PipelineState) -> Non
     if config.budget.dollars:
         progress_pct = (state.total_cost / config.budget.dollars) * 100
 
+    # SAL Cơ chế C — pick offensive prompt when stagnation depth is high.
+    sal = config.sal
+    offensive_mode = False
+    sal_extras: dict | None = None
+    if sal.enabled and sal.enable_c_meta_advice:
+        s = state.stagnation_depth(sal.tau)
+        if s >= sal.context_threshold:
+            offensive_mode = True
+            sal_extras = _gather_sal_meta_extras(state)
+            sal_extras["stagnation"] = s
+
     metrics_data = _format_metrics_for_llm(
-        metrics, state.previous_meta_advice, progress_pct, config.problem_description, config.function_signature
+        metrics,
+        state.previous_meta_advice,
+        progress_pct,
+        config.problem_description,
+        config.function_signature,
+        sal_extras=sal_extras,
     )
-    prompt = META_ADVISOR_PROMPT.format(metrics_data=metrics_data)
+    template = META_ADVISOR_OFFENSIVE_PROMPT if offensive_mode else META_ADVISOR_PROMPT
+    prompt = template.format(metrics_data=metrics_data)
 
     try:
         extras = {}

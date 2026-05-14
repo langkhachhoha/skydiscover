@@ -143,13 +143,28 @@ EARLY_THRESHOLD = 0.3
 LATE_THRESHOLD = 0.6
 
 
-def get_budget_stage(budget_progress: float) -> str:
-    """Map budget progress (0-1) to a stage name.
+def get_budget_stage(
+    budget_progress: float,
+    stagnation: float | None = None,
+    mid_threshold: float = 0.3,
+    late_threshold: float = 0.7,
+) -> str:
+    """Map (budget_progress, stagnation) to a prompt-stage name.
 
-    Always returns 'early' to use the large paradigm shift prompt
-    (radical exploration) regardless of budget progress.
+    When `stagnation` is None we keep historical behaviour (always 'early').
+    When provided, we route on the stagnation depth s(t) ∈ [0,1]:
+
+      s < mid_threshold   → 'early'   (radical paradigm shift)
+      s < late_threshold  → 'mid'     (synthesise strengths)
+      s ≥ late_threshold  → 'late'    (surgical fix on best solution)
     """
-    return "early"
+    if stagnation is None:
+        return "early"
+    if stagnation < mid_threshold:
+        return "early"
+    if stagnation < late_threshold:
+        return "mid"
+    return "late"
 
 
 # Default prompt (backwards compat) — same as early stage

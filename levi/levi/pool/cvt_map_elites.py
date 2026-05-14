@@ -302,6 +302,15 @@ class SamplerModelConfig:
     model: ClientSpec
     weight: float = 1.0
 
+    # --- SAL Cơ chế D — Thompson Beta-Bernoulli bandit state ---
+    # Posterior parameters over the accept-rate of this arm. Updated
+    # incrementally by `update_bandit(...)` whenever an offspring produced by
+    # (sampler, model) is evaluated. Reward = accept_indicator ∈ {0, 1}.
+    alpha: float = 1.0  # successes + alpha_prior
+    beta: float = 1.0  # failures + beta_prior
+    # NEW BEST count for this arm (multiplicative bonus in the final weight).
+    new_best_count: int = 0
+
 
 class CVTMAPElitesPool:
     """
@@ -640,19 +649,126 @@ class CVTMAPElitesPool:
         self._sampler_model_pairs.append(SamplerModelConfig(actual_sampler_name, model, weight))
         self._total_weight += weight
 
-    def get_weighted_sampler_config(self) -> tuple[str, ClientSpec]:
+    def get_weighted_sampler_config(
+        self,
+        *,
+        stagnation: Optional[float] = None,
+        bandit_w_min: float = 0.05,
+        bandit_new_best_gamma: float = 0.5,
+    ) -> tuple[str, ClientSpec]:
+        """Pick the next (sampler, model) pair.
+
+        Behaviour:
+        - When ``stagnation`` is None we keep historical behaviour: choose by
+          the static ``weight`` field on each pair (proportional roulette).
+        - When ``stagnation`` is provided we use a Thompson-sampling Beta-
+          Bernoulli bandit over the accept-rate of each arm, biased toward
+          arms with NEW BEST history. Concretely:
+
+              θ_i  ~  Beta(α_i, β_i)             # posterior sample
+              raw_i = θ_i · (1 + γ · nb_i)^(1+s)
+              w_i  = w_min + (1 - w_min) · raw_i / Σ raw_j
+
+          and we then sample proportionally to w_i. Floor ``w_min`` keeps every
+          arm playable so the bandit cannot collapse onto one combination.
+
+        Args:
+            stagnation: s(t) ∈ [0,1]; if None, bandit is disabled.
+            bandit_w_min: weight floor per arm.
+            bandit_new_best_gamma: γ — strength of NEW BEST bias.
+        """
         if not self._sampler_model_pairs:
             raise ValueError("No sampler-model pairs registered. Call register_sampler_model_pair() first.")
 
-        r = random.random() * self._total_weight
-        cumulative = 0.0
-        for pair in self._sampler_model_pairs:
-            cumulative += pair.weight
-            if r <= cumulative:
-                return pair.sampler_name, pair.model
+        if stagnation is None:
+            r = random.random() * self._total_weight
+            cumulative = 0.0
+            for pair in self._sampler_model_pairs:
+                cumulative += pair.weight
+                if r <= cumulative:
+                    return pair.sampler_name, pair.model
+            last = self._sampler_model_pairs[-1]
+            return last.sampler_name, last.model
 
-        last = self._sampler_model_pairs[-1]
-        return last.sampler_name, last.model
+        # SAL Cơ chế D — Thompson Beta-Bernoulli + NEW BEST multiplicative bonus
+        s = max(0.0, min(1.0, float(stagnation)))
+        exponent = 1.0 + s
+        raw = np.empty(len(self._sampler_model_pairs), dtype=float)
+        for i, pair in enumerate(self._sampler_model_pairs):
+            theta = float(np.random.beta(max(pair.alpha, 1e-6), max(pair.beta, 1e-6)))
+            bonus = (1.0 + bandit_new_best_gamma * pair.new_best_count) ** exponent
+            raw[i] = theta * bonus
+        total = float(raw.sum())
+        if total <= 0.0 or not np.isfinite(total):
+            normalized = np.full(len(self._sampler_model_pairs), 1.0 / len(self._sampler_model_pairs))
+        else:
+            normalized = raw / total
+
+        # Mix with floor: w_i = w_min + (1 - N*w_min) * p_i  guarantees
+        # w_i >= w_min and Σ w_i = 1 when 0 ≤ N*w_min ≤ 1. Clamp w_min if a
+        # caller picks a value that would make the floor exceed 1/N.
+        n_arms = len(normalized)
+        w_min = float(max(0.0, min(bandit_w_min, 1.0 / max(n_arms, 1))))
+        weights = w_min + (1.0 - w_min * n_arms) * normalized
+        weights = np.clip(weights, 1e-9, None)
+        weights /= weights.sum()
+
+        idx = int(np.random.choice(len(self._sampler_model_pairs), p=weights))
+        chosen = self._sampler_model_pairs[idx]
+        return chosen.sampler_name, chosen.model
+
+    # ------------------------------------------------------------------
+    # SAL Cơ chế D — bandit posterior updates
+    # ------------------------------------------------------------------
+
+    def update_bandit(
+        self,
+        sampler_name: str,
+        model: ClientSpec,
+        *,
+        accepted: bool,
+        is_new_best: bool = False,
+    ) -> None:
+        """Update Beta posterior and NEW BEST counter for the matching arm.
+
+        Looks up the (sampler_name, model) arm and increments α / β. Idempotent
+        on unknown arms (silently no-ops) so callers don't need to special-case
+        bundle or paradigm-shift evaluations that don't correspond to a bandit
+        arm.
+        """
+        from ..clients.base import client_name as _client_name
+
+        target_model = _client_name(model)
+        for pair in self._sampler_model_pairs:
+            if pair.sampler_name != sampler_name:
+                continue
+            if _client_name(pair.model) != target_model:
+                continue
+            if accepted:
+                pair.alpha += 1.0
+            else:
+                pair.beta += 1.0
+            if is_new_best:
+                pair.new_best_count += 1
+            return
+
+    def get_bandit_stats(self) -> list[dict]:
+        """Return per-arm bandit posterior summary (for logging / snapshot)."""
+        stats = []
+        for pair in self._sampler_model_pairs:
+            total = pair.alpha + pair.beta
+            mean = pair.alpha / total if total > 0 else 0.5
+            stats.append(
+                {
+                    "sampler": pair.sampler_name,
+                    "model": str(pair.model) if not hasattr(pair.model, "model") else pair.model.model,
+                    "alpha": pair.alpha,
+                    "beta": pair.beta,
+                    "posterior_mean": mean,
+                    "new_best_count": pair.new_best_count,
+                }
+            )
+        return stats
 
     def best(self, metric: str = "score") -> Program:
         """Return best program in archive."""
@@ -690,6 +806,53 @@ class CVTMAPElitesPool:
 
     def on_generation_complete(self) -> None:
         self._generation += 1
+
+    # ------------------------------------------------------------------
+    # SAL Cơ chế B — behaviorally-far elite for contrastive context
+    # ------------------------------------------------------------------
+
+    def select_diverse_elite_from(self, parent_cell: int) -> Optional[Elite]:
+        """Return the elite whose behaviour vector is farthest from `parent_cell`.
+
+        Used when stagnation depth s(t) ≥ context_threshold: the producer
+        appends this elite as a contrasting inspiration so the mutation prompt
+        sees not just "parent + nearby elites" but also "a structurally
+        different solution".
+
+        Returns None when the archive has fewer than 2 elites or the cell is
+        missing from the archive.
+        """
+        if not self._elites or parent_cell not in self._elites or len(self._elites) < 2:
+            return None
+        parent_behavior = self._elites[parent_cell].behavior
+        try:
+            parent_vec = np.array([parent_behavior[f] for f in self._feature_names], dtype=float)
+        except Exception:
+            return None
+
+        best_idx: Optional[int] = None
+        best_dist: float = -1.0
+        for cell_idx, elite in self._elites.items():
+            if cell_idx == parent_cell:
+                continue
+            try:
+                vec = np.array([elite.behavior[f] for f in self._feature_names], dtype=float)
+            except Exception:
+                continue
+            dist = float(np.linalg.norm(vec - parent_vec))
+            if dist > best_dist:
+                best_dist = dist
+                best_idx = cell_idx
+
+        if best_idx is None:
+            return None
+        return self._elites[best_idx]
+
+    def best_elite(self) -> Optional[Elite]:
+        """Return the elite with the highest primary score (or None)."""
+        if not self._elites:
+            return None
+        return max(self._elites.values(), key=lambda e: e.result.primary_score)
 
     def get_stats(self) -> dict:
         stats = {

@@ -13,6 +13,14 @@ import numpy as np
 N_CIRCLES = 26
 EPS = 1e-6
 
+# Used by scripts/run_levi.py → Levi BehaviorConfig.score_keys (numeric fields from score_fn).
+BEHAVIOR_SCORE_KEYS = (
+    "boundary_touch_fraction",
+    "nn_gap_mean",
+    "nn_gap_cv",
+    "radius_entropy",
+)
+
 PROBLEM_DESCRIPTION = f"""
 # Circle Packing (n=26, unit square)
 

@@ -4,7 +4,9 @@
 Every example under ``levi/examples/<name>/`` follows the same shape: there
 is a ``problem.py`` that exports ``PROBLEM_DESCRIPTION``,
 ``FUNCTION_SIGNATURE``, ``score_fn``, and optionally ``SEED_PROGRAM`` /
-``INPUTS`` / ``get_lazy_inputs``. This script picks one of those directories
+``INPUTS`` / ``get_lazy_inputs`` / ``BEHAVIOR_SCORE_KEYS`` (list/tuple of keys
+present in ``score_fn`` dicts for ``BehaviorConfig.score_keys``). This script
+picks one of those directories
 and runs LEVI on it, exposing every budget and pipeline knob as a flag so
 the GitHub Actions reusable workflow can wire them straight from inputs.
 
@@ -50,6 +52,27 @@ def _opt_float(value: str | None) -> float | None:
     if value == "" or value.lower() == "none":
         return None
     return float(value)
+
+
+def _parse_csv_keys(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _resolve_behavior_score_keys(cli_value: str | None, problem: object) -> list[str] | None:
+    """CLI overrides problem.BEHAVIOR_SCORE_KEYS; omit flag → use problem constant if defined."""
+    if cli_value is not None:
+        keys = _parse_csv_keys(cli_value)
+        return keys if keys else None
+    raw = getattr(problem, "BEHAVIOR_SCORE_KEYS", None)
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        keys = _parse_csv_keys(raw)
+        return keys if keys else None
+    if isinstance(raw, (list, tuple)):
+        keys = [str(k).strip() for k in raw if str(k).strip()]
+        return keys if keys else None
+    return None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -114,6 +137,25 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Where to drop snapshot.json + summary.json (default: outputs/levi/<example>/<ts>).",
     )
+    p.add_argument(
+        "--n-centroids",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "CVT-MAP-Elites archive size (number of behavior cells). "
+            "Levi default is 50; omit to keep default."
+        ),
+    )
+    p.add_argument(
+        "--behavior-score-keys",
+        default=None,
+        metavar="KEYS",
+        help=(
+            "Comma-separated keys appended to BehaviorExtractor via BehaviorConfig.score_keys "
+            "(must be numeric fields on score_fn results). Overrides problem.BEHAVIOR_SCORE_KEYS when set."
+        ),
+    )
     return p.parse_args()
 
 
@@ -176,6 +218,12 @@ def main() -> int:
     print(f"[levi] budget secs   = {seconds}")
     print(f"[levi] target_score  = {target_score}")
     print(f"[levi] output_dir    = {output_dir}")
+    if args.n_centroids is not None:
+        print(f"[levi] n_centroids   = {args.n_centroids}")
+
+    behavior_score_keys = _resolve_behavior_score_keys(args.behavior_score_keys, problem)
+    if behavior_score_keys is not None:
+        print(f"[levi] behavior score_keys = {behavior_score_keys}")
 
     init_updates: dict = {}
     if args.init_diverse_seeds is not None:
@@ -209,9 +257,14 @@ def main() -> int:
             eval_timeout=eval_timeout,
         ),
         "output_dir": str(output_dir),
+        "sal": levi.SalConfig(enabled=True),
     }
     if evolve_init is not None:
         evolve_kw["init"] = evolve_init
+    if args.n_centroids is not None:
+        evolve_kw["cvt"] = levi.CVTConfig(n_centroids=args.n_centroids)
+    if behavior_score_keys is not None:
+        evolve_kw["behavior"] = levi.BehaviorConfig(score_keys=behavior_score_keys)
 
     result = levi.evolve_code(**evolve_kw)
 
@@ -230,6 +283,8 @@ def main() -> int:
         },
         "small_model": args.small_model,
         "large_model": args.large_model,
+        "n_centroids": args.n_centroids,
+        "behavior_score_keys": behavior_score_keys,
         "init": {
             "n_diverse_seeds": effective_init.n_diverse_seeds,
             "n_variants_per_seed": effective_init.n_variants_per_seed,

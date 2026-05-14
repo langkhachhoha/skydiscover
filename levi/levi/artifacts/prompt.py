@@ -428,8 +428,14 @@ class PromptAdapter(ArtifactAdapter):
         use_diff: bool = False,
         target: str | None = None,
         feedback: Sequence[str] | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        stagnation: float | None = None,
+        top_failures: Sequence[str] | None = None,
     ) -> str:
-        del model, use_diff
+        # SAL kwargs are silently ignored for the prompt-bundle adapter; SAL
+        # currently targets code evolution only.
+        del model, use_diff, best_score, evals_since_best, stagnation, top_failures
         if self._is_bundle and target is not None:
             return self._build_bundle_mutation_prompt(
                 parents, target=target, meta_advice=meta_advice, feedback=feedback
@@ -486,8 +492,14 @@ class PromptAdapter(ArtifactAdapter):
         *,
         n_evaluations: int,
         budget_progress: float = 0.0,
+        stagnation: float | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        top_failures: Sequence[str] | None = None,
+        sal_thresholds: tuple[float, float] | None = None,
     ) -> str:
         del n_evaluations, budget_progress
+        del stagnation, best_score, evals_since_best, top_failures, sal_thresholds
         parts = []
         for idx, (cluster_id, elite) in enumerate(representatives, start=1):
             parts.append(

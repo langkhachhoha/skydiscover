@@ -254,6 +254,11 @@ class PipelineRunner:
             except (TypeError, ValueError):
                 cell_index_int = None
 
+            # SAL — keep the O(1) cache fresh so stagnation_depth() stays accurate
+            # when a PE-produced candidate sets a new best.
+            if is_new_best:
+                self.state.eval_count_at_last_best = self.state.eval_count
+
             self.state.record_score(
                 score=score,
                 accepted=accepted,
@@ -262,6 +267,17 @@ class PipelineRunner:
                 cell_index=cell_index_int,
                 is_punctuated_equilibrium=True,
             )
+
+            # SAL Cơ chế D — also update the Thompson bandit on PE-produced
+            # candidates so PE outcomes influence future weighting too. We
+            # look up the matching sampler-model pair; pairs that don't match
+            # are silently ignored inside the pool.
+            if self.config.sal.enabled and self.config.sal.enable_d_thompson:
+                # PE evaluations use synthetic sampler names like "pe_paradigm_shift"
+                # which won't match any registered arm; that's the intended behaviour
+                # (PE has its own quality signal and shouldn't pollute the mutation
+                # bandit's posterior).
+                pass
 
             if is_new_best:
                 status = "NEW BEST ★"
@@ -326,12 +342,23 @@ class PipelineRunner:
                     )
 
                     try:
+                        # Snapshot best score before PE — SAL Cơ chế E uses
+                        # the delta to update `consecutive_pe_no_best` so the
+                        # gate for Hard-PE has a deterministic source of truth.
+                        best_before_pe = self.state.best_score_so_far
                         stats = await self.pe.trigger(self.state.eval_count, self.state.budget_progress)
                         if not isinstance(stats, dict):
                             raise ValueError(f"Unexpected PE stats type: {type(stats).__name__}")
                         # PE LLM cost is accounted centrally by state.acompletion.
                         self._ingest_pe_stats(stats)
                         self._sync_best_score_from_pool()
+
+                        if self.config.sal.enabled and self.config.sal.enable_e_hard_pe:
+                            if self.state.best_score_so_far > best_before_pe:
+                                self.state.consecutive_pe_no_best = 0
+                            else:
+                                self.state.consecutive_pe_no_best += 1
+
                         # Prevent immediate re-triggering when PE's own evaluations
                         # move eval_count onto another interval boundary.
                         self.state.last_pe_eval_count = max(

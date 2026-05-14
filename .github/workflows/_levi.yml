@@ -78,6 +78,11 @@ on:
         required: false
         type: string
         default: ""
+      n_centroids:
+        description: "CVT archive cells (Levi default 50). Blank keeps default."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   levi:
@@ -127,6 +132,10 @@ jobs:
           if [ -n "${{ inputs.init_diverse_seeds }}" ]; then
             INIT_OPTS="$INIT_OPTS --init-diverse-seeds ${{ inputs.init_diverse_seeds }}"
           fi
+          CVT_OPTS=""
+          if [ -n "${{ inputs.n_centroids }}" ]; then
+            CVT_OPTS="$CVT_OPTS --n-centroids ${{ inputs.n_centroids }}"
+          fi
           uv run python ../scripts/run_levi.py \
             --example-dir "../${{ inputs.example_dir }}" \
             --problem-module "${{ inputs.problem_module }}" \
@@ -140,7 +149,8 @@ jobs:
             --eval-processes "${{ inputs.eval_processes }}" \
             --eval-timeout "${{ inputs.eval_timeout }}" \
             --output-dir "../${{ env.OUTPUT_DIR }}" \
-            $INIT_OPTS
+            $INIT_OPTS \
+            $CVT_OPTS
 
 
 

@@ -533,6 +533,14 @@ async def _run_async(
             init_cost, init_score_history = await diversifier.run(pool, config.seed_program, seed_result, extractor)
             logger.info(f"[Levi] Init phase complete, cost: ${init_cost:.3f}")
 
+            # SAL — snapshot σ₀ from init-phase scores so future
+            # extensions (and the diagnostic logs) have a baseline to
+            # compare recent score-std against.
+            try:
+                state.finalize_init_baseline(config.sal.sigma_window)
+            except Exception as e:
+                logger.warning(f"[SAL] finalize_init_baseline failed (ignored): {e}")
+
         # Run main pipeline
         logger.info("[Levi] Starting evolution pipeline")
         runner = PipelineRunner(

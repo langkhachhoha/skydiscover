@@ -50,6 +50,53 @@ Output ONLY the complete Python code in a ```python block.
 """
 
 
+def _trajectory_body(
+    *,
+    best_score: float | None,
+    evals_since_best: int | None,
+    stagnation: float | None,
+    top_failures: Sequence[str] | None,
+) -> str:
+    """Render only the bullet body of the search-trajectory context.
+
+    Returns "" when nothing meaningful is available. Caller adds the section
+    header (so this can be passed to either PromptBuilder.add_section, which
+    adds its own '## Title', or to a manual template).
+    """
+    parts: list[str] = []
+    if best_score is not None:
+        parts.append(f"- Current best score: {best_score:.17g}")
+    if evals_since_best is not None:
+        parts.append(f"- Evaluations since the last NEW BEST: {evals_since_best}")
+    if stagnation is not None:
+        parts.append(f"- Stagnation depth s(t): {stagnation:.2f} (0=improving, 1=stuck)")
+    if top_failures:
+        bullets = "\n".join(f"  - {f}" for f in top_failures[:3])
+        parts.append("- Recurring failure modes:\n" + bullets)
+    return "\n".join(parts)
+
+
+def _build_trajectory_block(
+    *,
+    best_score: float | None,
+    evals_since_best: int | None,
+    stagnation: float | None,
+    top_failures: Sequence[str] | None,
+) -> str:
+    """Markdown section with header. Used by build_paradigm_shift_prompt
+    which splices the block into a manual template.
+    """
+    body = _trajectory_body(
+        best_score=best_score,
+        evals_since_best=evals_since_best,
+        stagnation=stagnation,
+        top_failures=top_failures,
+    )
+    if not body:
+        return ""
+    return "\n## Search Trajectory\n" + body + "\n"
+
+
 def apply_diff(original: str, diff_response: str) -> str | None:
     """Apply SEARCH/REPLACE diff blocks to original code."""
     result = original
@@ -118,11 +165,27 @@ class CodeAdapter(ArtifactAdapter):
         meta_advice: str | None = None,
         model: ClientSpec | None = None,
         use_diff: bool = False,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        stagnation: float | None = None,
+        top_failures: Sequence[str] | None = None,
     ) -> str:
         builder = PromptBuilder()
         builder.add_section("Problem", self.config.problem_description, priority=10)
         builder.add_section("Signature", f"```python\n{self.config.function_signature}\n```", priority=20)
         builder.add_parents(list(parents), priority=30)
+
+        # SAL Cơ chế A.2 — inject lightweight trajectory context so the
+        # mutation model can see how far it is from the running best score.
+        # We pass only the bullet body (header is added by PromptBuilder).
+        trajectory_body = _trajectory_body(
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            stagnation=stagnation,
+            top_failures=top_failures,
+        )
+        if trajectory_body:
+            builder.add_section("Search Trajectory", trajectory_body, priority=40)
 
         mutation_overrides = self.config.prompt_overrides.get("mutation", {})
         model_key = client_name(model) if model is not None else None
@@ -178,8 +241,21 @@ class CodeAdapter(ArtifactAdapter):
         *,
         n_evaluations: int,
         budget_progress: float = 0.0,
+        stagnation: float | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        top_failures: Sequence[str] | None = None,
+        sal_thresholds: tuple[float, float] | None = None,
     ) -> str:
-        stage = get_budget_stage(budget_progress)
+        if sal_thresholds is not None:
+            stage = get_budget_stage(
+                budget_progress,
+                stagnation=stagnation,
+                mid_threshold=sal_thresholds[0],
+                late_threshold=sal_thresholds[1],
+            )
+        else:
+            stage = get_budget_stage(budget_progress, stagnation=stagnation)
 
         rep_text_parts = []
         for idx, (cluster_id, elite) in enumerate(representatives):
@@ -190,6 +266,12 @@ class CodeAdapter(ArtifactAdapter):
             )
 
         representative_solutions = "\n\n".join(rep_text_parts)
+        trajectory_block = _build_trajectory_block(
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            stagnation=stagnation,
+            top_failures=top_failures,
+        )
 
         override = self.config.prompt_overrides.get("paradigm_shift")
         if override:
@@ -206,7 +288,7 @@ class CodeAdapter(ArtifactAdapter):
 ## Current Best Solutions ({len(representatives)} regions, {n_evaluations} evaluations)
 
 {representative_solutions}
-
+{trajectory_block}
 ## Your Task
 {override}
 
@@ -214,13 +296,23 @@ Output ONLY complete, runnable Python code in a ```python block.
 """
 
         template = PARADIGM_SHIFT_PROMPTS[stage]
-        return template.format(
+        rendered = template.format(
             problem_description=self.config.problem_description,
             function_signature=self.config.function_signature,
             n_evaluations=n_evaluations,
             n_regions=len(representatives),
             representative_solutions=representative_solutions,
         )
+        if trajectory_block:
+            # Insert trajectory block right before the final Output section so
+            # the model sees it as additional context, not as an instruction.
+            split_token = "## Output"
+            if split_token in rendered:
+                head, _, tail = rendered.partition(split_token)
+                rendered = f"{head}{trajectory_block}\n{split_token}{tail}"
+            else:
+                rendered = f"{rendered}\n{trajectory_block}"
+        return rendered
 
     def build_variant_prompt(self, base_content: str, base_score: float) -> str:
         return VARIANT_GENERATION_PROMPT.format(

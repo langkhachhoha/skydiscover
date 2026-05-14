@@ -15,6 +15,7 @@ from .models import (
     PromptOptConfig,
     ProxyBenchmarkConfig,
     PunctuatedEquilibriumConfig,
+    SalConfig,
     SamplerModelPair,
 )
 
@@ -30,6 +31,7 @@ __all__ = [
     "PunctuatedEquilibriumConfig",
     "PromptOptConfig",
     "ProxyBenchmarkConfig",
+    "SalConfig",
     "LeviConfig",
     "LeviResult",
 ]

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import random
 
 from ..artifacts import ArtifactAdapter, apply_diff as _apply_diff
@@ -64,13 +65,39 @@ async def llm_producer(
                     logger.error(f"[LLM-{worker_id}] Archive is empty; stopping pipeline")
                     stop_event.set()
                     break
-                sampler_name, model = pool.get_weighted_sampler_config()
+                sampler_name, model = pool.get_weighted_sampler_config(
+                    stagnation=state.stagnation_depth(config.sal.tau) if config.sal.enabled else None,
+                )
                 n_parents = config.pipeline.n_parents + config.pipeline.n_inspirations
                 context = {"budget_progress": state.budget_progress}
                 sample = pool.sample(sampler_name, n_parents=n_parents, context=context)
 
+                # SAL Cơ chế B — when stagnant, augment parents with global-best
+                # and a behaviorally-far elite so the mutation prompt sees a
+                # gold standard and a contrasting strategy, not just look-alikes.
+                extra_inspirations: list = []
+                if config.sal.enabled and config.sal.enable_b_mutation_ctx:
+                    s = state.stagnation_depth(config.sal.tau)
+                    if s >= config.sal.context_threshold:
+                        parent_cell = sample.metadata.get("source_cell")
+                        best_elite = pool.best_elite()
+                        if best_elite is not None and best_elite.program is not sample.parent:
+                            extra_inspirations.append(best_elite.program)
+                        if parent_cell is not None:
+                            far_elite = pool.select_diverse_elite_from(parent_cell)
+                            if (
+                                far_elite is not None
+                                and far_elite.program is not sample.parent
+                                and (not extra_inspirations or far_elite.program is not extra_inspirations[0])
+                            ):
+                                extra_inspirations.append(far_elite.program)
+
             parent = sample.parent
             inspirations = [p for p in sample.inspirations if random.random() < 0.8]
+            # Append SAL contrast inspirations after the sampler ones, but cap
+            # total context size to keep prompts compact.
+            inspirations.extend(extra_inspirations)
+            inspirations = inspirations[:3]
             parents = [parent] + inspirations
 
             # Determine output mode from config
@@ -99,6 +126,24 @@ async def llm_producer(
                 mutation_kwargs["target"] = target
             if feedback:
                 mutation_kwargs["feedback"] = feedback
+
+            # SAL Cơ chế A.2 — pass trajectory context only for bare CodeAdapter
+            # (PromptAdapter / bundle adapter have a different signature).
+            if (
+                config.sal.enabled
+                and config.sal.enable_a_pe_staging
+                and not is_bundle
+            ):
+                s = state.stagnation_depth(config.sal.tau)
+                top_failures = [err for err, _ in sorted(
+                    state.all_error_counts.items(), key=lambda x: -x[1]
+                )[:3]]
+                mutation_kwargs["best_score"] = (
+                    state.best_score_so_far if math.isfinite(state.best_score_so_far) else None
+                )
+                mutation_kwargs["evals_since_best"] = state.evals_since_best()
+                mutation_kwargs["stagnation"] = s
+                mutation_kwargs["top_failures"] = top_failures or None
 
             prompt = artifact_adapter.build_mutation_prompt(
                 [ProgramWithScore(p, None) for p in parents],

@@ -44,8 +44,16 @@ class ArtifactAdapter(ABC):
         meta_advice: str | None = None,
         model: ClientSpec | None = None,
         use_diff: bool = False,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        stagnation: float | None = None,
+        top_failures: Sequence[str] | None = None,
     ) -> str:
-        """Build the main mutation prompt for the producer pipeline."""
+        """Build the main mutation prompt for the producer pipeline.
+
+        SAL kwargs (`best_score`, `evals_since_best`, `stagnation`,
+        `top_failures`) are optional — implementations may ignore them.
+        """
 
     @abstractmethod
     def extract_candidate(
@@ -72,8 +80,19 @@ class ArtifactAdapter(ABC):
         *,
         n_evaluations: int,
         budget_progress: float = 0.0,
+        stagnation: float | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        top_failures: Sequence[str] | None = None,
+        sal_thresholds: tuple[float, float] | None = None,
     ) -> str:
-        """Build the punctuated-equilibrium paradigm prompt."""
+        """Build the punctuated-equilibrium paradigm prompt.
+
+        SAL kwargs (`stagnation`, `best_score`, `evals_since_best`,
+        `top_failures`, `sal_thresholds`) are optional — implementations may
+        ignore them. The code adapter uses them to stage prompts and inject a
+        search-trajectory section.
+        """
 
     @abstractmethod
     def build_variant_prompt(self, base_content: str, base_score: float) -> str:

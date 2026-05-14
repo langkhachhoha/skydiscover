@@ -10,6 +10,7 @@ import asyncio
 import logging
 import random
 
+import numpy as np
 from sklearn.cluster import KMeans
 
 from ..artifacts import ArtifactAdapter
@@ -62,15 +63,20 @@ class PunctuatedEquilibrium:
         if self._is_bundle:
             self.pe_component_selector = make_component_selector(self.pe_config.component_selector)
 
-    def _cluster_occupied_centroids(self) -> dict[int, list[int]]:
+    def _cluster_occupied_centroids(self, n_clusters_override: int | None = None) -> dict[int, list[int]]:
         """
         Cluster occupied centroids and return mapping of cluster_id -> cell_indices.
 
         Returns empty dict if not enough occupied cells for clustering.
+
+        When `n_clusters_override` is provided (SAL Cơ chế E — Hard-PE) we use
+        that value instead of `self.pe_config.n_clusters`, allowing a heavier
+        partition of the archive on the rare "we're really stuck" trigger.
         """
         elites = self.pool.get_elites()
-        if len(elites) < self.pe_config.n_clusters:
-            logger.info(f"[PE] Not enough elites ({len(elites)}) for {self.pe_config.n_clusters} clusters")
+        target_n = n_clusters_override if n_clusters_override is not None else self.pe_config.n_clusters
+        if len(elites) < target_n:
+            logger.info(f"[PE] Not enough elites ({len(elites)}) for {target_n} clusters")
             return {}
 
         cell_indices = list(elites.keys())
@@ -83,7 +89,7 @@ class PunctuatedEquilibrium:
         # Get centroid vectors for occupied cells only
         occupied_centroids = centroids[cell_indices]
 
-        n_clusters = min(self.pe_config.n_clusters, len(cell_indices))
+        n_clusters = min(target_n, len(cell_indices))
         kmeans = KMeans(
             n_clusters=n_clusters,
             init="k-means++",
@@ -105,21 +111,83 @@ class PunctuatedEquilibrium:
     def _select_cluster_representatives(
         self,
         clusters: dict[int, list[int]],
+        *,
+        farthest_first: bool = False,
     ) -> list[tuple[int, Elite]]:
         """
-        Select highest-performing elite from each cluster.
+        Select a representative elite from each cluster.
 
-        Returns list of (cluster_id, elite) tuples.
+        Default: per-cluster max-score (the legacy behaviour).
+
+        SAL Cơ chế E `farthest_first=True`: from each cluster pick the elite
+        whose behaviour vector is farthest from the centroid of all elites
+        already picked. That diversifies the prompt context — the heavy
+        model sees structurally distinct anchors, not score-similar ones.
         """
-        representatives = []
+        representatives: list[tuple[int, Elite]] = []
         elites = self.pool.get_elites()
+
+        if not farthest_first:
+            for cluster_id, cell_indices in clusters.items():
+                cluster_elites = [(idx, elites[idx]) for idx in cell_indices]
+                _best_idx, best_elite = max(
+                    cluster_elites, key=lambda x: x[1].result.primary_score
+                )
+                representatives.append((cluster_id, best_elite))
+            return representatives
+
+        # Farthest-first per-cluster selection (SAL Hard-PE).
+        picked_vecs: list[np.ndarray] = []
+        feature_names = self.pool._feature_names
+
+        def _vec(elite: Elite) -> np.ndarray:
+            try:
+                return np.array([elite.behavior[f] for f in feature_names], dtype=float)
+            except Exception:
+                return np.zeros(len(feature_names), dtype=float)
 
         for cluster_id, cell_indices in clusters.items():
             cluster_elites = [(idx, elites[idx]) for idx in cell_indices]
-            best_idx, best_elite = max(cluster_elites, key=lambda x: x[1].result.primary_score)
-            representatives.append((cluster_id, best_elite))
+            if not picked_vecs:
+                # First cluster — fall back to max-score so we keep a strong
+                # anchor in the prompt.
+                _, best_elite = max(cluster_elites, key=lambda x: x[1].result.primary_score)
+                representatives.append((cluster_id, best_elite))
+                picked_vecs.append(_vec(best_elite))
+                continue
+
+            anchor_centroid = np.mean(np.stack(picked_vecs, axis=0), axis=0)
+            best_dist = -1.0
+            best_elite_here = cluster_elites[0][1]
+            for _, elite in cluster_elites:
+                v = _vec(elite)
+                d = float(np.linalg.norm(v - anchor_centroid))
+                if d > best_dist:
+                    best_dist = d
+                    best_elite_here = elite
+            representatives.append((cluster_id, best_elite_here))
+            picked_vecs.append(_vec(best_elite_here))
 
         return representatives
+
+    def _should_fire_hard_pe(self) -> bool:
+        """SAL Cơ chế E gate — fire a heavier PE when *really* stuck.
+
+        Conditions (all must hold):
+          - SAL enabled, mechanism E enabled.
+          - We haven't burned the per-run hard-PE budget yet.
+          - The last 2 PE triggers in a row produced no NEW BEST.
+          - Stagnation depth s(t) ≥ hard_pe_threshold.
+        """
+        sal = self.config.sal
+        if not (sal.enabled and sal.enable_e_hard_pe):
+            return False
+        if self.state.hard_pe_count >= sal.hard_pe_max_per_run:
+            return False
+        if self.state.consecutive_pe_no_best < 2:
+            return False
+        s = self.state.stagnation_depth(sal.tau)
+        return s >= sal.hard_pe_threshold
 
     def _build_paradigm_shift_prompt(
         self,
@@ -135,10 +203,31 @@ class PunctuatedEquilibrium:
                 n_evaluations=n_evaluations,
                 budget_progress=budget_progress,
             )
+
+        # SAL Cơ chế A: pass stagnation + trajectory context to the code adapter.
+        sal = self.config.sal
+        stagnation: float | None = None
+        best_score: float | None = None
+        evals_since_best: int | None = None
+        sal_thresholds: tuple[float, float] | None = None
+        if sal.enabled and sal.enable_a_pe_staging:
+            stagnation = self.state.stagnation_depth(sal.tau)
+            evals_since_best = self.state.evals_since_best()
+            best_score = (
+                self.state.best_score_so_far
+                if self.state.best_score_so_far != float("-inf")
+                else None
+            )
+            sal_thresholds = (sal.pe_staging_mid_threshold, sal.pe_staging_late_threshold)
+
         return self.artifact_adapter.build_paradigm_shift_prompt(
             representatives,
             n_evaluations=n_evaluations,
             budget_progress=budget_progress,
+            stagnation=stagnation,
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            sal_thresholds=sal_thresholds,
         )
 
     def _build_variant_prompt(
@@ -214,9 +303,23 @@ class PunctuatedEquilibrium:
                 return False
             return (self.state.eval_count + pe_evals_started) < eval_limit
 
+        # SAL Cơ chế E — check whether this trigger should be a Hard-PE
+        # (heavier clustering, farthest-first reps, forced reasoning effort).
+        sal = self.config.sal
+        is_hard_pe = self._should_fire_hard_pe()
+        hard_n_clusters = sal.hard_pe_n_clusters if is_hard_pe else None
+        if is_hard_pe:
+            self.state.hard_pe_count += 1
+            logger.info(
+                f"[PE] HARD-PE #{self.state.hard_pe_count}/{sal.hard_pe_max_per_run} "
+                f"(s={self.state.stagnation_depth(sal.tau):.2f}, "
+                f"consecutive_no_best={self.state.consecutive_pe_no_best})"
+            )
+            stats["hard_pe"] = True
+
         # Step 1: Cluster occupied centroids
         async with self.archive_lock:
-            clusters = self._cluster_occupied_centroids()
+            clusters = self._cluster_occupied_centroids(n_clusters_override=hard_n_clusters)
 
         if not clusters:
             stats["triggered"] = False
@@ -226,7 +329,9 @@ class PunctuatedEquilibrium:
 
         # Step 2: Select cluster representatives
         async with self.archive_lock:
-            representatives = self._select_cluster_representatives(clusters)
+            representatives = self._select_cluster_representatives(
+                clusters, farthest_first=is_hard_pe
+            )
 
         for cluster_id, elite in representatives:
             logger.info(f"[PE] Cluster {cluster_id} rep: score={elite.result.primary_score:.17g}")
@@ -247,15 +352,20 @@ class PunctuatedEquilibrium:
 
         try:
             extras = {}
+            # SAL Cơ chế E — force higher reasoning effort on Hard-PE.
+            effective_reasoning_effort = self.pe_config.reasoning_effort
+            if is_hard_pe:
+                effective_reasoning_effort = sal.hard_pe_reasoning_effort
+
             # Add reasoning_effort for DeepSeek models if configured
-            if self.pe_config.reasoning_effort:
-                if self.pe_config.reasoning_effort == "disabled":
+            if effective_reasoning_effort:
+                if effective_reasoning_effort == "disabled":
                     # Disable reasoning entirely (e.g., for GLM models)
                     extras["extra_body"] = {"reasoning": {"enabled": False}}
                     logger.info("[PE] Reasoning disabled for paradigm shift")
                 else:
-                    extras["reasoning_effort"] = self.pe_config.reasoning_effort
-                    logger.info(f"[PE] Using reasoning_effort={self.pe_config.reasoning_effort} for paradigm shift")
+                    extras["reasoning_effort"] = effective_reasoning_effort
+                    logger.info(f"[PE] Using reasoning_effort={effective_reasoning_effort} for paradigm shift")
 
             response = await self.state.acompletion(
                 heavy_model,

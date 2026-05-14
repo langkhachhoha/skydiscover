@@ -127,6 +127,65 @@ class ProxyBenchmarkConfig(BaseModel):
     debug_top_k: int = 5
 
 
+class SalConfig(BaseModel):
+    """Stagnation-Adaptive Levi (SAL).
+
+    A coordinated bundle of small enhancements that all read from one signal —
+    the *stagnation depth* s(t) ∈ [0,1] — to escape local optima without
+    breaking existing API.
+
+    Mechanisms (each can be toggled independently for ablation):
+      A. PE prompt staging: pick early / mid / late prompt by s(t).
+      B. Mutation context: when s ≥ context_threshold, augment prompt with the
+         global-best elite and a behaviorally-far elite (farthest-first).
+      C. Meta-advice dual-mode: defensive when s low, offensive when s high.
+      D. Thompson Beta-Bernoulli bandit over sampler-model pairs.
+         Reward = accept_indicator; multiplicative bonus from NEW BEST count.
+      E. Hard-PE: when s ≥ hard_pe_threshold and consecutive PE failed, fire a
+         heavier PE (more clusters, farthest-first reps, reasoning_effort=high).
+    """
+
+    enabled: bool = True
+
+    # --- Stagnation signal ---
+    tau: int = 80
+    """Plateau length (evals) at which s(t) saturates to 1.0."""
+
+    sigma_window: int = 30
+    """Window size for tracking accepted-score std (diagnostic only)."""
+
+    # --- Per-mechanism toggles (all on by default when SAL is enabled) ---
+    enable_a_pe_staging: bool = True
+    enable_b_mutation_ctx: bool = True
+    enable_c_meta_advice: bool = True
+    enable_d_thompson: bool = True
+    enable_e_hard_pe: bool = True
+
+    # --- Cơ chế A ---
+    pe_staging_mid_threshold: float = 0.3
+    pe_staging_late_threshold: float = 0.7
+
+    # --- Cơ chế B ---
+    context_threshold: float = 0.5
+    """s(t) above which mutation context gets global-best + farthest-elite."""
+
+    # --- Cơ chế D ---
+    bandit_w_min: float = 0.05
+    """Floor weight per arm; ensures every arm keeps a chance."""
+
+    bandit_new_best_bonus: float = 0.5
+    """γ in weight ∝ θ × (1 + γ·nb)^(1+s). Higher = stronger NEW BEST bias."""
+
+    bandit_alpha_prior: float = 1.0
+    bandit_beta_prior: float = 1.0
+
+    # --- Cơ chế E ---
+    hard_pe_threshold: float = 0.8
+    hard_pe_max_per_run: int = 2
+    hard_pe_n_clusters: int = 6
+    hard_pe_reasoning_effort: str = "high"
+
+
 class PipelineConfig(BaseModel):
     n_llm_workers: int = 4
     n_eval_processes: int = 4
@@ -165,6 +224,7 @@ class LeviConfig(BaseModel):
     punctuated_equilibrium: PunctuatedEquilibriumConfig = Field(default_factory=PunctuatedEquilibriumConfig)
     prompt_opt: PromptOptConfig = Field(default_factory=PromptOptConfig)
     proxy_benchmark: ProxyBenchmarkConfig = Field(default_factory=ProxyBenchmarkConfig)
+    sal: SalConfig = Field(default_factory=SalConfig)
 
     output_dir: Optional[str] = None  # Directory for snapshots
 

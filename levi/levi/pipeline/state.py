@@ -360,6 +360,28 @@ class PipelineState:
         self.last_pe_eval_count: int = 0
         self.pe_trigger_count: int = 0
 
+        # SAL tracking (Stagnation-Adaptive Levi)
+        self.sal_sigma_0: float = 0.0
+        """Baseline std of accepted scores (set after init phase)."""
+
+        self.sal_init_finished: bool = False
+        """True once the init phase has populated score_history."""
+
+        self.hard_pe_count: int = 0
+        """Count of hard-PE events fired so far (Cơ chế E cooldown)."""
+
+        self.consecutive_pe_no_best: int = 0
+        """Consecutive PE triggers that produced no NEW BEST."""
+
+        self.eval_count_at_last_best: int = 0
+        """eval_count snapshot at the last strict NEW BEST. O(1) cache for s(t)."""
+
+        self.best_score_at_last_pe: float = float("-inf")
+        """best_score_so_far at the moment of the most recent PE trigger.
+
+        Used by the runner to decide whether a PE produced a NEW BEST (so we
+        can update consecutive_pe_no_best and gate Hard-PE)."""
+
     # ------------------------------------------------------------------
     # Delegation: BudgetTracker
     # ------------------------------------------------------------------
@@ -551,3 +573,50 @@ class PipelineState:
     def get_score_history_list(self) -> list[float]:
         """Get just the best scores over time for the result."""
         return [entry.best_score for entry in self.score_history]
+
+    # ------------------------------------------------------------------
+    # Domain: SAL (Stagnation-Adaptive Levi)
+    # ------------------------------------------------------------------
+
+    def stagnation_depth(self, tau: int) -> float:
+        """Return s(t) ∈ [0,1] = min(1, n_since_best / tau).
+
+        n_since_best is the number of evals since the last strict NEW BEST
+        event. We use the O(1) cache ``eval_count_at_last_best`` that the
+        consumer maintains. (The cache starts at 0, so during init / before
+        the first NEW BEST we treat the whole run as "stagnant since start"
+        — this is intentional, matching the original O(N) scan semantics.)
+
+        Args:
+            tau: plateau length at which s saturates to 1.0.
+        """
+        if tau <= 0:
+            return 0.0
+        n = max(0, self.eval_count - self.eval_count_at_last_best)
+        return min(1.0, n / float(tau))
+
+    def evals_since_best(self) -> int:
+        """Count evals since the last strict NEW BEST (O(1) via cache)."""
+        return max(0, self.eval_count - self.eval_count_at_last_best)
+
+    def recent_score_std(self, window: int) -> float:
+        """Std of accepted scores in the last `window` history entries."""
+        if window <= 1 or not self.score_history:
+            return 0.0
+        recent = self.score_history[-window:]
+        scores = [e.score for e in recent if e.accepted]
+        if len(scores) < 2:
+            return 0.0
+        mean = sum(scores) / len(scores)
+        var = sum((s - mean) ** 2 for s in scores) / len(scores)
+        return var ** 0.5
+
+    def finalize_init_baseline(self, sigma_window: int) -> None:
+        """Capture σ₀ from init-phase score history.
+
+        Called once at the boundary between init and main-loop.
+        """
+        if self.sal_init_finished:
+            return
+        self.sal_sigma_0 = self.recent_score_std(window=max(sigma_window, len(self.score_history)))
+        self.sal_init_finished = True
