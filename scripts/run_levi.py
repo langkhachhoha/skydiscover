@@ -156,6 +156,33 @@ def _parse_args() -> argparse.Namespace:
             "(must be numeric fields on score_fn results). Overrides problem.BEHAVIOR_SCORE_KEYS when set."
         ),
     )
+    p.add_argument(
+        "--prompt-bank",
+        action="store_true",
+        help=(
+            "Enable the mutation prompt-bank + temperature-bank (joint bandit). "
+            "Off by default; when on, every (sampler, model) is cross-product expanded "
+            "with every (prompt_id, llm_temperature) pair."
+        ),
+    )
+    p.add_argument(
+        "--prompt-bank-prompts-file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a JSON list of {id, text} prompts for the bank. "
+            "Default: <example_dir>/mutation_prompts.json (if it exists)."
+        ),
+    )
+    p.add_argument(
+        "--prompt-bank-temperatures-file",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Path to a JSON list of floats for the temperature bank. "
+            "Default: <example_dir>/mutation_temperatures.json (if it exists)."
+        ),
+    )
     return p.parse_args()
 
 
@@ -265,6 +292,34 @@ def main() -> int:
         evolve_kw["cvt"] = levi.CVTConfig(n_centroids=args.n_centroids)
     if behavior_score_keys is not None:
         evolve_kw["behavior"] = levi.BehaviorConfig(score_keys=behavior_score_keys)
+
+    if args.prompt_bank:
+        prompts_file = args.prompt_bank_prompts_file
+        if prompts_file is None:
+            default_prompts = example_dir / "mutation_prompts.json"
+            prompts_file = str(default_prompts) if default_prompts.is_file() else None
+        temperatures_file = args.prompt_bank_temperatures_file
+        if temperatures_file is None:
+            default_temps = example_dir / "mutation_temperatures.json"
+            temperatures_file = str(default_temps) if default_temps.is_file() else None
+        if not prompts_file or not temperatures_file:
+            print(
+                "ERROR: --prompt-bank requires both a prompts file and a temperatures file. "
+                "Provide --prompt-bank-prompts-file / --prompt-bank-temperatures-file or place "
+                "mutation_prompts.json and mutation_temperatures.json under the example dir.",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"[levi] prompt_bank     = enabled")
+        print(f"[levi]   prompts_file        = {prompts_file}")
+        print(f"[levi]   temperatures_file   = {temperatures_file}")
+        evolve_kw["prompt_bank"] = levi.PromptBankConfig(
+            enabled=True,
+            prompts_file=prompts_file,
+            temperatures_file=temperatures_file,
+        )
+    else:
+        evolve_kw["prompt_bank"] = levi.PromptBankConfig(enabled=False)
 
     result = levi.evolve_code(**evolve_kw)
 

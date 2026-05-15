@@ -83,6 +83,21 @@ on:
         required: false
         type: string
         default: ""
+      prompt_bank:
+        description: "Enable the mutation prompt-bank + temperature-bank (joint bandit). Off by default."
+        required: false
+        type: boolean
+        default: false
+      prompt_bank_prompts_file:
+        description: "Path to prompts JSON for the bank (relative to example_dir). Blank → <example_dir>/mutation_prompts.json."
+        required: false
+        type: string
+        default: ""
+      prompt_bank_temperatures_file:
+        description: "Path to temperatures JSON for the bank (relative to example_dir). Blank → <example_dir>/mutation_temperatures.json."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   levi:
@@ -136,6 +151,16 @@ jobs:
           if [ -n "${{ inputs.n_centroids }}" ]; then
             CVT_OPTS="$CVT_OPTS --n-centroids ${{ inputs.n_centroids }}"
           fi
+          PROMPT_BANK_OPTS=""
+          if [ "${{ inputs.prompt_bank }}" = "true" ]; then
+            PROMPT_BANK_OPTS="--prompt-bank"
+            if [ -n "${{ inputs.prompt_bank_prompts_file }}" ]; then
+              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-prompts-file ../${{ inputs.example_dir }}/${{ inputs.prompt_bank_prompts_file }}"
+            fi
+            if [ -n "${{ inputs.prompt_bank_temperatures_file }}" ]; then
+              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-temperatures-file ../${{ inputs.example_dir }}/${{ inputs.prompt_bank_temperatures_file }}"
+            fi
+          fi
           uv run python ../scripts/run_levi.py \
             --example-dir "../${{ inputs.example_dir }}" \
             --problem-module "${{ inputs.problem_module }}" \
@@ -150,7 +175,8 @@ jobs:
             --eval-timeout "${{ inputs.eval_timeout }}" \
             --output-dir "../${{ env.OUTPUT_DIR }}" \
             $INIT_OPTS \
-            $CVT_OPTS
+            $CVT_OPTS \
+            $PROMPT_BANK_OPTS
 
 
 
