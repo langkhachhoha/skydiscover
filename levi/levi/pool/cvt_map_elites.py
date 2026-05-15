@@ -302,10 +302,15 @@ class SamplerModelConfig:
     model: ClientSpec
     weight: float = 1.0
 
+    # Joint bandit-arm dimensions for the prompt bank. None on either field
+    # means "legacy arm", and update_bandit() must match with None on both.
+    mutation_prompt_id: Optional[str] = None
+    llm_temperature: Optional[float] = None
+
     # --- SAL Cơ chế D — Thompson Beta-Bernoulli bandit state ---
     # Posterior parameters over the accept-rate of this arm. Updated
     # incrementally by `update_bandit(...)` whenever an offspring produced by
-    # (sampler, model) is evaluated. Reward = accept_indicator ∈ {0, 1}.
+    # this arm is evaluated. Reward = accept_indicator ∈ {0, 1}.
     alpha: float = 1.0  # successes + alpha_prior
     beta: float = 1.0  # failures + beta_prior
     # NEW BEST count for this arm (multiplicative bonus in the final weight).
@@ -627,6 +632,8 @@ class CVTMAPElitesPool:
         weight: float = 1.0,
         temperature: Optional[float] = None,
         n_cycles: Optional[int] = None,
+        mutation_prompt_id: Optional[str] = None,
+        llm_temperature: Optional[float] = None,
     ) -> None:
         if weight <= 0:
             raise ValueError("Weight must be positive")
@@ -646,7 +653,15 @@ class CVTMAPElitesPool:
         elif sampler_name not in self._samplers:
             raise ValueError(f"Unknown sampler: {sampler_name}. Available: {list(self._samplers.keys())}")
 
-        self._sampler_model_pairs.append(SamplerModelConfig(actual_sampler_name, model, weight))
+        self._sampler_model_pairs.append(
+            SamplerModelConfig(
+                actual_sampler_name,
+                model,
+                weight,
+                mutation_prompt_id=mutation_prompt_id,
+                llm_temperature=llm_temperature,
+            )
+        )
         self._total_weight += weight
 
     def get_weighted_sampler_config(
@@ -655,7 +670,7 @@ class CVTMAPElitesPool:
         stagnation: Optional[float] = None,
         bandit_w_min: float = 0.05,
         bandit_new_best_gamma: float = 0.5,
-    ) -> tuple[str, ClientSpec]:
+    ) -> tuple[str, ClientSpec, Optional[str], Optional[float]]:
         """Pick the next (sampler, model) pair.
 
         Behaviour:
@@ -686,9 +701,9 @@ class CVTMAPElitesPool:
             for pair in self._sampler_model_pairs:
                 cumulative += pair.weight
                 if r <= cumulative:
-                    return pair.sampler_name, pair.model
+                    return pair.sampler_name, pair.model, pair.mutation_prompt_id, pair.llm_temperature
             last = self._sampler_model_pairs[-1]
-            return last.sampler_name, last.model
+            return last.sampler_name, last.model, last.mutation_prompt_id, last.llm_temperature
 
         # SAL Cơ chế D — Thompson Beta-Bernoulli + NEW BEST multiplicative bonus
         s = max(0.0, min(1.0, float(stagnation)))
@@ -715,7 +730,7 @@ class CVTMAPElitesPool:
 
         idx = int(np.random.choice(len(self._sampler_model_pairs), p=weights))
         chosen = self._sampler_model_pairs[idx]
-        return chosen.sampler_name, chosen.model
+        return chosen.sampler_name, chosen.model, chosen.mutation_prompt_id, chosen.llm_temperature
 
     # ------------------------------------------------------------------
     # SAL Cơ chế D — bandit posterior updates
@@ -728,13 +743,19 @@ class CVTMAPElitesPool:
         *,
         accepted: bool,
         is_new_best: bool = False,
+        mutation_prompt_id: Optional[str] = None,
+        llm_temperature: Optional[float] = None,
     ) -> None:
         """Update Beta posterior and NEW BEST counter for the matching arm.
 
-        Looks up the (sampler_name, model) arm and increments α / β. Idempotent
-        on unknown arms (silently no-ops) so callers don't need to special-case
-        bundle or paradigm-shift evaluations that don't correspond to a bandit
-        arm.
+        Looks up the (sampler, model, prompt_id, llm_temperature) arm and
+        increments α / β. Idempotent on unknown arms (silently no-ops) so
+        callers don't need to special-case bundle or paradigm-shift
+        evaluations that don't correspond to a bandit arm.
+
+        When ``mutation_prompt_id`` or ``llm_temperature`` is None on a call,
+        we match arms that also have None on those fields — preserving legacy
+        behaviour when the prompt bank is disabled.
         """
         from ..clients.base import client_name as _client_name
 
@@ -744,6 +765,16 @@ class CVTMAPElitesPool:
                 continue
             if _client_name(pair.model) != target_model:
                 continue
+            if pair.mutation_prompt_id != mutation_prompt_id:
+                continue
+            # Compare llm_temperature with float tolerance to avoid mismatches
+            # from JSON / arithmetic float drift.
+            if pair.llm_temperature is None or llm_temperature is None:
+                if pair.llm_temperature is not llm_temperature:
+                    continue
+            else:
+                if abs(pair.llm_temperature - llm_temperature) > 1e-9:
+                    continue
             if accepted:
                 pair.alpha += 1.0
             else:
@@ -762,6 +793,8 @@ class CVTMAPElitesPool:
                 {
                     "sampler": pair.sampler_name,
                     "model": str(pair.model) if not hasattr(pair.model, "model") else pair.model.model,
+                    "mutation_prompt_id": pair.mutation_prompt_id,
+                    "llm_temperature": pair.llm_temperature,
                     "alpha": pair.alpha,
                     "beta": pair.beta,
                     "posterior_mean": mean,

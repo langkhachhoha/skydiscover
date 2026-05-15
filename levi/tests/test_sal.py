@@ -28,8 +28,13 @@ from levi.pool import CVTMAPElitesPool
 # ---------------------------------------------------------------------------
 
 
-def _make_state() -> PipelineState:
-    return PipelineState(BudgetConfig(evaluations=1_000_000))
+def _make_state(budget: BudgetConfig | None = None) -> PipelineState:
+    """Default: no budget caps → stagnation_depth() reflects only the plateau term.
+
+    Tests that exercise the new budget-pressure branch pass an explicit
+    ``BudgetConfig`` with the relevant limits set.
+    """
+    return PipelineState(budget if budget is not None else BudgetConfig())
 
 
 def _append_score(state: PipelineState, score: float, accepted: bool = True) -> None:
@@ -104,6 +109,59 @@ class TestStagnationDepth:
         _append_score(state, 1.5)
         assert state.evals_since_best() == 3
 
+    def test_evals_budget_drives_signal_when_plateau_is_zero(self):
+        """With an evaluations cap and no plateau, s(t) = evals_used / evals_max."""
+        state = _make_state(BudgetConfig(evaluations=100))
+        # Every score is a NEW BEST → plateau term stays at 0.
+        for v in [1.0, 1.5, 2.0]:
+            _append_score(state, v)
+        # 3 evals out of 100 budget → ratio = 0.03, plateau = 0 → s ≈ 0.03.
+        s = state.stagnation_depth(tau=80)
+        assert 0.029 < s < 0.031
+
+    def test_plateau_dominates_when_larger(self):
+        """max() — plateau term still wins when bigger than budget pressure."""
+        state = _make_state(BudgetConfig(evaluations=10_000))
+        _append_score(state, 2.0)  # NEW BEST
+        for _ in range(40):
+            _append_score(state, 1.5)
+        # plateau = 40/80 = 0.5; eval ratio = 41/10000 = 0.0041 → max = 0.5.
+        s = state.stagnation_depth(tau=80)
+        assert 0.49 < s < 0.51
+
+    def test_seconds_budget_drives_signal(self):
+        """With a seconds cap, elapsed/limit feeds the signal."""
+        state = _make_state(BudgetConfig(seconds=10.0))
+        # Backdate start_time so ~5s have elapsed.
+        state.start_time = time.time() - 5.0
+        s = state.stagnation_depth(tau=80)
+        # plateau = 0 (no scores), seconds ratio ≈ 0.5 → s ≈ 0.5.
+        assert 0.45 < s < 0.55
+
+    def test_dollars_budget_drives_signal(self):
+        """With a dollars cap, total_cost/limit feeds the signal."""
+        state = _make_state(BudgetConfig(dollars=10.0))
+        state.budget_tracker.total_cost = 7.5
+        s = state.stagnation_depth(tau=80)
+        assert 0.74 < s < 0.76
+
+    def test_no_budget_keeps_legacy_zero(self):
+        """Without budget limits, signal stays pure plateau."""
+        state = _make_state(BudgetConfig())
+        for v in [1.0, 1.5, 2.0]:
+            _append_score(state, v)  # always NEW BEST
+        assert state.stagnation_depth(tau=80) == 0.0
+
+    def test_max_over_all_defined_budgets(self):
+        """All three caps defined → signal = max(plateau, seconds, dollars, evals)."""
+        state = _make_state(BudgetConfig(seconds=100.0, dollars=10.0, evaluations=1000))
+        state.start_time = time.time() - 10.0  # seconds ratio = 0.10
+        state.budget_tracker.total_cost = 8.0  # dollars ratio = 0.80
+        _append_score(state, 2.0)  # plateau=0, evals ratio = 1/1000 = 0.001
+        s = state.stagnation_depth(tau=80)
+        # Dollars ratio should win.
+        assert 0.79 < s < 0.81
+
 
 # ---------------------------------------------------------------------------
 # Cơ chế A — get_budget_stage routing
@@ -149,7 +207,7 @@ class TestThompsonBandit:
         pool = _fresh_pool()
         # No stagnation = legacy weighted-roulette path.
         np.random.seed(0)
-        name, model = pool.get_weighted_sampler_config(stagnation=None)
+        name, model, _, _ = pool.get_weighted_sampler_config(stagnation=None)
         assert (name, model) in {
             ("softmax_T0.3", "model_a"),
             ("softmax_T1.0", "model_b"),
@@ -187,7 +245,7 @@ class TestThompsonBandit:
         a_wins = 0
         n_draws = 400
         for _ in range(n_draws):
-            name, _ = pool.get_weighted_sampler_config(stagnation=0.9)
+            name, _, _, _ = pool.get_weighted_sampler_config(stagnation=0.9)
             if name == "softmax_T0.3":
                 a_wins += 1
         # Under high stagnation we expect strong commitment to arm A.

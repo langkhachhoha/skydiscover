@@ -158,6 +158,60 @@ class CodeAdapter(ArtifactAdapter):
             timeout=self.config.pipeline.eval_timeout if timeout is None else timeout,
         )
 
+    def build_mutation_prompt_from_template(
+        self,
+        parents: Sequence[ProgramWithScore],
+        template: str,
+        *,
+        meta_advice: str | None = None,
+        feedback: Sequence[str] | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        stagnation: float | None = None,
+        top_failures: Sequence[str] | None = None,
+    ) -> str:
+        """Build mutation prompt from a full-template string (prompt-bank mode).
+
+        Supported placeholders (missing ones render as empty string):
+          {problem_description}, {function_signature}, {parents_block},
+          {search_trajectory_block}, {feedback_block}, {meta_advice_block}
+        """
+
+        class _SafeFmt(dict):
+            def __missing__(self, key):  # type: ignore[override]
+                return ""
+
+        parent_blocks: list[str] = []
+        for i, p in enumerate(parents):
+            label = f"v{i + 1}"
+            parent_blocks.append(f"## {label}\nScore: {p.score}\n```python\n{p.program.content}\n```")
+        parents_block = "\n\n".join(parent_blocks)
+
+        trajectory_body = _trajectory_body(
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            stagnation=stagnation,
+            top_failures=top_failures,
+        )
+        search_trajectory_block = f"## Search Trajectory\n{trajectory_body}" if trajectory_body else ""
+
+        feedback_block = ""
+        if feedback:
+            bullets = "\n".join(f"- {f}" for f in feedback)
+            feedback_block = f"## Feedback\n{bullets}"
+
+        meta_advice_block = f"## Meta-Advice\n{meta_advice}" if meta_advice else ""
+
+        values = _SafeFmt(
+            problem_description=self.config.problem_description,
+            function_signature=self.config.function_signature,
+            parents_block=parents_block,
+            search_trajectory_block=search_trajectory_block,
+            feedback_block=feedback_block,
+            meta_advice_block=meta_advice_block,
+        )
+        return template.format_map(values)
+
     def build_mutation_prompt(
         self,
         parents: Sequence[ProgramWithScore],

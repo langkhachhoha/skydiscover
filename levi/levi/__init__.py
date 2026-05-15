@@ -42,6 +42,7 @@ from .config import (
     LeviResult,
     MetaAdviceConfig,
     PipelineConfig,
+    PromptBankConfig,
     PromptOptConfig,
     ProxyBenchmarkConfig,
     PunctuatedEquilibriumConfig,
@@ -118,6 +119,7 @@ __all__ = [
     "PipelineConfig",
     "PunctuatedEquilibriumConfig",
     "PromptOptConfig",
+    "PromptBankConfig",
     "ProxyBenchmarkConfig",
     "SalConfig",
     # Methods

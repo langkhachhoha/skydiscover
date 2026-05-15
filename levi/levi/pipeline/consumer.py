@@ -221,7 +221,12 @@ async def eval_consumer(
                     pool.update_sampler(item["sampler"], item["source_cell"], success=False)
                     if sal_bandit_active:
                         pool.update_bandit(
-                            item["sampler"], item["model"], accepted=False, is_new_best=False
+                            item["sampler"],
+                            item["model"],
+                            accepted=False,
+                            is_new_best=False,
+                            mutation_prompt_id=item.get("mutation_prompt_id"),
+                            llm_temperature=item.get("llm_temperature"),
                         )
                     state.record_reject()
                     if component_selector is not None and item.get("target") is not None:
@@ -237,7 +242,12 @@ async def eval_consumer(
                         pool.update_sampler(item["sampler"], item["source_cell"], success=False)
                         if sal_bandit_active:
                             pool.update_bandit(
-                                item["sampler"], item["model"], accepted=False, is_new_best=False
+                                item["sampler"],
+                                item["model"],
+                                accepted=False,
+                                is_new_best=False,
+                                mutation_prompt_id=item.get("mutation_prompt_id"),
+                                llm_temperature=item.get("llm_temperature"),
                             )
                         state.record_error(score_error)
                         label = _model_label(item)
@@ -276,6 +286,8 @@ async def eval_consumer(
                                 item["model"],
                                 accepted=accepted,
                                 is_new_best=is_new_best,
+                                mutation_prompt_id=item.get("mutation_prompt_id"),
+                                llm_temperature=item.get("llm_temperature"),
                             )
 
                         # SAL — keep state.eval_count_at_last_best fresh so the
@@ -312,6 +324,8 @@ async def eval_consumer(
                             item["model"],
                             accepted=False,
                             is_new_best=False,
+                            mutation_prompt_id=item.get("mutation_prompt_id"),
+                            llm_temperature=item.get("llm_temperature"),
                         )
                     state.record_error(result["error"])
                     label = _model_label(item)

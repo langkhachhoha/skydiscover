@@ -1,5 +1,7 @@
+import json
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -13,6 +15,11 @@ class SamplerModelPair(BaseModel):
     weight: float = 1.0
     temperature: Optional[float] = None  # For softmax sampler
     n_cycles: Optional[int] = None  # For cyclic_annealing sampler
+
+    # Prompt-bank dimensions (joint bandit arm with sampler/model).
+    # None on both means: legacy behaviour (no prompt selection at sample time).
+    mutation_prompt_id: Optional[str] = None
+    llm_temperature: Optional[float] = None  # LLM sampling temperature (distinct from sampler softmax `temperature`)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -98,6 +105,83 @@ class PunctuatedEquilibriumConfig(BaseModel):
     share_main_selector_stats: bool = True
 
     model_config = {"arbitrary_types_allowed": True}
+
+
+class PromptBankConfig(BaseModel):
+    """Prompt-bank + temperature-bank for joint Thompson-bandit mutation.
+
+    When enabled, every (sampler, model) is cross-product expanded with every
+    (prompt_id, llm_temperature) pair from the two banks. Each combination
+    becomes an independent bandit arm (α/β/new_best tracked in pool).
+
+    Prompts in this bank are *full templates* — they replace the standard
+    PromptBuilder output. Supported placeholders (all optional, missing ones
+    render as empty string):
+
+      {problem_description}       raw problem statement
+      {function_signature}        target signature, no ```python wrap
+      {parents_block}             v1/v2/.. parent blocks with score + code fence
+      {search_trajectory_block}   SAL trajectory section (header + bullets), or ""
+      {feedback_block}            per-example failure bullets, or ""
+      {meta_advice_block}         meta-advice section, or ""
+
+    Bank fully overrides ``prompt_opt`` (DSPy MIPROv2). If both are enabled,
+    ``prompt_opt`` is skipped with a warning.
+    """
+
+    enabled: bool = False
+
+    # Either point to JSON files on disk OR pass inline lists. Inline takes
+    # precedence when both are set (useful for tests).
+    prompts_file: Optional[str] = None
+    temperatures_file: Optional[str] = None
+
+    # Inline overrides. Each prompt: {"id": str, "text": str}.
+    prompts: list[dict[str, str]] = Field(default_factory=list)
+    temperatures: list[float] = Field(default_factory=list)
+
+    # Replace any default auto-generated sampler_model_pairs with the cross
+    # product? When False, the bank arms are *appended* (rare; usually you
+    # want True so the bank is the only source of arms).
+    replace_default_pairs: bool = True
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def load_prompts(self) -> dict[str, str]:
+        """Return {prompt_id: text}, merging file and inline definitions.
+
+        Inline entries win on id collision.
+        """
+        merged: dict[str, str] = {}
+        if self.prompts_file:
+            path = Path(self.prompts_file)
+            if not path.is_file():
+                raise FileNotFoundError(f"prompts_file does not exist: {self.prompts_file}")
+            payload = json.loads(path.read_text())
+            if not isinstance(payload, list):
+                raise ValueError(f"prompts_file must contain a JSON list: {self.prompts_file}")
+            for entry in payload:
+                if not isinstance(entry, dict) or "id" not in entry or "text" not in entry:
+                    raise ValueError(f"each prompt entry must be {{'id', 'text'}}; got {entry!r}")
+                merged[str(entry["id"])] = str(entry["text"])
+        for entry in self.prompts:
+            if "id" not in entry or "text" not in entry:
+                raise ValueError(f"inline prompt entry must be {{'id', 'text'}}; got {entry!r}")
+            merged[str(entry["id"])] = str(entry["text"])
+        return merged
+
+    def load_temperatures(self) -> list[float]:
+        if self.temperatures:
+            return [float(t) for t in self.temperatures]
+        if self.temperatures_file:
+            path = Path(self.temperatures_file)
+            if not path.is_file():
+                raise FileNotFoundError(f"temperatures_file does not exist: {self.temperatures_file}")
+            payload = json.loads(path.read_text())
+            if not isinstance(payload, list):
+                raise ValueError(f"temperatures_file must contain a JSON list: {self.temperatures_file}")
+            return [float(t) for t in payload]
+        return []
 
 
 class PromptOptConfig(BaseModel):
@@ -223,6 +307,7 @@ class LeviConfig(BaseModel):
     cascade: CascadeConfig = Field(default_factory=CascadeConfig)
     punctuated_equilibrium: PunctuatedEquilibriumConfig = Field(default_factory=PunctuatedEquilibriumConfig)
     prompt_opt: PromptOptConfig = Field(default_factory=PromptOptConfig)
+    prompt_bank: PromptBankConfig = Field(default_factory=PromptBankConfig)
     proxy_benchmark: ProxyBenchmarkConfig = Field(default_factory=ProxyBenchmarkConfig)
     sal: SalConfig = Field(default_factory=SalConfig)
 
@@ -259,6 +344,39 @@ class LeviConfig(BaseModel):
                         )
                     )
             self.sampler_model_pairs = pairs
+
+        # 2b. Cross-product expansion with the prompt bank (joint bandit arm).
+        # Each base (sampler, model) becomes (sampler, model, prompt_id, llm_temperature)
+        # for every (prompt_id, llm_temperature) pair in the bank.
+        if self.prompt_bank.enabled:
+            prompts_map = self.prompt_bank.load_prompts()
+            temps = self.prompt_bank.load_temperatures()
+            if not prompts_map:
+                raise ValueError("prompt_bank.enabled=True but the prompts pool is empty")
+            if not temps:
+                raise ValueError("prompt_bank.enabled=True but the temperatures pool is empty")
+
+            base_pairs = self.sampler_model_pairs
+            expanded: list[SamplerModelPair] = []
+            for base in base_pairs:
+                for pid in prompts_map.keys():
+                    for t in temps:
+                        expanded.append(
+                            SamplerModelPair(
+                                sampler=base.sampler,
+                                model=base.model,
+                                weight=base.weight,
+                                temperature=base.temperature,
+                                n_cycles=base.n_cycles,
+                                mutation_prompt_id=pid,
+                                llm_temperature=float(t),
+                            )
+                        )
+
+            if self.prompt_bank.replace_default_pairs:
+                self.sampler_model_pairs = expanded
+            else:
+                self.sampler_model_pairs = base_pairs + expanded
 
         if not self.sampler_model_pairs:
             raise ValueError(

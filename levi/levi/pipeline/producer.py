@@ -55,6 +55,11 @@ async def llm_producer(
     stop_event: asyncio.Event,
     component_selector: ComponentSelector | None = None,
 ) -> None:
+    # Pre-load prompt-bank registry once per worker so we don't hit disk on
+    # every sample. Empty dict when the bank is disabled.
+    prompt_bank_registry: dict[str, str] = {}
+    if config.prompt_bank.enabled:
+        prompt_bank_registry = config.prompt_bank.load_prompts()
     while not stop_event.is_set():
         if state.budget_exhausted:
             break
@@ -65,7 +70,7 @@ async def llm_producer(
                     logger.error(f"[LLM-{worker_id}] Archive is empty; stopping pipeline")
                     stop_event.set()
                     break
-                sampler_name, model = pool.get_weighted_sampler_config(
+                sampler_name, model, mutation_prompt_id, arm_llm_temperature = pool.get_weighted_sampler_config(
                     stagnation=state.stagnation_depth(config.sal.tau) if config.sal.enabled else None,
                 )
                 n_parents = config.pipeline.n_parents + config.pipeline.n_inspirations
@@ -145,16 +150,53 @@ async def llm_producer(
                 mutation_kwargs["stagnation"] = s
                 mutation_kwargs["top_failures"] = top_failures or None
 
-            prompt = artifact_adapter.build_mutation_prompt(
-                [ProgramWithScore(p, None) for p in parents],
-                **mutation_kwargs,
+            # Prompt-bank takes over the prompt construction when an arm
+            # carries a mutation_prompt_id. We strip kwargs that build_mutation_prompt
+            # accepts but the template builder does not (model, use_diff, target)
+            # because they map to PromptBuilder-specific knobs.
+            if (
+                mutation_prompt_id is not None
+                and prompt_bank_registry
+                and not is_bundle
+                and hasattr(artifact_adapter, "build_mutation_prompt_from_template")
+            ):
+                template_text = prompt_bank_registry.get(mutation_prompt_id)
+                if template_text is None:
+                    logger.warning(
+                        f"[LLM-{worker_id}] prompt_bank: id {mutation_prompt_id!r} not in registry; "
+                        "falling back to default mutation prompt"
+                    )
+                    prompt = artifact_adapter.build_mutation_prompt(
+                        [ProgramWithScore(p, None) for p in parents],
+                        **mutation_kwargs,
+                    )
+                else:
+                    template_kwargs = {
+                        k: v
+                        for k, v in mutation_kwargs.items()
+                        if k not in ("model", "use_diff", "target")
+                    }
+                    prompt = artifact_adapter.build_mutation_prompt_from_template(
+                        [ProgramWithScore(p, None) for p in parents],
+                        template_text,
+                        **template_kwargs,
+                    )
+            else:
+                prompt = artifact_adapter.build_mutation_prompt(
+                    [ProgramWithScore(p, None) for p in parents],
+                    **mutation_kwargs,
+                )
+
+            # Per-arm LLM temperature (from prompt-bank) wins over the pipeline default.
+            call_temperature = (
+                arm_llm_temperature if arm_llm_temperature is not None else config.pipeline.temperature
             )
 
             try:
                 response = await state.acompletion(
                     model,
                     prompt=[{"role": "user", "content": prompt}],
-                    temperature=config.pipeline.temperature,
+                    temperature=call_temperature,
                     max_tokens=config.pipeline.max_tokens,
                     timeout=300,
                 )
@@ -191,6 +233,8 @@ async def llm_producer(
                     "source_cell": sample.metadata.get("source_cell"),
                     "model": model_key,
                     "target": target,
+                    "mutation_prompt_id": mutation_prompt_id,
+                    "llm_temperature": arm_llm_temperature,
                 }
             )
 

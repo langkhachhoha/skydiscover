@@ -486,14 +486,25 @@ async def _run_async(
     if artifact_adapter.artifact_type == "prompt":
         _activate_proxy_benchmark_discovery_inputs(config)
 
-    # Run prompt optimization if enabled.
-    if artifact_adapter.artifact_type == "code" and config.prompt_opt.enabled and not config.prompt_overrides:
-        from ..prompt_opt import optimize_prompts
+    # Run prompt optimization if enabled. The prompt bank fully replaces
+    # prompt_opt when both are turned on — they share the "## Output" override
+    # slot, so running both would be ambiguous.
+    if (
+        artifact_adapter.artifact_type == "code"
+        and config.prompt_opt.enabled
+        and not config.prompt_overrides
+    ):
+        if config.prompt_bank.enabled:
+            logger.warning(
+                "[Levi] prompt_bank is enabled — skipping DSPy prompt_opt to avoid override conflicts"
+            )
+        else:
+            from ..prompt_opt import optimize_prompts
 
-        overrides, opt_cost = optimize_prompts(config)
-        config.prompt_overrides = overrides
-        state.total_cost += opt_cost
-        logger.info(f"[Levi] Prompt optimization cost: ${opt_cost:.3f}")
+            overrides, opt_cost = optimize_prompts(config)
+            config.prompt_overrides = overrides
+            state.total_cost += opt_cost
+            logger.info(f"[Levi] Prompt optimization cost: ${opt_cost:.3f}")
 
     # Create behavior extractor
     extractor = BehaviorExtractor(
@@ -510,7 +521,15 @@ async def _run_async(
     )
 
     for pair in config.sampler_model_pairs:
-        pool.register_sampler_model_pair(pair.sampler, pair.model, pair.weight, pair.temperature, pair.n_cycles)
+        pool.register_sampler_model_pair(
+            pair.sampler,
+            pair.model,
+            pair.weight,
+            pair.temperature,
+            pair.n_cycles,
+            mutation_prompt_id=pair.mutation_prompt_id,
+            llm_temperature=pair.llm_temperature,
+        )
 
     # Create executor
     executor = ResilientProcessPool(max_workers=config.pipeline.n_eval_processes)

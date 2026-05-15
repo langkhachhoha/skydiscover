@@ -579,21 +579,59 @@ class PipelineState:
     # ------------------------------------------------------------------
 
     def stagnation_depth(self, tau: int) -> float:
-        """Return s(t) ∈ [0,1] = min(1, n_since_best / tau).
+        """Return s(t) ∈ [0,1] combining plateau + budget pressure.
 
-        n_since_best is the number of evals since the last strict NEW BEST
-        event. We use the O(1) cache ``eval_count_at_last_best`` that the
-        consumer maintains. (The cache starts at 0, so during init / before
-        the first NEW BEST we treat the whole run as "stagnant since start"
-        — this is intentional, matching the original O(N) scan semantics.)
+        Base signal: ``s_plateau = min(1, n_since_best / tau)`` — the legacy
+        plateau term, where ``n_since_best`` is the number of evals since the
+        last strict NEW BEST event (O(1) via ``eval_count_at_last_best``).
+
+        Budget pressure: for each *defined* budget limit, add a normalized
+        ratio of how much has been burned:
+
+            - ``seconds`` → ``elapsed_seconds / budget.seconds``
+            - ``dollars`` → ``total_cost / budget.dollars``
+            - ``evaluations`` → ``(eval_count + eval_in_flight) / budget.evaluations``
+
+        Each ratio is clipped to [0, 1]. The final signal is the *max* over
+        the plateau term and every defined budget ratio, so:
+
+            - If no budget limits are defined, behavior is unchanged
+              (plateau-only — legacy semantics).
+            - As we approach any defined budget cap, the signal saturates
+              faster, which lets downstream SAL mechanisms (PE staging,
+              Hard-PE, offensive meta-advice, bandit commitment) push for a
+              breakthrough before the run ends.
 
         Args:
-            tau: plateau length at which s saturates to 1.0.
+            tau: plateau length at which the plateau term saturates to 1.0.
         """
-        if tau <= 0:
-            return 0.0
-        n = max(0, self.eval_count - self.eval_count_at_last_best)
-        return min(1.0, n / float(tau))
+        if tau > 0:
+            n = max(0, self.eval_count - self.eval_count_at_last_best)
+            s = min(1.0, n / float(tau))
+        else:
+            s = 0.0
+
+        budget = self.budget_tracker.budget
+
+        seconds_limit = _coerce_positive_limit(budget.seconds)
+        if seconds_limit is not None and seconds_limit > 0.0:
+            ratio = self.budget_tracker.elapsed_seconds / seconds_limit
+            s = max(s, min(1.0, max(0.0, ratio)))
+
+        dollars_limit = _coerce_positive_limit(budget.dollars)
+        if dollars_limit is not None and dollars_limit > 0.0:
+            cost = coerce_finite_float(self.budget_tracker.total_cost, default=0.0)
+            ratio = cost / dollars_limit
+            s = max(s, min(1.0, max(0.0, ratio)))
+
+        if budget.evaluations is not None:
+            eval_limit = int(coerce_finite_float(budget.evaluations, default=0.0))
+            if eval_limit > 0:
+                eval_used = self.budget_tracker.eval_count + self.budget_tracker.eval_in_flight
+                ratio = eval_used / float(eval_limit)
+                s = max(s, min(1.0, max(0.0, ratio)))
+
+        return s
 
     def evals_since_best(self) -> int:
         """Count evals since the last strict NEW BEST (O(1) via cache)."""

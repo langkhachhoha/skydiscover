@@ -376,9 +376,7 @@ class PunctuatedEquilibrium:
                 **extras,
             )
             content = response.text
-            logger.info(f"[PE] Paradigm shift response: {response}")
             cost = response.cost
-            logger.info(f"[PE] Paradigm shift cost: {cost}")
             stats["total_cost"] += cost
         except BudgetLimitReached:
             logger.info("[PE] Budget exhausted before paradigm shift generation")
