@@ -100,8 +100,8 @@ Hiệu quả mong đợi:
 | `levi/levi/pipeline/consumer.py` | 4 call sites của `update_bandit` | Forward `mutation_prompt_id` + `llm_temperature` từ `item` payload. | **Không.** Khi `item` không có 2 khoá đó (`.get()` trả `None`), match-rule rơi về cũ. |
 | `levi/levi/methods/levi.py` | `_run_async`, vòng register arm | Skip DSPy `prompt_opt` (với warning) khi bank bật. Register arm với 2 trường mới. | **Không xoá `prompt_opt`.** Chỉ bỏ qua khi đụng độ slot `## Output`. Người dùng có thể tắt bank, bật prompt_opt như cũ. |
 | `levi/tests/test_sal.py` | Sửa unpack `name, model, _, _` | Thích nghi return-type mới của `get_weighted_sampler_config`. | Test logic không đổi. |
-| `levi/examples/circle_packing/mutation_prompts.json` | MỚI | 5 prompt template ví dụ cho circle_packing. | — |
-| `levi/examples/circle_packing/mutation_temperatures.json` | MỚI | `[0.5, 0.8, 1.1]`. | — |
+| `levi/examples/mutation_prompts.json` | MỚI | 5 prompt template dùng chung cho mọi example (đặt ở `examples/`, không bind riêng circle_packing). | — |
+| `levi/examples/mutation_temperatures.json` | MỚI | `[0.5, 0.8, 1.1]`. Shared default cho tất cả example. | — |
 
 ### 2.3. Prompt cũ có bị xoá không?
 
@@ -227,7 +227,7 @@ Vì dùng `_SafeFmt`, bất kỳ placeholder lạ nào trong template cũng tự
 
 Đây là khác biệt cốt lõi so với `prompt_overrides` của DSPy (chỉ override mỗi block `## Output`). Lý do user chọn full template: mỗi entry trong bank có thể có cấu trúc section khác nhau, có thể bỏ qua block không cần, có thể thay đổi cả "Your Task" — cho diversity sâu hơn. Nhược điểm: phải tự viết phần Output rõ ràng (yêu cầu format code block + signature giữ nguyên), nếu quên LLM sẽ trả text loạn xạ và `extract_code` rỗng → offspring bị bỏ.
 
-Đã có 5 ví dụ trong [examples/circle_packing/mutation_prompts.json](../levi/examples/circle_packing/mutation_prompts.json) bao quát các style: surgical refine, borrow from inspiration, aggressive rewrite, hyperparameter tuning, diversify initialization.
+Đã có 5 ví dụ trong [examples/mutation_prompts.json](../levi/examples/mutation_prompts.json) bao quát các style: surgical refine, borrow from inspiration, aggressive rewrite, hyperparameter tuning, diversify initialization.
 
 ### 4.3. Temperature bank
 
@@ -253,8 +253,8 @@ config = LeviConfig(
     # MỚI — bật bank
     prompt_bank=PromptBankConfig(
         enabled=True,
-        prompts_file="examples/circle_packing/mutation_prompts.json",
-        temperatures_file="examples/circle_packing/mutation_temperatures.json",
+        prompts_file="examples/mutation_prompts.json",
+        temperatures_file="examples/mutation_temperatures.json",
         # replace_default_pairs=True (default): default auto-gen (4 softmax_T)
         # bị thay hoàn toàn bằng cross-product. Đặt False nếu muốn GHÉP THÊM.
     ),
@@ -347,8 +347,8 @@ Cách dùng để viết paper:
 ## 10. File mới / file sửa — quick reference
 
 **Mới**:
-- `levi/examples/circle_packing/mutation_prompts.json`
-- `levi/examples/circle_packing/mutation_temperatures.json`
+- `levi/examples/mutation_prompts.json` (shared default cho mọi example)
+- `levi/examples/mutation_temperatures.json` (shared default cho mọi example)
 - `docs/PROMPT_BANK_ARCHITECTURE.md` (tài liệu này)
 
 **Sửa**:

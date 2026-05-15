@@ -89,12 +89,12 @@ on:
         type: boolean
         default: false
       prompt_bank_prompts_file:
-        description: "Path to prompts JSON for the bank (relative to example_dir). Blank → <example_dir>/mutation_prompts.json."
+        description: "Path to prompts JSON (relative to repo root). Blank → levi/examples/mutation_prompts.json (shared default)."
         required: false
         type: string
         default: ""
       prompt_bank_temperatures_file:
-        description: "Path to temperatures JSON for the bank (relative to example_dir). Blank → <example_dir>/mutation_temperatures.json."
+        description: "Path to temperatures JSON (relative to repo root). Blank → levi/examples/mutation_temperatures.json (shared default)."
         required: false
         type: string
         default: ""
@@ -154,11 +154,12 @@ jobs:
           PROMPT_BANK_OPTS=""
           if [ "${{ inputs.prompt_bank }}" = "true" ]; then
             PROMPT_BANK_OPTS="--prompt-bank"
+            # Paths are relative to repo root (we run from ./levi, so prepend ../).
             if [ -n "${{ inputs.prompt_bank_prompts_file }}" ]; then
-              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-prompts-file ../${{ inputs.example_dir }}/${{ inputs.prompt_bank_prompts_file }}"
+              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-prompts-file ../${{ inputs.prompt_bank_prompts_file }}"
             fi
             if [ -n "${{ inputs.prompt_bank_temperatures_file }}" ]; then
-              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-temperatures-file ../${{ inputs.example_dir }}/${{ inputs.prompt_bank_temperatures_file }}"
+              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-temperatures-file ../${{ inputs.prompt_bank_temperatures_file }}"
             fi
           fi
           uv run python ../scripts/run_levi.py \

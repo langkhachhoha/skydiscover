@@ -171,7 +171,7 @@ def _parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Path to a JSON list of {id, text} prompts for the bank. "
-            "Default: <example_dir>/mutation_prompts.json (if it exists)."
+            "Default: levi/examples/mutation_prompts.json (shared across examples)."
         ),
     )
     p.add_argument(
@@ -180,7 +180,7 @@ def _parse_args() -> argparse.Namespace:
         metavar="PATH",
         help=(
             "Path to a JSON list of floats for the temperature bank. "
-            "Default: <example_dir>/mutation_temperatures.json (if it exists)."
+            "Default: levi/examples/mutation_temperatures.json (shared across examples)."
         ),
     )
     return p.parse_args()
@@ -294,19 +294,23 @@ def main() -> int:
         evolve_kw["behavior"] = levi.BehaviorConfig(score_keys=behavior_score_keys)
 
     if args.prompt_bank:
+        # Shared defaults live one level *above* each example dir
+        # (levi/examples/mutation_prompts.json + mutation_temperatures.json)
+        # so they're not duplicated per example.
+        shared_dir = REPO_ROOT / "levi" / "examples"
         prompts_file = args.prompt_bank_prompts_file
         if prompts_file is None:
-            default_prompts = example_dir / "mutation_prompts.json"
+            default_prompts = shared_dir / "mutation_prompts.json"
             prompts_file = str(default_prompts) if default_prompts.is_file() else None
         temperatures_file = args.prompt_bank_temperatures_file
         if temperatures_file is None:
-            default_temps = example_dir / "mutation_temperatures.json"
+            default_temps = shared_dir / "mutation_temperatures.json"
             temperatures_file = str(default_temps) if default_temps.is_file() else None
         if not prompts_file or not temperatures_file:
             print(
                 "ERROR: --prompt-bank requires both a prompts file and a temperatures file. "
                 "Provide --prompt-bank-prompts-file / --prompt-bank-temperatures-file or place "
-                "mutation_prompts.json and mutation_temperatures.json under the example dir.",
+                f"mutation_prompts.json and mutation_temperatures.json under {shared_dir}.",
                 file=sys.stderr,
             )
             return 2
