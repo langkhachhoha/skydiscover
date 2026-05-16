@@ -183,6 +183,126 @@ def _parse_args() -> argparse.Namespace:
             "Default: levi/examples/mutation_temperatures.json (shared across examples)."
         ),
     )
+
+    # ------------------------------------------------------------------
+    # HLS — Strategic Blueprint (Heavy-Light Synthesis) knobs.
+    # The blueprint pathway is the new default: heavy model writes a short
+    # structured blueprint, light models implement it, and the blueprint
+    # also conditions main-loop mutations via a TTL window. Knobs below
+    # tune that mechanism; leave alone for the published defaults.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-blueprint",
+        action="store_true",
+        help=(
+            "Disable HLS: fall back to legacy 'heavy model writes full code' "
+            "paradigm-shift pathway. Use for ablation studies."
+        ),
+    )
+    p.add_argument(
+        "--blueprint-ttl-mult",
+        type=float,
+        default=None,
+        metavar="X",
+        help=(
+            "Strategic-Memory TTL multiplier (default 1.5). Blueprint TTL in "
+            "evaluations = X * PE interval. Larger X → blueprint conditions "
+            "more main-loop mutations before being replaced."
+        ),
+    )
+    p.add_argument(
+        "--blueprint-inject-prob",
+        type=float,
+        default=None,
+        metavar="P",
+        help=(
+            "Per-mutation probability of injecting the blueprint into the "
+            "prompt while TTL > 0 (default 0.3). Conditioned on the "
+            "stagnation gate."
+        ),
+    )
+    p.add_argument(
+        "--blueprint-stagnation-gate",
+        type=float,
+        default=None,
+        metavar="S",
+        help=(
+            "Stagnation threshold below which blueprint injection is "
+            "suppressed (default 0.4). Keeps the directive out of healthy "
+            "phases where it would just bias exploration."
+        ),
+    )
+    p.add_argument(
+        "--blueprint-max-tokens",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Output-token cap for the heavy-model blueprint call (default "
+            "600). Blueprints are intentionally short — they are text, not "
+            "code — so this should stay small."
+        ),
+    )
+    p.add_argument(
+        "--blueprint-heavy-only",
+        action="store_true",
+        help=(
+            "Send the reference implementation back to the heavy model "
+            "instead of a light model. Default is light-only implementations "
+            "to maximise cost savings."
+        ),
+    )
+
+    # ------------------------------------------------------------------
+    # Punctuated Equilibrium overrides — handy for ablation runs.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--pe-interval",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Trigger PE every N evaluations (Levi default 10).",
+    )
+    p.add_argument(
+        "--pe-n-clusters",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Number of behavioural clusters when picking PE anchors (default 3).",
+    )
+    p.add_argument(
+        "--pe-n-variants",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Light-model implementations of the blueprint per PE event (default 3).",
+    )
+    p.add_argument(
+        "--no-pe",
+        action="store_true",
+        help="Disable Punctuated Equilibrium entirely (turns off the blueprint pathway too).",
+    )
+
+    # ------------------------------------------------------------------
+    # PPS — Posterior-Plateau Stagnation tuning (SAL.tau).
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--sal-tau",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Plateau length τ (in evaluations) at which the PPS plateau "
+            "term saturates to 1.0. Default 80. Smaller τ → PE / Hard-PE "
+            "fire sooner."
+        ),
+    )
+    p.add_argument(
+        "--no-sal",
+        action="store_true",
+        help="Disable SAL/PPS entirely. Producer ignores stagnation; bandit reverts to roulette.",
+    )
+
     return p.parse_args()
 
 
@@ -266,6 +386,47 @@ def main() -> int:
     else:
         evolve_init = None
 
+    # --- SAL / PPS ---
+    sal_kwargs: dict = {"enabled": not args.no_sal}
+    if args.sal_tau is not None:
+        sal_kwargs["tau"] = args.sal_tau
+
+    # --- HLS Strategic Blueprint ---
+    blueprint_kwargs: dict = {"enabled": not args.no_blueprint}
+    if args.blueprint_ttl_mult is not None:
+        blueprint_kwargs["ttl_multiplier"] = args.blueprint_ttl_mult
+    if args.blueprint_inject_prob is not None:
+        blueprint_kwargs["inject_probability"] = args.blueprint_inject_prob
+    if args.blueprint_stagnation_gate is not None:
+        blueprint_kwargs["stagnation_gate"] = args.blueprint_stagnation_gate
+    if args.blueprint_max_tokens is not None:
+        blueprint_kwargs["max_tokens"] = args.blueprint_max_tokens
+
+    # --- Punctuated Equilibrium ---
+    pe_kwargs: dict = {
+        "enabled": not args.no_pe,
+        "use_blueprint": not args.no_blueprint,
+        "light_only_implementations": not args.blueprint_heavy_only,
+    }
+    if args.pe_interval is not None:
+        pe_kwargs["interval"] = args.pe_interval
+    if args.pe_n_clusters is not None:
+        pe_kwargs["n_clusters"] = args.pe_n_clusters
+    if args.pe_n_variants is not None:
+        pe_kwargs["n_variants"] = args.pe_n_variants
+
+    print(f"[levi] HLS blueprint = {'on' if not args.no_blueprint else 'OFF (ablation)'}")
+    if not args.no_blueprint:
+        bp_show = levi.BlueprintConfig(**blueprint_kwargs)
+        print(f"[levi]   TTL multiplier      = {bp_show.ttl_multiplier}")
+        print(f"[levi]   inject_probability  = {bp_show.inject_probability}")
+        print(f"[levi]   stagnation_gate     = {bp_show.stagnation_gate}")
+        print(f"[levi]   max_tokens          = {bp_show.max_tokens}")
+    print(f"[levi] SAL/PPS = {'on' if not args.no_sal else 'OFF (ablation)'}")
+    if not args.no_sal and args.sal_tau is not None:
+        print(f"[levi]   τ (plateau length)  = {args.sal_tau}")
+    print(f"[levi] Punctuated Equilibrium = {'on' if not args.no_pe else 'OFF'}")
+
     evolve_kw: dict = {
         "problem_description": problem.PROBLEM_DESCRIPTION,
         "function_signature": problem.FUNCTION_SIGNATURE,
@@ -284,7 +445,9 @@ def main() -> int:
             eval_timeout=eval_timeout,
         ),
         "output_dir": str(output_dir),
-        "sal": levi.SalConfig(enabled=True),
+        "sal": levi.SalConfig(**sal_kwargs),
+        "blueprint": levi.BlueprintConfig(**blueprint_kwargs),
+        "punctuated_equilibrium": levi.PunctuatedEquilibriumConfig(**pe_kwargs),
     }
     if evolve_init is not None:
         evolve_kw["init"] = evolve_init
@@ -347,6 +510,24 @@ def main() -> int:
         "init": {
             "n_diverse_seeds": effective_init.n_diverse_seeds,
             "n_variants_per_seed": effective_init.n_variants_per_seed,
+        },
+        "hls": {
+            "blueprint_enabled": not args.no_blueprint,
+            "ttl_multiplier": blueprint_kwargs.get("ttl_multiplier"),
+            "inject_probability": blueprint_kwargs.get("inject_probability"),
+            "stagnation_gate": blueprint_kwargs.get("stagnation_gate"),
+            "max_tokens": blueprint_kwargs.get("max_tokens"),
+            "light_only_implementations": not args.blueprint_heavy_only,
+        },
+        "sal": {
+            "enabled": not args.no_sal,
+            "tau": args.sal_tau,
+        },
+        "punctuated_equilibrium": {
+            "enabled": not args.no_pe,
+            "interval": args.pe_interval,
+            "n_clusters": args.pe_n_clusters,
+            "n_variants": args.pe_n_variants,
         },
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2))

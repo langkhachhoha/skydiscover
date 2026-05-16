@@ -525,8 +525,6 @@ async def _run_async(
             pair.sampler,
             pair.model,
             pair.weight,
-            pair.temperature,
-            pair.n_cycles,
             mutation_prompt_id=pair.mutation_prompt_id,
             llm_temperature=pair.llm_temperature,
         )

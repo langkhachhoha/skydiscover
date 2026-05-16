@@ -1,5 +1,53 @@
 """Prompts for Punctuated Equilibrium paradigm shift generation."""
 
+import re
+from typing import Optional
+
+
+_BLUEPRINT_SECTION_HEADERS = ("DIAGNOSIS", "APPROACH", "INVARIANTS", "PSEUDOCODE")
+
+
+def parse_blueprint(text: str) -> Optional[dict[str, str]]:
+    """Extract the four blueprint sections from a heavy-model response.
+
+    Returns a dict with keys ``diagnosis`` / ``approach`` / ``invariants`` /
+    ``pseudocode`` (lowercase). Missing sections are left as empty strings.
+    Returns None only when the response contains NONE of the expected
+    headers — that's the signal to fall back to legacy paradigm-shift code
+    generation rather than feeding garbage to the implementer prompts.
+
+    The parser is whitespace- and case-insensitive on the headers and
+    tolerates extra prose between sections.
+    """
+    if not text:
+        return None
+
+    upper = text.upper()
+    if not any(h in upper for h in _BLUEPRINT_SECTION_HEADERS):
+        return None
+
+    # Split on section headers while preserving the header in each chunk.
+    pattern = re.compile(
+        r"^\s*(DIAGNOSIS|APPROACH|INVARIANTS|PSEUDOCODE)\s*:\s*",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    matches = list(pattern.finditer(text))
+    if not matches:
+        return None
+
+    sections: dict[str, str] = {h.lower(): "" for h in _BLUEPRINT_SECTION_HEADERS}
+    for i, m in enumerate(matches):
+        name = m.group(1).lower()
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[start:end].strip()
+        # Strip code fences if the model snuck one in for PSEUDOCODE.
+        body = re.sub(r"^```[a-zA-Z]*\n?", "", body)
+        body = re.sub(r"\n?```$", "", body)
+        sections[name] = body.strip()
+
+    return sections
+
 # Adaptive paradigm shift prompts keyed by budget stage.
 # Early: explore radically different approaches.
 # Mid: synthesize and recombine strengths from existing solutions.
@@ -169,6 +217,149 @@ def get_budget_stage(
 
 # Default prompt (backwards compat) — same as early stage
 PARADIGM_SHIFT_PROMPT = PARADIGM_SHIFT_PROMPTS["early"]
+
+
+# ---------------------------------------------------------------------------
+# Heavy-Light Synthesis (HLS) — Strategic Blueprint prompts.
+#
+# The heavy model produces a SHORT structured blueprint (~200-400 tokens)
+# instead of full code. Light models then implement the blueprint in
+# parallel; the blueprint also conditions a fraction of subsequent main-
+# loop mutations through a TTL window. This keeps heavy-model spend
+# focused on reasoning, not on boilerplate, and turns one-shot heavy
+# guidance into a durable search-direction signal.
+# ---------------------------------------------------------------------------
+
+
+STRATEGIC_BLUEPRINT_PROMPT = """# Strategic Blueprint Request
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Archive Snapshot ({n_evaluations} evaluations, {n_regions} behavioural regions)
+
+Below are the best-performing solutions from each region. Treat them as
+*evidence about what the search has discovered so far*, not as code to
+edit:
+
+{representative_solutions}
+{trajectory_block}
+## Your Task: Strategic Blueprint (NOT code)
+
+You are the strategist for an evolutionary search system. Light implementer
+models will turn your blueprint into concrete Python on the next step. Your
+job is to **decide the next algorithmic direction**, not to write code.
+
+Write a blueprint with EXACTLY these four sections, each plain text:
+
+DIAGNOSIS:
+- 1-3 sentences identifying the dominant algorithmic family in the archive
+  and the structural weakness that explains the plateau.
+
+APPROACH:
+- 4-8 sentences describing ONE concrete new algorithmic direction that is
+  meaningfully different from what is already represented. Be specific
+  about data structures, optimisation routines, and the order of operations.
+
+INVARIANTS:
+- A bulleted list (3-5 items) of correctness conditions / output-shape
+  constraints / API contracts the implementation MUST preserve.
+
+PSEUDOCODE:
+- A short (5-20 lines) pseudocode sketch. Plain English with code-like
+  structure is fine; this is a sketch, not Python.
+
+Hard rules:
+- Do NOT emit Python code, ```python``` fences, or imports.
+- Do NOT propose minor parameter tweaks of an existing solution — propose
+  a different algorithmic strategy.
+- Stay under {max_words} words total. Brevity is the point.
+
+## Output
+Start your response with the literal word `DIAGNOSIS:` and follow the four-
+section format above. No preamble.
+"""
+
+
+BLUEPRINT_IMPLEMENTATION_PROMPT = """# Implement Strategic Blueprint
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Strategic Blueprint (from the search strategist)
+
+The blueprint below decides the algorithmic direction. Implement it
+faithfully — do NOT replace the APPROACH with an unrelated algorithm.
+
+{blueprint_text}
+
+## Reference Solutions (for context only; do NOT just copy them)
+
+{representative_solutions}
+
+## Your Task
+
+Write a complete Python implementation of the APPROACH described in the
+blueprint. The PSEUDOCODE sketch shows the intended structure; the
+INVARIANTS list MUST hold in your code.
+
+- Match the function signature EXACTLY: `{function_signature}`
+- Include all imports. Use standard libraries (numpy, math, heapq,
+  collections, itertools, functools) and torch if useful.
+- No placeholders, ellipses, or pseudocode in the final output.
+
+## Output
+Output ONLY complete, runnable Python code in a ```python``` block. No
+explanation before or after.
+"""
+
+
+BLUEPRINT_VARIANT_PROMPT = """# Variant Implementation of Strategic Blueprint
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Strategic Blueprint
+{blueprint_text}
+
+## Reference Implementation (already accepted, score {base_score:.17g})
+```python
+{base_code}
+```
+
+## Your Task
+
+Produce a DIFFERENT implementation of the SAME blueprint. Keep the APPROACH
+intact but vary:
+- Data structure choices (array vs heap vs dict) where the blueprint is
+  silent on the details.
+- Secondary heuristics, tie-breaking rules, constants.
+- Edge-case handling and early-exit conditions.
+- Numerical precision or stability tactics.
+
+Hard rules:
+- Stay faithful to APPROACH and INVARIANTS.
+- Match the function signature exactly: `{function_signature}`.
+- Output complete, runnable Python.
+
+## Output
+Output ONLY complete Python code in a ```python``` block. No prose.
+"""
 
 
 VARIANT_GENERATION_PROMPT = """# Generate Variant of Paradigm Shift Solution

@@ -74,7 +74,16 @@ async def llm_producer(
                     stagnation=state.stagnation_depth(config.sal.tau) if config.sal.enabled else None,
                 )
                 n_parents = config.pipeline.n_parents + config.pipeline.n_inspirations
-                context = {"budget_progress": state.budget_progress}
+                # AdaptiveRankSampler reads ``stagnation`` from context to
+                # derive its β. Other samplers ignore it. budget_progress
+                # is kept for any sampler that still uses it.
+                live_stagnation = (
+                    state.stagnation_depth(config.sal.tau) if config.sal.enabled else 0.0
+                )
+                context = {
+                    "budget_progress": state.budget_progress,
+                    "stagnation": live_stagnation,
+                }
                 sample = pool.sample(sampler_name, n_parents=n_parents, context=context)
 
                 # SAL Cơ chế B — when stagnant, augment parents with global-best
@@ -120,10 +129,36 @@ async def llm_producer(
             parent_elite = pool.get_elite(sample.metadata.get("source_cell"))
             feedback = _extract_failure_feedback(parent_elite)
 
+            base_meta_advice = (
+                state.current_meta_advice if state.current_meta_advice and random.random() < 0.8 else None
+            )
+
+            # HLS — when a Strategic Blueprint is live, inject its directive
+            # text into the mutation prompt with probability ``inject_probability``,
+            # conditional on (a) blueprint config enabled, (b) stagnation
+            # gate met, (c) blueprint TTL > 0. We splice into the existing
+            # meta_advice slot so adapters that don't know about blueprints
+            # still render it without code changes.
+            blueprint_directive_injected = False
+            bp_cfg = config.blueprint
+            if bp_cfg.enabled and state.current_blueprint is not None:
+                bp = state.current_blueprint
+                if (
+                    bp.is_active
+                    and live_stagnation >= bp_cfg.stagnation_gate
+                    and random.random() < bp_cfg.inject_probability
+                ):
+                    directive = bp.directive_text()
+                    if directive:
+                        prefix = "[STRATEGIC DIRECTIVE — current search direction]\n" + directive
+                        if base_meta_advice:
+                            base_meta_advice = prefix + "\n\n---\n\n" + base_meta_advice
+                        else:
+                            base_meta_advice = prefix
+                        blueprint_directive_injected = True
+
             mutation_kwargs = {
-                "meta_advice": (
-                    state.current_meta_advice if state.current_meta_advice and random.random() < 0.8 else None
-                ),
+                "meta_advice": base_meta_advice,
                 "model": model,
                 "use_diff": use_diff,
             }
@@ -226,6 +261,11 @@ async def llm_producer(
             if not candidate_content:
                 continue
 
+            if blueprint_directive_injected:
+                # TTL is measured in *injections*, not wall-clock evals, so a
+                # blueprint that nobody actually reads doesn't decay.
+                state.consume_blueprint_tick()
+
             await code_queue.put(
                 {
                     "content": candidate_content,
@@ -235,6 +275,7 @@ async def llm_producer(
                     "target": target,
                     "mutation_prompt_id": mutation_prompt_id,
                     "llm_temperature": arm_llm_temperature,
+                    "blueprint_injected": blueprint_directive_injected,
                 }
             )
 

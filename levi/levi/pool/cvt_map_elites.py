@@ -3,7 +3,7 @@ CVT-MAP-Elites Pool with Multi-Strategy Sampling.
 
 Single shared archive with multiple sampling strategies:
 - UCB (Upper Confidence Bound) - exploration/exploitation balance
-- Softmax - temperature-based fitness-weighted sampling
+- AdaptiveRank - parameter-free Zipfian rank sampling driven by stagnation
 - Uniform - random sampling for exploration
 - Per-subscore - sample best performers on individual metrics
 """
@@ -119,124 +119,79 @@ class UCBSampler(Sampler):
         return [cell for _, cell in scores[: min(n, len(cells))]]
 
 
-class SoftmaxSampler(Sampler):
-    """Temperature-based softmax sampling weighted by fitness."""
+class AdaptiveRankSampler(Sampler):
+    """Parameter-free Zipfian rank sampler driven by stagnation.
 
-    def __init__(self, temperature: float = 1.0):
-        super().__init__("softmax")
-        self.temperature = temperature
+    Selection rule (per draw, without replacement):
 
-    def select_cells(self, elites: dict[int, Elite], n: int, context: Optional[dict] = None) -> list[int]:
-        if not elites:
-            return []
-        cells = list(elites.keys())
-        scores = [elites[c].result.primary_score for c in cells]
+        rank r(c)        ← 0-based index after sorting cells by primary score
+                           descending
+        β(t)             ← max(β_min, β_max · (1 - s(t)))   where s(t) is the
+                           Posterior-Plateau Stagnation passed via context
+        P(c) ∝ (r+1)^{-β}
 
-        min_s = min(scores)
-        max_s = max(scores)
-        score_range = max_s - min_s if max_s > min_s else 1.0
-        normalized = [(s - min_s) / score_range for s in scores]  # [0, 1]
-
-        exp_s = [math.exp((ns - 1.0) / self.temperature) for ns in normalized]
-        total = sum(exp_s)
-        weights = [e / total for e in exp_s]
-
-        # Weighted sampling without replacement
-        selected = []
-        remaining_cells = cells.copy()
-        remaining_weights = weights.copy()
-
-        for _ in range(min(n, len(cells))):
-            if not remaining_cells:
-                break
-            # Normalize remaining weights
-            w_sum = sum(remaining_weights)
-            if w_sum == 0:
-                break
-            probs = [w / w_sum for w in remaining_weights]
-            idx = np.random.choice(len(remaining_cells), p=probs)
-            selected.append(remaining_cells[idx])
-            remaining_cells.pop(idx)
-            remaining_weights.pop(idx)
-
-        return selected
-
-
-class CyclicAnnealingSampler(Sampler):
-    """
-    Cyclic annealing sampler with budget-based temperature schedule.
-
-    Temperature cycles from T_max to T_min multiple times during the run:
-        T = T_min + (T_max - T_min) * (1 - cycle_progress)
-    where cycle_progress = (budget_progress * n_cycles) mod 1
-
-    This provides periodic exploration/exploitation phases:
-    - High temperature: more uniform sampling (exploration)
-    - Low temperature: favor high-scoring cells (exploitation)
+    Why this is preferable to softmax-with-temperature:
+      * Score-scale-invariant — the Zipfian distribution depends only on
+        the rank, not on raw score gaps, so it does not collapse to near-
+        deterministic mode when the archive's best cell is far ahead.
+      * Single, derived knob β(t). It is *not* exposed to the bandit arms:
+        the same sampler can act exploitative early (β large) and
+        exploratory under stagnation (β small) without producing multiple
+        arm variants. This removes the (sampler, softmax-T) cross product
+        that previously confounded the joint bandit.
+      * Reduces to a uniform sampler when β → 0 and to argmax when β → ∞,
+        so AdaptiveRank covers both ends of the explore/exploit spectrum
+        without dedicated "uniform" / "elitist" variants.
     """
 
-    def __init__(self, t_max: float = 1.2, t_min: float = 0.15, n_cycles: int = 4):
-        super().__init__("cyclic_annealing")
-        self.t_max = t_max
-        self.t_min = t_min
-        self.n_cycles = n_cycles
-        self._last_temperature: float = t_max
+    def __init__(self, beta_max: float = 2.0, beta_min: float = 0.2):
+        super().__init__("adaptive_rank")
+        self.beta_max = float(beta_max)
+        self.beta_min = float(beta_min)
+        self._last_beta: float = float(beta_max)
 
-    def _compute_temperature(self, budget_progress: float) -> float:
-        """Compute temperature based on budget progress (0 to 1)."""
-        cycle_progress = (budget_progress * self.n_cycles) % 1.0
-        temperature = self.t_min + (self.t_max - self.t_min) * (1.0 - cycle_progress)
-        self._last_temperature = temperature
-        return temperature
+    def _compute_beta(self, stagnation: float) -> float:
+        s = max(0.0, min(1.0, float(stagnation)))
+        beta = self.beta_max * (1.0 - s)
+        return max(self.beta_min, beta)
 
     def select_cells(self, elites: dict[int, Elite], n: int, context: Optional[dict] = None) -> list[int]:
         if not elites:
             return []
 
-        # Get budget progress from context, default to 0 (start of run)
-        budget_progress = 0.0
-        if context and "budget_progress" in context:
-            budget_progress = context["budget_progress"]
+        # Stagnation defaults to 0 when caller doesn't pass it (e.g. PE
+        # sampling, init phase). Producer always passes the live s(t).
+        stagnation = 0.0
+        if context is not None and "stagnation" in context:
+            stagnation = context["stagnation"]
+        beta = self._compute_beta(stagnation)
+        self._last_beta = beta
 
-        temperature = self._compute_temperature(budget_progress)
-
+        # Rank by primary score (descending); break ties deterministically
+        # on cell index so behaviour is stable across runs.
         cells = list(elites.keys())
-        scores = [elites[c].result.primary_score for c in cells]
+        cells.sort(key=lambda c: (-elites[c].result.primary_score, c))
 
-        min_s = min(scores)
-        max_s = max(scores)
-        score_range = max_s - min_s if max_s > min_s else 1.0
-        normalized = [(s - min_s) / score_range for s in scores]  # [0, 1]
+        n_cells = len(cells)
+        ranks = np.arange(1, n_cells + 1, dtype=float)
+        weights = ranks ** (-beta)
+        total = float(weights.sum())
+        if total <= 0.0 or not np.isfinite(total):
+            probs = np.full(n_cells, 1.0 / n_cells)
+        else:
+            probs = weights / total
 
-        exp_s = [math.exp((ns - 1.0) / temperature) for ns in normalized]
-        total = sum(exp_s)
-        weights = [e / total for e in exp_s]
-
-        # Weighted sampling without replacement
-        selected = []
-        remaining_cells = cells.copy()
-        remaining_weights = weights.copy()
-
-        for _ in range(min(n, len(cells))):
-            if not remaining_cells:
-                break
-            w_sum = sum(remaining_weights)
-            if w_sum == 0:
-                break
-            probs = [w / w_sum for w in remaining_weights]
-            idx = np.random.choice(len(remaining_cells), p=probs)
-            selected.append(remaining_cells[idx])
-            remaining_cells.pop(idx)
-            remaining_weights.pop(idx)
-
-        return selected
+        # Sampling without replacement; np.random.choice handles n>=k by
+        # falling back to whatever we have.
+        k = min(n, n_cells)
+        idx = np.random.choice(n_cells, size=k, replace=False, p=probs)
+        return [cells[int(i)] for i in idx]
 
     def get_stats_summary(self) -> dict:
         stats = super().get_stats_summary()
-        stats["last_temperature"] = self._last_temperature
-        stats["t_max"] = self.t_max
-        stats["t_min"] = self.t_min
-        stats["n_cycles"] = self.n_cycles
+        stats["last_beta"] = self._last_beta
+        stats["beta_max"] = self.beta_max
+        stats["beta_min"] = self.beta_min
         return stats
 
 
@@ -329,7 +284,6 @@ class CVTMAPElitesPool:
         self,
         behavior_extractor: BehaviorExtractor,
         n_centroids: int = 1000,
-        temperature: float = 1.0,
         bounds_padding: float = 0.1,
         subscore_keys: Optional[list[str]] = None,
         data_driven_centroids: bool = False,
@@ -354,12 +308,12 @@ class CVTMAPElitesPool:
         self._best_score: float = float("-inf")
         self._generation = 0
 
-        # Initialize samplers
+        # Initialize samplers. AdaptiveRank is the default parent-selector;
+        # UCB and Uniform are retained as alternative arms for ablation.
         self._samplers: dict[str, Sampler] = {
             "ucb": UCBSampler(c=2.0),
-            "softmax": SoftmaxSampler(temperature=temperature),
+            "adaptive_rank": AdaptiveRankSampler(),
             "uniform": UniformSampler(),
-            "cyclic_annealing": CyclicAnnealingSampler(),
         }
 
         # Add per-subscore samplers
@@ -630,32 +584,28 @@ class CVTMAPElitesPool:
         sampler_name: str,
         model: ClientSpec,
         weight: float = 1.0,
-        temperature: Optional[float] = None,
-        n_cycles: Optional[int] = None,
         mutation_prompt_id: Optional[str] = None,
         llm_temperature: Optional[float] = None,
     ) -> None:
+        """Register a (sampler, model[, prompt_id, llm_temperature]) arm.
+
+        Sampler-specific temperatures and cycle counts are no longer part
+        of the arm space: AdaptiveRankSampler tunes itself from the live
+        stagnation signal. The bandit's arm dimensions are now exactly
+        (model, prompt_id, llm_temperature) so Thompson posteriors are not
+        fragmented across spurious softmax-T variants.
+        """
         if weight <= 0:
             raise ValueError("Weight must be positive")
 
-        actual_sampler_name = sampler_name
-
-        # For softmax with custom temperature, create a new sampler instance
-        if sampler_name == "softmax" and temperature is not None:
-            actual_sampler_name = f"softmax_T{temperature}"
-            if actual_sampler_name not in self._samplers:
-                self._samplers[actual_sampler_name] = SoftmaxSampler(temperature=temperature)
-        # For cyclic_annealing with custom n_cycles, create a new sampler instance
-        elif sampler_name == "cyclic_annealing" and n_cycles is not None:
-            actual_sampler_name = f"cyclic_annealing_C{n_cycles}"
-            if actual_sampler_name not in self._samplers:
-                self._samplers[actual_sampler_name] = CyclicAnnealingSampler(n_cycles=n_cycles)
-        elif sampler_name not in self._samplers:
-            raise ValueError(f"Unknown sampler: {sampler_name}. Available: {list(self._samplers.keys())}")
+        if sampler_name not in self._samplers:
+            raise ValueError(
+                f"Unknown sampler: {sampler_name}. Available: {list(self._samplers.keys())}"
+            )
 
         self._sampler_model_pairs.append(
             SamplerModelConfig(
-                actual_sampler_name,
+                sampler_name,
                 model,
                 weight,
                 mutation_prompt_id=mutation_prompt_id,

@@ -66,7 +66,6 @@ class TestCVTMAPElitesPool:
         return CVTMAPElitesPool(
             behavior_extractor=extractor,
             n_centroids=10,
-            temperature=1.0,
         )
 
     def test_creation(self, extractor):
@@ -309,10 +308,10 @@ class TestCVTMAPElitesPool:
                 ),
             )
 
-        # Check available samplers
+        # Check available samplers (AdaptiveRank replaces softmax/cyclic)
         stats = pool.get_stats()
         assert "ucb" in stats["samplers"]
-        assert "softmax" in stats["samplers"]
+        assert "adaptive_rank" in stats["samplers"]
         assert "uniform" in stats["samplers"]
 
 

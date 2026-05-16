@@ -17,12 +17,18 @@ from ..artifacts import ArtifactAdapter
 from ..clients.base import client_name
 from ..config import LeviConfig
 from ..core import EvaluationResult
-from ..pipeline.state import BudgetLimitReached, PipelineState, coerce_finite_float
+from ..pipeline.state import (
+    BudgetLimitReached,
+    PipelineState,
+    StrategicBlueprint,
+    coerce_finite_float,
+)
 from ..pool import CVTMAPElitesPool
 from ..pool.cvt_map_elites import Elite
 from ..prompts import PromptBundle
 from ..selection import ComponentSelector, make_component_selector
 from ..utils import ResilientProcessPool, coerce_score
+from .prompts import parse_blueprint
 
 logger = logging.getLogger(__name__)
 
@@ -235,11 +241,110 @@ class PunctuatedEquilibrium:
         base_code: str,
         base_score: float,
         target: str | None = None,
+        blueprint_text: str | None = None,
     ) -> str:
         if target is not None and self._is_bundle:
             base_bundle = PromptBundle.deserialize_loose(base_code)
             return self.artifact_adapter.build_component_variant_prompt(target, base_bundle, base_score)
+        # HLS — when a blueprint is in scope, condition the variant on it
+        # so light models keep producing the same algorithmic family
+        # instead of regressing to the parent's prior strategy.
+        if blueprint_text and hasattr(self.artifact_adapter, "build_blueprint_variant_prompt"):
+            return self.artifact_adapter.build_blueprint_variant_prompt(blueprint_text, base_code, base_score)
         return self.artifact_adapter.build_variant_prompt(base_code, base_score)
+
+    # ------------------------------------------------------------------
+    # HLS — Strategic Blueprint generation
+    # ------------------------------------------------------------------
+
+    def _hls_enabled(self) -> bool:
+        if self._is_bundle:
+            return False
+        if not self.pe_config.use_blueprint:
+            return False
+        return hasattr(self.artifact_adapter, "build_blueprint_prompt")
+
+    async def _generate_blueprint(
+        self,
+        heavy_model,
+        representatives: list[tuple[int, Elite]],
+        n_evaluations: int,
+        *,
+        stagnation: float | None,
+        best_score: float | None,
+        evals_since_best: int | None,
+        max_tokens: int,
+        reasoning_effort: str | None,
+    ) -> tuple[StrategicBlueprint | None, float]:
+        """Ask the heavy model for a short, structured strategic blueprint.
+
+        Returns ``(blueprint, cost)``. ``blueprint`` is None when generation
+        failed or the response could not be parsed; the caller should then
+        fall back to the legacy full-code paradigm-shift path so the PE
+        event is not wasted.
+        """
+        top_failures = [
+            err for err, _ in sorted(
+                self.state.all_error_counts.items(), key=lambda x: -x[1]
+            )[:3]
+        ] or None
+
+        prompt = self.artifact_adapter.build_blueprint_prompt(
+            representatives,
+            n_evaluations=n_evaluations,
+            stagnation=stagnation,
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            top_failures=top_failures,
+            max_words=350,
+        )
+
+        extras: dict = {}
+        if reasoning_effort:
+            if reasoning_effort == "disabled":
+                extras["extra_body"] = {"reasoning": {"enabled": False}}
+            else:
+                extras["reasoning_effort"] = reasoning_effort
+
+        try:
+            response = await self.state.acompletion(
+                heavy_model,
+                prompt=[{"role": "user", "content": prompt}],
+                temperature=self.pe_config.temperature,
+                max_tokens=max_tokens,
+                timeout=300,
+                **extras,
+            )
+        except BudgetLimitReached:
+            raise
+        except Exception as e:
+            logger.warning(f"[PE] Blueprint generation call failed: {e}")
+            return None, 0.0
+
+        raw = response.text or ""
+        cost = float(getattr(response, "cost", 0.0) or 0.0)
+
+        parsed = parse_blueprint(raw)
+        if not parsed:
+            logger.warning("[PE] Blueprint parse failed (no sections matched); falling back to legacy paradigm shift")
+            return None, cost
+
+        blueprint = StrategicBlueprint(
+            diagnosis=parsed.get("diagnosis", ""),
+            approach=parsed.get("approach", ""),
+            invariants=parsed.get("invariants", ""),
+            pseudocode=parsed.get("pseudocode", ""),
+            raw=raw.strip(),
+            pe_event_id=self.state.pe_trigger_count,
+        )
+
+        # Soft validation: a blueprint without an APPROACH section is
+        # useless to implementers. Reject and fall back.
+        if not blueprint.approach.strip():
+            logger.warning("[PE] Blueprint had no APPROACH section; falling back to legacy paradigm shift")
+            return None, cost
+
+        return blueprint, cost
 
     def _pick_pe_component(self) -> str | None:
         if not self._is_bundle or self.pe_component_selector is None:
@@ -346,9 +451,69 @@ class PunctuatedEquilibrium:
         if pe_target is not None:
             logger.info(f"[PE] Selected component for paradigm shift: {pe_target}")
             stats["pe_target"] = pe_target
-        prompt = self._build_paradigm_shift_prompt(
-            representatives, n_evaluations, budget_progress, target=pe_target
-        )
+
+        # HLS — try the Strategic Blueprint path first. On failure we fall
+        # through to the legacy "heavy generates full code" pathway so a
+        # parser hiccup never wastes the PE trigger.
+        active_blueprint: StrategicBlueprint | None = None
+        if pe_target is None and self._hls_enabled():
+            sal = self.config.sal
+            try:
+                blueprint, blueprint_cost = await self._generate_blueprint(
+                    heavy_model,
+                    representatives,
+                    n_evaluations,
+                    stagnation=(
+                        self.state.stagnation_depth(sal.tau)
+                        if sal.enabled else None
+                    ),
+                    best_score=(
+                        self.state.best_score_so_far
+                        if self.state.best_score_so_far != float("-inf")
+                        else None
+                    ),
+                    evals_since_best=self.state.evals_since_best(),
+                    max_tokens=self.config.blueprint.max_tokens,
+                    reasoning_effort=(
+                        sal.hard_pe_reasoning_effort
+                        if is_hard_pe else self.pe_config.reasoning_effort
+                    ),
+                )
+            except BudgetLimitReached:
+                logger.info("[PE] Budget exhausted before blueprint generation")
+                return stats
+            stats["total_cost"] += blueprint_cost
+            stats["blueprint_cost"] = blueprint_cost
+            if blueprint is not None:
+                active_blueprint = blueprint
+                stats["blueprint_generated"] = True
+                logger.info(
+                    f"[PE] Blueprint generated ({len(blueprint.raw)} chars, "
+                    f"approach={blueprint.approach[:80]!r}...)"
+                )
+
+        # Select which model writes the reference implementation. Under
+        # HLS the heavy model already produced the blueprint, so the
+        # reference implementation is delegated to a *light* model
+        # (cost reduction) when ``light_only_implementations`` is True.
+        impl_models: list = []
+        if active_blueprint is not None and self.pe_config.light_only_implementations:
+            impl_models = list(self.pe_config.variant_models or [])
+            if not impl_models:
+                impl_models = [p.model for p in self.config.sampler_model_pairs[:3]]
+            if not impl_models:
+                impl_models = [heavy_model]
+            ref_model = random.choice(impl_models)
+            prompt = self.artifact_adapter.build_blueprint_implementation_prompt(
+                active_blueprint.raw, representatives
+            )
+            ref_role = "blueprint_impl"
+        else:
+            ref_model = heavy_model
+            prompt = self._build_paradigm_shift_prompt(
+                representatives, n_evaluations, budget_progress, target=pe_target
+            )
+            ref_role = "paradigm_shift"
 
         try:
             extras = {}
@@ -356,19 +521,23 @@ class PunctuatedEquilibrium:
             effective_reasoning_effort = self.pe_config.reasoning_effort
             if is_hard_pe:
                 effective_reasoning_effort = sal.hard_pe_reasoning_effort
+            if ref_role == "blueprint_impl":
+                # Light implementer doesn't need expensive reasoning — it
+                # is just rendering the blueprint as code.
+                effective_reasoning_effort = None
 
             # Add reasoning_effort for DeepSeek models if configured
             if effective_reasoning_effort:
                 if effective_reasoning_effort == "disabled":
                     # Disable reasoning entirely (e.g., for GLM models)
                     extras["extra_body"] = {"reasoning": {"enabled": False}}
-                    logger.info("[PE] Reasoning disabled for paradigm shift")
+                    logger.info(f"[PE] Reasoning disabled for {ref_role}")
                 else:
                     extras["reasoning_effort"] = effective_reasoning_effort
-                    logger.info(f"[PE] Using reasoning_effort={effective_reasoning_effort} for paradigm shift")
+                    logger.info(f"[PE] Using reasoning_effort={effective_reasoning_effort} for {ref_role}")
 
             response = await self.state.acompletion(
-                heavy_model,
+                ref_model,
                 prompt=[{"role": "user", "content": prompt}],
                 temperature=self.pe_config.temperature,
                 # max_tokens=4096,
@@ -382,7 +551,7 @@ class PunctuatedEquilibrium:
             logger.info("[PE] Budget exhausted before paradigm shift generation")
             return stats
         except Exception as e:
-            logger.warning(f"[PE] Paradigm shift generation failed: {e}")
+            logger.warning(f"[PE] {ref_role} generation failed: {e}")
             return stats
 
         if pe_target is not None and representatives:
@@ -407,7 +576,7 @@ class PunctuatedEquilibrium:
             stats["evaluations"].append(
                 {
                     "source": "paradigm_shift",
-                    "model": client_name(heavy_model),
+                    "model": client_name(ref_model),
                     "error": "Budget exhausted",
                     "archive_size": self.pool.size(),
                 }
@@ -455,7 +624,7 @@ class PunctuatedEquilibrium:
             stats["evaluations"].append(
                 {
                     "source": "paradigm_shift",
-                    "model": client_name(heavy_model),
+                    "model": client_name(ref_model),
                     "score": score,
                     "accepted": accepted,
                     "cell_index": cell_idx,
@@ -470,7 +639,7 @@ class PunctuatedEquilibrium:
             stats["evaluations"].append(
                 {
                     "source": "paradigm_shift",
-                    "model": client_name(heavy_model),
+                    "model": client_name(ref_model),
                     "error": error_message,
                     "archive_size": self.pool.size(),
                 }
@@ -491,8 +660,14 @@ class PunctuatedEquilibrium:
                 f"{[client_name(model) for model in variant_models[:3]]}..."
             )
 
+            blueprint_text_for_variants = (
+                active_blueprint.raw if active_blueprint is not None else None
+            )
             variant_prompt = self._build_variant_prompt(
-                paradigm_code, stats["paradigm_score"], target=pe_target
+                paradigm_code,
+                stats["paradigm_score"],
+                target=pe_target,
+                blueprint_text=blueprint_text_for_variants,
             )
 
             async def generate_variant(model, idx: int):
@@ -617,6 +792,28 @@ class PunctuatedEquilibrium:
                             "archive_size": self.pool.size(),
                         }
                     )
+
+        # HLS — install the blueprint into pipeline state with a TTL so
+        # main-loop mutations can read its APPROACH section as a strategic
+        # directive. We only install when at least one implementation
+        # entered the archive (unless the operator disabled that guard);
+        # otherwise the blueprint already failed once and shouldn't be
+        # spread further.
+        if active_blueprint is not None:
+            bp_cfg = self.config.blueprint
+            any_accepted = bool(stats["paradigm_accepted"]) or stats["variants_accepted"] > 0
+            install_ok = any_accepted or not bp_cfg.require_accepted
+            if bp_cfg.enabled and install_ok:
+                ttl = max(1, int(round(bp_cfg.ttl_multiplier * max(self.pe_config.interval, 1))))
+                active_blueprint.accepted = any_accepted
+                self.state.install_blueprint(active_blueprint, ttl_evals=ttl)
+                stats["blueprint_installed"] = True
+                stats["blueprint_ttl"] = ttl
+                logger.info(
+                    f"[PE] Blueprint installed (TTL={ttl} evals, accepted={any_accepted})"
+                )
+            else:
+                stats["blueprint_installed"] = False
 
         logger.info(
             f"[PE] Complete: paradigm_accepted={stats['paradigm_accepted']}, "

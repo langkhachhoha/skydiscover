@@ -58,7 +58,7 @@ def _append_score(state: PipelineState, score: float, accepted: bool = True) -> 
             best_score=best,
             timestamp=time.time(),
             accepted=accepted,
-            sampler="softmax_T0.3",
+            sampler="adaptive_rank",
             archive_size=10,
             cell_index=0,
         )
@@ -109,41 +109,56 @@ class TestStagnationDepth:
         _append_score(state, 1.5)
         assert state.evals_since_best() == 3
 
-    def test_evals_budget_drives_signal_when_plateau_is_zero(self):
-        """With an evaluations cap and no plateau, s(t) = evals_used / evals_max."""
-        state = _make_state(BudgetConfig(evaluations=100))
-        # Every score is a NEW BEST → plateau term stays at 0.
-        for v in [1.0, 1.5, 2.0]:
-            _append_score(state, v)
-        # 3 evals out of 100 budget → ratio = 0.03, plateau = 0 → s ≈ 0.03.
-        s = state.stagnation_depth(tau=80)
-        assert 0.029 < s < 0.031
+    def test_pps_returns_zero_when_improving_despite_budget(self):
+        """PPS: when plateau term is zero (every eval is a NEW BEST), the
+        signal stays at zero regardless of budget consumed.
 
-    def test_plateau_dominates_when_larger(self):
-        """max() — plateau term still wins when bigger than budget pressure."""
+        This is a *deliberate* departure from the legacy max(plateau,
+        budget_ratios) behaviour: panic-triggering PE while the search is
+        producing NEW BESTs is wasteful. PPS bakes that intuition into the
+        formula via the multiplicative ``p · exp(-λ̂·B_rem)`` term.
+        """
+        state = _make_state(BudgetConfig(evaluations=100))
+        for v in [1.0, 1.5, 2.0]:
+            _append_score(state, v)  # always NEW BEST → p(t) = 0
+        s = state.stagnation_depth(tau=80)
+        assert s < 1e-9
+
+    def test_pps_plateau_wins_when_budget_low(self):
+        """Early-run with caps barely consumed: α(t)=b² ≈ 0 → s ≈ p(t)."""
         state = _make_state(BudgetConfig(evaluations=10_000))
         _append_score(state, 2.0)  # NEW BEST
         for _ in range(40):
             _append_score(state, 1.5)
-        # plateau = 40/80 = 0.5; eval ratio = 41/10000 = 0.0041 → max = 0.5.
         s = state.stagnation_depth(tau=80)
+        # b ≈ 41/10000 → α ≈ 0 → s ≈ p ≈ 0.5.
         assert 0.49 < s < 0.51
 
-    def test_seconds_budget_drives_signal(self):
-        """With a seconds cap, elapsed/limit feeds the signal."""
-        state = _make_state(BudgetConfig(seconds=10.0))
-        # Backdate start_time so ~5s have elapsed.
-        state.start_time = time.time() - 5.0
-        s = state.stagnation_depth(tau=80)
-        # plateau = 0 (no scores), seconds ratio ≈ 0.5 → s ≈ 0.5.
-        assert 0.45 < s < 0.55
-
-    def test_dollars_budget_drives_signal(self):
-        """With a dollars cap, total_cost/limit feeds the signal."""
+    def test_pps_amplifies_late_run_plateau_without_progress(self):
+        """Late run, plateau active, no NEW BEST in window → posterior_stuck
+        ≈ p, blended weight stays close to p so PE / Hard-PE still fire."""
         state = _make_state(BudgetConfig(dollars=10.0))
-        state.budget_tracker.total_cost = 7.5
+        state.budget_tracker.total_cost = 8.0  # b = 0.8 → α = 0.64
+        # Force plateau without populating new_best_history.
+        state.budget_tracker.eval_count = 200
+        state.eval_count_at_last_best = 100  # p = min(1, 100/80) = 1.0
         s = state.stagnation_depth(tau=80)
-        assert 0.74 < s < 0.76
+        # B_rem = 2, λ̂ ≈ 1/8 (Laplace), exp(-2/8) ≈ 0.78 → posterior_stuck
+        # ≈ 0.78. Blend: 0.36·1.0 + 0.64·0.78 ≈ 0.86.
+        assert 0.80 < s < 0.92
+
+    def test_pps_protects_against_panic_when_frequent_new_best(self):
+        """Many NEW BEST events in history → high λ̂ → posterior_stuck → 0
+        even if p(t) is positive. Result: blended s stays under p."""
+        state = _make_state(BudgetConfig(dollars=10.0))
+        state.budget_tracker.total_cost = 8.0  # b = 0.8
+        state.budget_tracker.eval_count = 200
+        state.eval_count_at_last_best = 100  # plateau p = 1.0
+        # 12 NEW BEST events spread over the consumed budget → high hazard.
+        for i in range(12):
+            state.new_best_history.append((10 * i, 0.6 * i))
+        s = state.stagnation_depth(tau=80)
+        assert s < 0.5
 
     def test_no_budget_keeps_legacy_zero(self):
         """Without budget limits, signal stays pure plateau."""
@@ -152,15 +167,15 @@ class TestStagnationDepth:
             _append_score(state, v)  # always NEW BEST
         assert state.stagnation_depth(tau=80) == 0.0
 
-    def test_max_over_all_defined_budgets(self):
-        """All three caps defined → signal = max(plateau, seconds, dollars, evals)."""
-        state = _make_state(BudgetConfig(seconds=100.0, dollars=10.0, evaluations=1000))
-        state.start_time = time.time() - 10.0  # seconds ratio = 0.10
-        state.budget_tracker.total_cost = 8.0  # dollars ratio = 0.80
-        _append_score(state, 2.0)  # plateau=0, evals ratio = 1/1000 = 0.001
+    def test_end_of_run_floor(self):
+        """When ≥95% of budget consumed AND plateau saturated, s must be
+        at least the plateau term (PPS safety floor)."""
+        state = _make_state(BudgetConfig(dollars=10.0))
+        state.budget_tracker.total_cost = 9.8  # b = 0.98
+        state.budget_tracker.eval_count = 300
+        state.eval_count_at_last_best = 100  # p = 1.0
         s = state.stagnation_depth(tau=80)
-        # Dollars ratio should win.
-        assert 0.79 < s < 0.81
+        assert s >= 0.95
 
 
 # ---------------------------------------------------------------------------
@@ -194,11 +209,17 @@ class TestPromptStaging:
 
 
 def _fresh_pool() -> CVTMAPElitesPool:
-    """A pool with a couple of bandit arms; no actual archive needed."""
+    """A pool with a couple of bandit arms; no actual archive needed.
+
+    With AdaptiveRankSampler the arm space is (sampler, model[, prompt_id,
+    llm_temperature]); sampler-internal temperatures are no longer
+    arm dimensions. We register two model arms on the same sampler so the
+    bandit has something meaningful to discriminate over.
+    """
     extractor = BehaviorExtractor(ast_features=["loop_count", "branch_count"])
     pool = CVTMAPElitesPool(behavior_extractor=extractor, n_centroids=4)
-    pool.register_sampler_model_pair("softmax", "model_a", weight=1.0, temperature=0.3)
-    pool.register_sampler_model_pair("softmax", "model_b", weight=1.0, temperature=1.0)
+    pool.register_sampler_model_pair("adaptive_rank", "model_a", weight=1.0)
+    pool.register_sampler_model_pair("adaptive_rank", "model_b", weight=1.0)
     return pool
 
 
@@ -209,24 +230,24 @@ class TestThompsonBandit:
         np.random.seed(0)
         name, model, _, _ = pool.get_weighted_sampler_config(stagnation=None)
         assert (name, model) in {
-            ("softmax_T0.3", "model_a"),
-            ("softmax_T1.0", "model_b"),
+            ("adaptive_rank", "model_a"),
+            ("adaptive_rank", "model_b"),
         }
 
     def test_update_bandit_increments_alpha_on_accept(self):
         pool = _fresh_pool()
-        pool.update_bandit("softmax_T0.3", "model_a", accepted=True, is_new_best=True)
+        pool.update_bandit("adaptive_rank", "model_a", accepted=True, is_new_best=True)
         stats = pool.get_bandit_stats()
-        a = next(s for s in stats if s["sampler"] == "softmax_T0.3")
+        a = next(s for s in stats if s["model"] == "model_a")
         assert a["alpha"] == pytest.approx(2.0)
         assert a["beta"] == pytest.approx(1.0)
         assert a["new_best_count"] == 1
 
     def test_update_bandit_increments_beta_on_reject(self):
         pool = _fresh_pool()
-        pool.update_bandit("softmax_T1.0", "model_b", accepted=False)
+        pool.update_bandit("adaptive_rank", "model_b", accepted=False)
         stats = pool.get_bandit_stats()
-        b = next(s for s in stats if s["sampler"] == "softmax_T1.0")
+        b = next(s for s in stats if s["model"] == "model_b")
         assert b["alpha"] == pytest.approx(1.0)
         assert b["beta"] == pytest.approx(2.0)
 
@@ -234,19 +255,19 @@ class TestThompsonBandit:
         pool = _fresh_pool()
         # Make arm A look really good: many accepts, a couple of NEW BESTs.
         for _ in range(30):
-            pool.update_bandit("softmax_T0.3", "model_a", accepted=True, is_new_best=False)
-        pool.update_bandit("softmax_T0.3", "model_a", accepted=True, is_new_best=True)
-        pool.update_bandit("softmax_T0.3", "model_a", accepted=True, is_new_best=True)
+            pool.update_bandit("adaptive_rank", "model_a", accepted=True, is_new_best=False)
+        pool.update_bandit("adaptive_rank", "model_a", accepted=True, is_new_best=True)
+        pool.update_bandit("adaptive_rank", "model_a", accepted=True, is_new_best=True)
         # Arm B: a lot of rejects.
         for _ in range(20):
-            pool.update_bandit("softmax_T1.0", "model_b", accepted=False)
+            pool.update_bandit("adaptive_rank", "model_b", accepted=False)
 
         np.random.seed(42)
         a_wins = 0
         n_draws = 400
         for _ in range(n_draws):
-            name, _, _, _ = pool.get_weighted_sampler_config(stagnation=0.9)
-            if name == "softmax_T0.3":
+            _, model, _, _ = pool.get_weighted_sampler_config(stagnation=0.9)
+            if model == "model_a":
                 a_wins += 1
         # Under high stagnation we expect strong commitment to arm A.
         assert a_wins / n_draws > 0.85, f"Expected >85% commitment to arm A, got {a_wins/n_draws:.2f}"
@@ -362,7 +383,7 @@ class TestMetaAdviceOffensiveExtras:
                 "best_score": 2.6,
                 "evals_since_best": 80,
                 "stagnation": 0.95,
-                "per_sampler_accepts": {"softmax_T0.3": 5},
+                "per_sampler_accepts": {"adaptive_rank": 5},
             },
         )
         assert "Search Trajectory" in block

@@ -290,10 +290,13 @@ async def eval_consumer(
                                 llm_temperature=item.get("llm_temperature"),
                             )
 
-                        # SAL — keep state.eval_count_at_last_best fresh so the
-                        # stagnation signal is computed cheaply elsewhere.
+                        # SAL + PPS — keep state.eval_count_at_last_best
+                        # fresh so the plateau term in stagnation_depth is
+                        # computed cheaply; also snapshot the (eval, cost)
+                        # of this NEW BEST into the hazard history that
+                        # powers PPS's posterior survival estimate.
                         if is_new_best:
-                            state.eval_count_at_last_best = state.eval_count
+                            state.record_new_best()
 
                         state.record_score(
                             score=score,

@@ -9,7 +9,14 @@ from typing import Any
 from ..clients.base import ClientSpec, client_name
 from ..config import LeviConfig
 from ..core import Program
-from ..equilibrium.prompts import PARADIGM_SHIFT_PROMPTS, VARIANT_GENERATION_PROMPT, get_budget_stage
+from ..equilibrium.prompts import (
+    BLUEPRINT_IMPLEMENTATION_PROMPT,
+    BLUEPRINT_VARIANT_PROMPT,
+    PARADIGM_SHIFT_PROMPTS,
+    STRATEGIC_BLUEPRINT_PROMPT,
+    VARIANT_GENERATION_PROMPT,
+    get_budget_stage,
+)
 from ..prompts import OutputMode, ProgramWithScore, PromptBuilder
 from ..utils import ResilientProcessPool, evaluate_code, extract_code, extract_fn_name
 from .base import ArtifactAdapter
@@ -372,6 +379,93 @@ Output ONLY complete, runnable Python code in a ```python block.
         return VARIANT_GENERATION_PROMPT.format(
             problem_description=self.config.problem_description,
             function_signature=self.config.function_signature,
+            base_code=base_content,
+            base_score=base_score,
+        )
+
+    # ------------------------------------------------------------------
+    # HLS — Strategic Blueprint adapter methods
+    # ------------------------------------------------------------------
+
+    def build_blueprint_prompt(
+        self,
+        representatives: Sequence[tuple[int, Any]],
+        *,
+        n_evaluations: int,
+        stagnation: float | None = None,
+        best_score: float | None = None,
+        evals_since_best: int | None = None,
+        top_failures: Sequence[str] | None = None,
+        max_words: int = 350,
+    ) -> str:
+        """Render the heavy-model strategic blueprint request.
+
+        The blueprint is intentionally short (text-only, no code) so the
+        heavy model spends its tokens on reasoning rather than boilerplate;
+        light implementer models turn the blueprint into runnable code
+        afterwards. We pass trajectory context (stagnation, best score,
+        evals-since-best) so the diagnosis is grounded.
+        """
+        rep_text_parts = []
+        for idx, (cluster_id, elite) in enumerate(representatives):
+            score = elite.result.primary_score
+            content = elite.program.content
+            rep_text_parts.append(
+                f"### Region {idx + 1} (Cluster {cluster_id}, Score: {score:.17g})\n"
+                f"```python\n{content}\n```"
+            )
+        representative_solutions = "\n\n".join(rep_text_parts)
+
+        trajectory_block = _build_trajectory_block(
+            best_score=best_score,
+            evals_since_best=evals_since_best,
+            stagnation=stagnation,
+            top_failures=top_failures,
+        )
+
+        return STRATEGIC_BLUEPRINT_PROMPT.format(
+            problem_description=self.config.problem_description,
+            function_signature=self.config.function_signature,
+            n_evaluations=n_evaluations,
+            n_regions=len(representatives),
+            representative_solutions=representative_solutions,
+            trajectory_block=trajectory_block,
+            max_words=max_words,
+        )
+
+    def build_blueprint_implementation_prompt(
+        self,
+        blueprint_text: str,
+        representatives: Sequence[tuple[int, Any]],
+    ) -> str:
+        """Render the light-model implementation request for a blueprint."""
+        rep_text_parts = []
+        for idx, (cluster_id, elite) in enumerate(representatives):
+            score = elite.result.primary_score
+            content = elite.program.content
+            rep_text_parts.append(
+                f"### Reference {idx + 1} (Cluster {cluster_id}, Score: {score:.17g})\n"
+                f"```python\n{content}\n```"
+            )
+        representative_solutions = "\n\n".join(rep_text_parts) if rep_text_parts else "(none)"
+
+        return BLUEPRINT_IMPLEMENTATION_PROMPT.format(
+            problem_description=self.config.problem_description,
+            function_signature=self.config.function_signature,
+            blueprint_text=blueprint_text,
+            representative_solutions=representative_solutions,
+        )
+
+    def build_blueprint_variant_prompt(
+        self,
+        blueprint_text: str,
+        base_content: str,
+        base_score: float,
+    ) -> str:
+        return BLUEPRINT_VARIANT_PROMPT.format(
+            problem_description=self.config.problem_description,
+            function_signature=self.config.function_signature,
+            blueprint_text=blueprint_text,
             base_code=base_content,
             base_score=base_score,
         )

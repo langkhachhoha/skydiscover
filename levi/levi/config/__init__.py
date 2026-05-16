@@ -4,6 +4,7 @@ Configuration models for Levi.
 
 from .models import (
     BehaviorConfig,
+    BlueprintConfig,
     BudgetConfig,
     CascadeConfig,
     CVTConfig,
@@ -30,6 +31,7 @@ __all__ = [
     "CascadeConfig",
     "PipelineConfig",
     "PunctuatedEquilibriumConfig",
+    "BlueprintConfig",
     "PromptOptConfig",
     "PromptBankConfig",
     "ProxyBenchmarkConfig",

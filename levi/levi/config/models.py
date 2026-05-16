@@ -10,16 +10,23 @@ from ..clients.base import ClientSpec
 
 
 class SamplerModelPair(BaseModel):
-    sampler: str
+    """A single bandit arm: (sampler, model, prompt_id, llm_temperature).
+
+    The sampler is the parent-selection strategy (default: AdaptiveRank).
+    No sampler-internal hyperparameter (softmax temperature, annealing
+    cycle count, etc.) appears as an arm dimension — AdaptiveRankSampler
+    derives its β from the live stagnation signal, so adding such knobs
+    only fragments the bandit's posterior without informational gain.
+    """
+
+    sampler: str = "adaptive_rank"
     model: ClientSpec
     weight: float = 1.0
-    temperature: Optional[float] = None  # For softmax sampler
-    n_cycles: Optional[int] = None  # For cyclic_annealing sampler
 
     # Prompt-bank dimensions (joint bandit arm with sampler/model).
-    # None on both means: legacy behaviour (no prompt selection at sample time).
+    # None on both means: no prompt selection at sample time (default arm).
     mutation_prompt_id: Optional[str] = None
-    llm_temperature: Optional[float] = None  # LLM sampling temperature (distinct from sampler softmax `temperature`)
+    llm_temperature: Optional[float] = None  # LLM sampling temperature
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -91,6 +98,13 @@ class PunctuatedEquilibriumConfig(BaseModel):
 
     Periodically triggers paradigm-shift generation using heavy model(s),
     creating fundamentally new solutions to escape local optima.
+
+    Under HLS (Heavy-Light Synthesis) the heavy model produces a short
+    *Strategic Blueprint* (diagnosis + approach + invariants + pseudocode)
+    rather than a full code dump; light models then implement the
+    blueprint in parallel. See ``BlueprintConfig`` for the persistence
+    knobs that let the blueprint also condition main-loop mutations via
+    a TTL window.
     """
 
     enabled: bool = True
@@ -104,7 +118,53 @@ class PunctuatedEquilibriumConfig(BaseModel):
     component_selector: Any = "stagnation"
     share_main_selector_stats: bool = True
 
+    # HLS — when True, the heavy model emits a Strategic Blueprint (short,
+    # structured) and light models implement it. When False, the legacy
+    # "heavy generates full code" pathway is used for backward-compatible
+    # ablation runs.
+    use_blueprint: bool = True
+
+    # HLS — when True the paradigm-shift "reference implementation" is
+    # also produced by a light model (cost reduction). The heavy model
+    # is only used for the blueprint. When False the heavy model also
+    # writes one reference implementation.
+    light_only_implementations: bool = True
+
     model_config = {"arbitrary_types_allowed": True}
+
+
+class BlueprintConfig(BaseModel):
+    """Strategic-Blueprint persistence (HLS — Heavy-Light Synthesis).
+
+    A Strategic Blueprint produced by Punctuated Equilibrium can also
+    condition a fraction of main-loop mutations during a TTL window,
+    turning the heavy model's single-shot reasoning into a durable
+    search-direction signal. This is the "Strategic Memory" component
+    of HLS.
+    """
+
+    enabled: bool = True
+
+    ttl_multiplier: float = 1.5
+    """Blueprint TTL (in evaluations) = ttl_multiplier × PE interval."""
+
+    inject_probability: float = 0.3
+    """Per-mutation probability of injecting the blueprint into the prompt,
+    conditional on TTL > 0 and stagnation gate being active."""
+
+    stagnation_gate: float = 0.4
+    """Blueprint is injected only when s(t) ≥ this threshold. Keeps the
+    directive out of healthy phases (where it would just bias exploration)."""
+
+    require_accepted: bool = True
+    """When True, only install a blueprint after at least one of its
+    implementations was accepted into the archive. Avoids polluting the
+    main loop with directives that already failed at PE time."""
+
+    max_tokens: int = 600
+    """Cap on heavy-model output tokens for the blueprint call. Kept low
+    because a blueprint is intentionally short (diagnosis + approach +
+    invariants + pseudocode), not full code."""
 
 
 class PromptBankConfig(BaseModel):
@@ -306,6 +366,7 @@ class LeviConfig(BaseModel):
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     cascade: CascadeConfig = Field(default_factory=CascadeConfig)
     punctuated_equilibrium: PunctuatedEquilibriumConfig = Field(default_factory=PunctuatedEquilibriumConfig)
+    blueprint: BlueprintConfig = Field(default_factory=BlueprintConfig)
     prompt_opt: PromptOptConfig = Field(default_factory=PromptOptConfig)
     prompt_bank: PromptBankConfig = Field(default_factory=PromptBankConfig)
     proxy_benchmark: ProxyBenchmarkConfig = Field(default_factory=ProxyBenchmarkConfig)
@@ -330,20 +391,16 @@ class LeviConfig(BaseModel):
         if not isinstance(self.mutation_models, list):
             self.mutation_models = [self.mutation_models]
 
-        # 2. Auto-generate sampler_model_pairs if not provided
+        # 2. Auto-generate sampler_model_pairs if not provided.
+        #    With AdaptiveRankSampler the bandit arm space is just
+        #    (model[, prompt_id, llm_temperature]). Each mutation model
+        #    becomes exactly one base arm; the prompt bank multiplies
+        #    that by (prompt × llm_temperature) if enabled.
         if not self.sampler_model_pairs:
-            pairs = []
-            for model in self.mutation_models:
-                for temp in [0.3, 0.7, 1.0, 1.2]:
-                    pairs.append(
-                        SamplerModelPair(
-                            sampler="softmax",
-                            model=model,
-                            weight=1.0,
-                            temperature=temp,
-                        )
-                    )
-            self.sampler_model_pairs = pairs
+            self.sampler_model_pairs = [
+                SamplerModelPair(sampler="adaptive_rank", model=model, weight=1.0)
+                for model in self.mutation_models
+            ]
 
         # 2b. Cross-product expansion with the prompt bank (joint bandit arm).
         # Each base (sampler, model) becomes (sampler, model, prompt_id, llm_temperature)
@@ -366,8 +423,6 @@ class LeviConfig(BaseModel):
                                 sampler=base.sampler,
                                 model=base.model,
                                 weight=base.weight,
-                                temperature=base.temperature,
-                                n_cycles=base.n_cycles,
                                 mutation_prompt_id=pid,
                                 llm_temperature=float(t),
                             )

@@ -34,6 +34,7 @@ from .clients import BaseClient, ClaudeCodeClient, ClientResult, CodexClient, LM
 # Config types
 from .config import (
     BehaviorConfig,
+    BlueprintConfig,
     BudgetConfig,
     CascadeConfig,
     CVTConfig,
@@ -118,6 +119,7 @@ __all__ = [
     "CascadeConfig",
     "PipelineConfig",
     "PunctuatedEquilibriumConfig",
+    "BlueprintConfig",
     "PromptOptConfig",
     "PromptBankConfig",
     "ProxyBenchmarkConfig",

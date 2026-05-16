@@ -63,6 +63,11 @@ class _Pool:
     def update_sampler(self, sampler_name: str, cell: int, success: bool):
         self.update_calls.append((sampler_name, cell, success))
 
+    def update_bandit(self, *args, **kwargs):
+        # SAL Thompson bandit hook — not exercised by these tests; accept
+        # any signature so the consumer path is unaffected.
+        return None
+
     def size(self):
         return 1 if self.add_calls else 0
 
@@ -70,7 +75,7 @@ class _Pool:
 async def _run_consumer_once(pool: _Pool, executor: _Executor, config: LeviConfig) -> PipelineState:
     state = PipelineState(config.budget)
     queue = asyncio.Queue()
-    await queue.put({"content": "def solve(x):\n    return x", "sampler": "softmax", "source_cell": 3, "model": "m"})
+    await queue.put({"content": "def solve(x):\n    return x", "sampler": "adaptive_rank", "source_cell": 3, "model": "m"})
     stop_event = asyncio.Event()
     stop_event.set()
     archive_lock = asyncio.Lock()
@@ -111,7 +116,7 @@ class TestEvalConsumerPerCellCascade:
 
         assert executor.calls == 1
         assert pool.add_calls == []
-        assert pool.update_calls == [("softmax", 3, False)]
+        assert pool.update_calls == [("adaptive_rank", 3, False)]
         assert state.eval_count == 1
 
     def test_runs_full_eval_when_quick_score_beats_cell_incumbent(self):
@@ -125,7 +130,7 @@ class TestEvalConsumerPerCellCascade:
         assert len(pool.add_calls) == 1
         assert pool.add_calls[0][1].scores["score"] == 1.5
         assert pool.add_calls[0][1].scores["quick_score"] == 0.9
-        assert pool.update_calls == [("softmax", 3, True)]
+        assert pool.update_calls == [("adaptive_rank", 3, True)]
         assert state.eval_count == 1
 
     def test_runs_full_eval_when_cell_incumbent_has_no_quick_score(self):

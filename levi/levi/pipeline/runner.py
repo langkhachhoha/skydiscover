@@ -254,10 +254,11 @@ class PipelineRunner:
             except (TypeError, ValueError):
                 cell_index_int = None
 
-            # SAL — keep the O(1) cache fresh so stagnation_depth() stays accurate
-            # when a PE-produced candidate sets a new best.
+            # SAL + PPS — keep the O(1) cache fresh and snapshot the
+            # NEW BEST event into the PPS hazard history when a PE-
+            # produced candidate sets a new best.
             if is_new_best:
-                self.state.eval_count_at_last_best = self.state.eval_count
+                self.state.record_new_best()
 
             self.state.record_score(
                 score=score,

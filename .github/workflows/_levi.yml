@@ -99,6 +99,72 @@ on:
         type: string
         default: ""
 
+      # ---------------- HLS — Strategic Blueprint (Heavy-Light Synthesis) ----------------
+      blueprint:
+        description: "Enable HLS Strategic Blueprint (heavy writes short blueprint, light implements). On by default."
+        required: false
+        type: boolean
+        default: true
+      blueprint_ttl_mult:
+        description: "Blueprint Strategic-Memory TTL multiplier (default 1.5). TTL evals = X * PE interval. Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      blueprint_inject_prob:
+        description: "Probability of injecting blueprint into a main-loop mutation while TTL>0 (default 0.3). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      blueprint_stagnation_gate:
+        description: "Stagnation s(t) threshold below which blueprint injection is suppressed (default 0.4). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      blueprint_max_tokens:
+        description: "Heavy-model blueprint output token cap (default 600). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      blueprint_heavy_only:
+        description: "Use the heavy model for the reference implementation (off → light-only, the cheap default)."
+        required: false
+        type: boolean
+        default: false
+
+      # ---------------- Punctuated Equilibrium overrides ----------------
+      pe_interval:
+        description: "Trigger PE every N evaluations (Levi default 10). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      pe_n_clusters:
+        description: "Number of behavioural clusters for picking PE anchors (default 3). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      pe_n_variants:
+        description: "Number of light-model implementations of the blueprint per PE event (default 3). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      pe_disabled:
+        description: "Disable Punctuated Equilibrium entirely (also disables HLS, since the blueprint lives inside PE)."
+        required: false
+        type: boolean
+        default: false
+
+      # ---------------- PPS — Posterior-Plateau Stagnation ----------------
+      sal_tau:
+        description: "Plateau length τ (evals) at which PPS plateau term saturates to 1.0 (default 80). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      sal_disabled:
+        description: "Disable SAL/PPS entirely. Producer ignores stagnation; bandit reverts to weighted roulette."
+        required: false
+        type: boolean
+        default: false
+
 jobs:
   levi:
     runs-on: ubuntu-latest
@@ -162,6 +228,52 @@ jobs:
               PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-temperatures-file ../${{ inputs.prompt_bank_temperatures_file }}"
             fi
           fi
+
+          # HLS Strategic Blueprint options
+          BLUEPRINT_OPTS=""
+          if [ "${{ inputs.blueprint }}" != "true" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --no-blueprint"
+          fi
+          if [ -n "${{ inputs.blueprint_ttl_mult }}" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-ttl-mult ${{ inputs.blueprint_ttl_mult }}"
+          fi
+          if [ -n "${{ inputs.blueprint_inject_prob }}" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-inject-prob ${{ inputs.blueprint_inject_prob }}"
+          fi
+          if [ -n "${{ inputs.blueprint_stagnation_gate }}" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-stagnation-gate ${{ inputs.blueprint_stagnation_gate }}"
+          fi
+          if [ -n "${{ inputs.blueprint_max_tokens }}" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-max-tokens ${{ inputs.blueprint_max_tokens }}"
+          fi
+          if [ "${{ inputs.blueprint_heavy_only }}" = "true" ]; then
+            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-heavy-only"
+          fi
+
+          # Punctuated Equilibrium overrides
+          PE_OPTS=""
+          if [ -n "${{ inputs.pe_interval }}" ]; then
+            PE_OPTS="$PE_OPTS --pe-interval ${{ inputs.pe_interval }}"
+          fi
+          if [ -n "${{ inputs.pe_n_clusters }}" ]; then
+            PE_OPTS="$PE_OPTS --pe-n-clusters ${{ inputs.pe_n_clusters }}"
+          fi
+          if [ -n "${{ inputs.pe_n_variants }}" ]; then
+            PE_OPTS="$PE_OPTS --pe-n-variants ${{ inputs.pe_n_variants }}"
+          fi
+          if [ "${{ inputs.pe_disabled }}" = "true" ]; then
+            PE_OPTS="$PE_OPTS --no-pe"
+          fi
+
+          # PPS / SAL
+          SAL_OPTS=""
+          if [ -n "${{ inputs.sal_tau }}" ]; then
+            SAL_OPTS="$SAL_OPTS --sal-tau ${{ inputs.sal_tau }}"
+          fi
+          if [ "${{ inputs.sal_disabled }}" = "true" ]; then
+            SAL_OPTS="$SAL_OPTS --no-sal"
+          fi
+
           uv run python ../scripts/run_levi.py \
             --example-dir "../${{ inputs.example_dir }}" \
             --problem-module "${{ inputs.problem_module }}" \
@@ -177,7 +289,10 @@ jobs:
             --output-dir "../${{ env.OUTPUT_DIR }}" \
             $INIT_OPTS \
             $CVT_OPTS \
-            $PROMPT_BANK_OPTS
+            $PROMPT_BANK_OPTS \
+            $BLUEPRINT_OPTS \
+            $PE_OPTS \
+            $SAL_OPTS
 
 
 

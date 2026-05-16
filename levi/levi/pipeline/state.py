@@ -4,14 +4,57 @@ import asyncio
 import logging
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Deque, Optional
 
 from ..clients.base import ClientInput, ClientSpec
 from ..clients.lm import DEFAULT_TIMEOUT, _LMResolver
 from ..config import BudgetConfig
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Strategic Blueprint — heavy-model directive that persists across mutations.
+# Populated by Punctuated Equilibrium; consumed by the producer with TTL.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class StrategicBlueprint:
+    """Heavy-model strategic directive (HLS — Heavy-Light Synthesis).
+
+    The heavy paradigm-shift model emits a *short* structured blueprint
+    (~200-400 tokens) instead of a full code dump. Light implementers turn
+    each blueprint into a concrete program. The same blueprint is also
+    pushed into a TTL window so a fraction of subsequent main-loop mutations
+    can read its APPROACH section as a strategic hint.
+    """
+
+    diagnosis: str = ""
+    approach: str = ""
+    invariants: str = ""
+    pseudocode: str = ""
+    raw: str = ""  # original text in case parsing partly failed
+    pe_event_id: int = 0  # which PE event produced this blueprint
+    accepted: bool = False  # at least one implementation entered the archive
+    ttl_evals: int = 0  # remaining evals during which producer may inject it
+
+    @property
+    def is_active(self) -> bool:
+        return self.ttl_evals > 0 and (self.approach or self.pseudocode)
+
+    def directive_text(self) -> str:
+        """Short rendering used by producer.inject_blueprint."""
+        if not self.approach and not self.pseudocode:
+            return ""
+        parts = []
+        if self.approach:
+            parts.append(self.approach.strip())
+        if self.pseudocode:
+            parts.append(f"Pseudocode sketch:\n{self.pseudocode.strip()}")
+        return "\n\n".join(parts)
 
 
 class BudgetLimitReached(RuntimeError):
@@ -382,6 +425,23 @@ class PipelineState:
         Used by the runner to decide whether a PE produced a NEW BEST (so we
         can update consecutive_pe_no_best and gate Hard-PE)."""
 
+        # ------------------------------------------------------------------
+        # PPS — Posterior-Plateau Stagnation
+        # Bounded sliding window of (eval_count, total_cost) tuples captured
+        # at the moment of each strict NEW BEST. Used by stagnation_depth()
+        # to estimate the empirical NEW BEST hazard rate per unit cost.
+        # ------------------------------------------------------------------
+        self.new_best_history: Deque[tuple[int, float]] = deque(maxlen=32)
+
+        # ------------------------------------------------------------------
+        # HLS — Strategic Blueprint (heavy-model directive, TTL-bounded)
+        # ------------------------------------------------------------------
+        self.current_blueprint: Optional[StrategicBlueprint] = None
+        """Live blueprint with positive TTL; consumed by the producer."""
+
+        self.last_blueprint_text: str = ""
+        """Most recent blueprint raw text (for logging / snapshot)."""
+
     # ------------------------------------------------------------------
     # Delegation: BudgetTracker
     # ------------------------------------------------------------------
@@ -578,60 +638,149 @@ class PipelineState:
     # Domain: SAL (Stagnation-Adaptive Levi)
     # ------------------------------------------------------------------
 
-    def stagnation_depth(self, tau: int) -> float:
-        """Return s(t) ∈ [0,1] combining plateau + budget pressure.
+    # ------------------------------------------------------------------
+    # PPS — Posterior-Plateau Stagnation
+    # ------------------------------------------------------------------
 
-        Base signal: ``s_plateau = min(1, n_since_best / tau)`` — the legacy
-        plateau term, where ``n_since_best`` is the number of evals since the
-        last strict NEW BEST event (O(1) via ``eval_count_at_last_best``).
+    def record_new_best(self) -> None:
+        """Mark the current evaluation as a strict NEW BEST.
 
-        Budget pressure: for each *defined* budget limit, add a normalized
-        ratio of how much has been burned:
-
-            - ``seconds`` → ``elapsed_seconds / budget.seconds``
-            - ``dollars`` → ``total_cost / budget.dollars``
-            - ``evaluations`` → ``(eval_count + eval_in_flight) / budget.evaluations``
-
-        Each ratio is clipped to [0, 1]. The final signal is the *max* over
-        the plateau term and every defined budget ratio, so:
-
-            - If no budget limits are defined, behavior is unchanged
-              (plateau-only — legacy semantics).
-            - As we approach any defined budget cap, the signal saturates
-              faster, which lets downstream SAL mechanisms (PE staging,
-              Hard-PE, offensive meta-advice, bandit commitment) push for a
-              breakthrough before the run ends.
-
-        Args:
-            tau: plateau length at which the plateau term saturates to 1.0.
+        Snapshots ``(eval_count, total_cost)`` into the bounded history that
+        powers the empirical NEW BEST hazard rate used by PPS. Also resets
+        the O(1) plateau cache. Idempotent in the sense that two calls in a
+        single eval just produce a duplicate entry; callers should gate on a
+        score-vs-best comparison.
         """
-        if tau > 0:
-            n = max(0, self.eval_count - self.eval_count_at_last_best)
-            s = min(1.0, n / float(tau))
-        else:
-            s = 0.0
+        self.eval_count_at_last_best = self.eval_count
+        self.new_best_history.append(
+            (
+                self.budget_tracker.eval_count,
+                coerce_finite_float(self.budget_tracker.total_cost, default=0.0),
+            )
+        )
 
+    def _budget_progress_components(self) -> tuple[float, float, float]:
+        """Return ``(b, B_used, B_total)`` ∈ [0,1] × cost × cost.
+
+        b is the dominant budget-consumed fraction across all defined caps
+        (max over dollars / evals / seconds), used as the PPS confidence
+        weight. B_used / B_total are reported in the *same* unit as the
+        dominant cap so the hazard rate is interpretable. When no caps are
+        defined we fall back to a synthetic "evals so far / max(evals,1)"
+        signal so PPS still returns something meaningful.
+        """
         budget = self.budget_tracker.budget
 
-        seconds_limit = _coerce_positive_limit(budget.seconds)
-        if seconds_limit is not None and seconds_limit > 0.0:
-            ratio = self.budget_tracker.elapsed_seconds / seconds_limit
-            s = max(s, min(1.0, max(0.0, ratio)))
-
         dollars_limit = _coerce_positive_limit(budget.dollars)
+        seconds_limit = _coerce_positive_limit(budget.seconds)
+        evals_limit_raw = budget.evaluations
+
+        candidates: list[tuple[str, float, float, float]] = []
+
         if dollars_limit is not None and dollars_limit > 0.0:
-            cost = coerce_finite_float(self.budget_tracker.total_cost, default=0.0)
-            ratio = cost / dollars_limit
-            s = max(s, min(1.0, max(0.0, ratio)))
+            used = coerce_finite_float(self.budget_tracker.total_cost, default=0.0)
+            candidates.append(("dollars", used / dollars_limit, used, dollars_limit))
 
-        if budget.evaluations is not None:
-            eval_limit = int(coerce_finite_float(budget.evaluations, default=0.0))
-            if eval_limit > 0:
-                eval_used = self.budget_tracker.eval_count + self.budget_tracker.eval_in_flight
-                ratio = eval_used / float(eval_limit)
-                s = max(s, min(1.0, max(0.0, ratio)))
+        if evals_limit_raw is not None:
+            evals_limit = float(coerce_finite_float(evals_limit_raw, default=0.0))
+            if evals_limit > 0:
+                used = float(self.budget_tracker.eval_count + self.budget_tracker.eval_in_flight)
+                candidates.append(("evals", used / evals_limit, used, evals_limit))
 
-        return s
+        if seconds_limit is not None and seconds_limit > 0.0:
+            used = self.budget_tracker.elapsed_seconds
+            candidates.append(("seconds", used / seconds_limit, used, seconds_limit))
+
+        if not candidates:
+            used = float(self.budget_tracker.eval_count)
+            total = max(used + 1.0, 1.0)
+            return (0.0, used, total)
+
+        candidates.sort(key=lambda c: c[1], reverse=True)
+        _, ratio, used, total = candidates[0]
+        return (max(0.0, min(1.0, ratio)), used, total)
+
+    def stagnation_depth(self, tau: int) -> float:
+        """Posterior-Plateau Stagnation s(t) ∈ [0, 1].
+
+        Replaces the legacy ``max(plateau, budget_ratios)`` with a survival-
+        style estimate of "no further NEW BEST in remaining budget":
+
+            p(t) = min(1, n_since_best / tau)              # plateau term
+            b(t) ∈ [0,1]                                    # dominant budget consumed
+            B_rem = (1 - b(t)) · B_total                    # remaining budget (raw)
+            λ̂(t) = (k_W + 1) / (B_W + ε)                   # Laplace-smoothed hazard
+                                                            #   k_W: NEW BEST in window
+                                                            #   B_W: budget consumed since
+                                                            #        first window entry
+            posterior_stuck = p(t) · exp(-λ̂(t) · B_rem)    # P(no progress | history)
+            α(t)  = b(t)^2                                  # confidence in hazard estimate
+            s(t)  = (1 - α) · p(t) + α · posterior_stuck
+
+        Properties:
+          * Early run (α≈0): s(t) ≈ p(t) — legacy plateau, no noisy hazard.
+          * Late run (α≈1) with no NEW BEST: B_rem · λ̂ → 0, so
+            posterior_stuck → p(t) and s(t) → p(t) — but p(t) is already
+            saturating, so SAL mechanisms fire as before.
+          * Late run with frequent NEW BEST: λ̂ · B_rem is large,
+            posterior_stuck → 0 even if p(t) > 0 — we're improving so don't
+            panic-trigger PE / Hard-PE.
+          * Late run with sparse NEW BEST and large B_rem: posterior_stuck
+            stays close to p(t) so plateau pressure dominates.
+
+        The formulation is a Poisson-hazard survival estimate, which is
+        well-grounded statistically and treats stagnation as a *posterior
+        belief about exhaustion of the archive* conditional on the
+        improvement-per-budget trajectory we have observed.
+
+        Args:
+            tau: plateau length at which p(t) saturates to 1.0.
+        """
+        # --- plateau term p(t) ------------------------------------------
+        if tau > 0:
+            n_since_best = max(0, self.eval_count - self.eval_count_at_last_best)
+            p = min(1.0, n_since_best / float(tau))
+        else:
+            p = 0.0
+
+        # --- budget components ------------------------------------------
+        b, B_used, B_total = self._budget_progress_components()
+        B_rem = max(0.0, B_total - B_used)
+
+        # --- empirical NEW BEST hazard λ̂(t) -----------------------------
+        history = self.new_best_history
+        if history:
+            # Window covers everything since the oldest tracked NEW BEST.
+            # Laplace smoothing: (k+1)/(B_W+ε) keeps λ̂ > 0 even if the
+            # window saw no improvements yet (k=0 → λ̂ = 1/B_W).
+            window_start_used = history[0][1]
+            B_window = max(0.0, B_used - window_start_used)
+            k_window = len(history)
+        else:
+            B_window = B_used
+            k_window = 0
+
+        eps = max(1e-9, 1e-3 * B_total)  # numerically safe floor
+        lam_hat = (k_window + 1.0) / (B_window + eps)
+
+        # Survival probability of "no NEW BEST in remaining budget" under a
+        # Poisson process with rate λ̂. Multiplied by plateau term so that
+        # if we're not even on a plateau, posterior_stuck contributes
+        # nothing.
+        survival = math.exp(-lam_hat * B_rem)
+        posterior_stuck = p * survival
+
+        # --- confidence-weighted blend ----------------------------------
+        alpha = b * b
+        s = (1.0 - alpha) * p + alpha * posterior_stuck
+
+        # Safety floor: PPS should never *under-report* a strict end-of-run
+        # plateau (b≈1, p≈1) regardless of hazard noise. Clamp so very-late-
+        # run stagnation is always ≥ plateau term.
+        if b >= 0.95 and p >= 0.95:
+            s = max(s, p)
+
+        return max(0.0, min(1.0, s))
 
     def evals_since_best(self) -> int:
         """Count evals since the last strict NEW BEST (O(1) via cache)."""
@@ -658,3 +807,29 @@ class PipelineState:
             return
         self.sal_sigma_0 = self.recent_score_std(window=max(sigma_window, len(self.score_history)))
         self.sal_init_finished = True
+
+    # ------------------------------------------------------------------
+    # HLS — Strategic Blueprint helpers
+    # ------------------------------------------------------------------
+
+    def install_blueprint(self, blueprint: StrategicBlueprint, ttl_evals: int) -> None:
+        """Make ``blueprint`` the active strategic directive for ``ttl_evals``.
+
+        Called by Punctuated Equilibrium after a successful blueprint
+        generation. We refresh TTL on every PE event so a sequence of PEs
+        progressively replaces older strategies without leaving gaps.
+        """
+        blueprint.ttl_evals = max(0, int(ttl_evals))
+        self.current_blueprint = blueprint
+        self.last_blueprint_text = blueprint.raw or ""
+
+    def consume_blueprint_tick(self) -> None:
+        """Decrement TTL by one. Producer calls this when it injected a
+        blueprint into a mutation prompt so the strategy decays with use,
+        not just wall-clock evals."""
+        bp = self.current_blueprint
+        if bp is None or bp.ttl_evals <= 0:
+            return
+        bp.ttl_evals -= 1
+        if bp.ttl_evals <= 0:
+            self.current_blueprint = None

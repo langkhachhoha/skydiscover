@@ -61,13 +61,15 @@ class TestAutoWiring:
             **_minimal_config_kwargs(),
             mutation_models=["model-a", "model-b"],
         )
-        # 2 models × 4 temperatures = 8 pairs
-        assert len(cfg.sampler_model_pairs) == 8
+        # With AdaptiveRankSampler the arm space is just (model[, prompt_id,
+        # llm_temperature]); no spurious softmax-T cross-product. 2 models
+        # → 2 arms.
+        assert len(cfg.sampler_model_pairs) == 2
         models = {p.model for p in cfg.sampler_model_pairs}
         assert models == {"model-a", "model-b"}
-        temps = sorted({p.temperature for p in cfg.sampler_model_pairs})
-        assert temps == [0.3, 0.7, 1.0, 1.2]
-        assert all(p.sampler == "softmax" for p in cfg.sampler_model_pairs)
+        assert all(p.sampler == "adaptive_rank" for p in cfg.sampler_model_pairs)
+        assert all(p.llm_temperature is None for p in cfg.sampler_model_pairs)
+        assert all(p.mutation_prompt_id is None for p in cfg.sampler_model_pairs)
 
     def test_explicit_sampler_model_pairs_not_overridden(self):
         explicit_pairs = [
@@ -135,7 +137,7 @@ class TestLeviConfig:
         cfg = LeviConfig(**_minimal_config_kwargs())
         assert cfg.paradigm_models == ["openai/gpt-4o"]
         assert cfg.mutation_models == ["openai/gpt-4o-mini"]
-        assert len(cfg.sampler_model_pairs) == 4  # 1 model × 4 temps
+        assert len(cfg.sampler_model_pairs) == 1  # 1 model × adaptive_rank
 
     def test_prompt_overrides_preserved(self):
         overrides = {
