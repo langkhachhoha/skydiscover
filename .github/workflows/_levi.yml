@@ -69,7 +69,7 @@ on:
         type: string
         default: "600"
       init_variants_per_seed:
-        description: "Init Phase 2 — variants per diverse seed (Levi default 20). Blank keeps default. Total LLM variants ≈ this × (# seeds after Phase 1)."
+        description: "Init Phase 2 — variants per diverse seed (Levi default 20). Blank keeps default."
         required: false
         type: string
         default: ""
@@ -88,113 +88,31 @@ on:
         required: false
         type: boolean
         default: false
-      prompt_bank_prompts_file:
-        description: "Path to prompts JSON (relative to repo root). Blank → levi/examples/mutation_prompts.json (shared default)."
-        required: false
-        type: string
-        default: ""
-      prompt_bank_temperatures_file:
-        description: "Path to temperatures JSON (relative to repo root). Blank → levi/examples/mutation_temperatures.json (shared default)."
-        required: false
-        type: string
-        default: ""
-
-      # ---------------- Punctuated Equilibrium overrides ----------------
-      pe_interval:
-        description: "Trigger PE every N evaluations (Levi default 10). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      pe_n_clusters:
-        description: "Number of behavioural clusters for picking PE anchors (default 3). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      pe_n_variants:
-        description: "Light-model variants of the heavy paradigm shift per PE event (default 3). Blank keeps default."
-        required: false
-        type: string
-        default: ""
       pe_disabled:
         description: "Disable Punctuated Equilibrium entirely."
         required: false
         type: boolean
         default: false
-
-      # ---------------- Strategy Log (post-PE summariser) ----------------
-      strategy_log_disabled:
-        description: "Disable the strategy-history summariser (heavy prompt won't see past PE attempts)."
-        required: false
-        type: boolean
-        default: false
-      strategy_log_entries:
-        description: "How many most-recent strategy records to render into the heavy prompt (default 8). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-
-      # ---------------- Code Error Repair ----------------
       code_repair_disabled:
         description: "Disable the one-shot light-model code-repair sub-pipeline."
         required: false
         type: boolean
         default: false
-      code_repair_every_n:
-        description: "Fire one repair attempt every N main-loop offspring (default 8). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      code_repair_max:
-        description: "Hard cap on total repair attempts per run (default 100). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      code_repair_beta:
-        description: "Zipfian exponent for rank-by-parent-score selection from the error buffer (default 1.5). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      code_repair_buffer:
-        description: "Bounded error-buffer size (default 64). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-
-      # ---------------- Adaptive Island Expansion ----------------
-      # AdaEvolve-style growth: when a PE candidate fails standard admission
-      # under high stagnation, open a NEW cell at its own behaviour vector.
       adaptive_island_disabled:
         description: "Disable Adaptive Island Expansion (PE candidates that fail standard admission are discarded)."
         required: false
         type: boolean
         default: false
-      island_stagnation:
-        description: "Minimum stagnation s(t) for island expansion to fire (default 0.7). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      island_max:
-        description: "Maximum island expansions per run (default 16). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      island_max_centroids:
-        description: "Hard ceiling on total centroids (default 200). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-
-      # ---------------- PPS — Posterior-Plateau Stagnation ----------------
-      sal_tau:
-        description: "Plateau length τ (evals) at which PPS plateau term saturates to 1.0 (default 80). Blank keeps default."
-        required: false
-        type: string
-        default: ""
       sal_disabled:
         description: "Disable SAL/PPS entirely. Producer ignores stagnation; bandit reverts to weighted roulette."
         required: false
         type: boolean
         default: false
+      advanced_options:
+        description: "Advanced config options as JSON string (e.g. '{\"pe_interval\":15,\"code_repair_every_n\":10}')"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   levi:
@@ -234,6 +152,22 @@ jobs:
         working-directory: levi
         run: uv sync
 
+      - name: Parse advanced options
+        if: inputs.advanced_options != ''
+        run: |
+          # Parse JSON and convert to environment variables
+          echo "${{ inputs.advanced_options }}" | python3 -c "
+          import json, sys, os
+          try:
+              opts = json.loads(sys.stdin.read())
+              for k, v in opts.items():
+                  env_name = f'ADV_{k.upper()}'
+                  print(f'{env_name}={v}')
+          except Exception as e:
+              print(f'Error parsing advanced options: {e}', file=sys.stderr)
+              sys.exit(1)
+          " >> $GITHUB_ENV
+
       - name: Run LEVI on ${{ inputs.example_dir }}
         working-directory: levi
         run: |
@@ -244,87 +178,41 @@ jobs:
           if [ -n "${{ inputs.init_diverse_seeds }}" ]; then
             INIT_OPTS="$INIT_OPTS --init-diverse-seeds ${{ inputs.init_diverse_seeds }}"
           fi
+          
           CVT_OPTS=""
           if [ -n "${{ inputs.n_centroids }}" ]; then
             CVT_OPTS="$CVT_OPTS --n-centroids ${{ inputs.n_centroids }}"
           fi
+          
           PROMPT_BANK_OPTS=""
           if [ "${{ inputs.prompt_bank }}" = "true" ]; then
             PROMPT_BANK_OPTS="--prompt-bank"
-            # Paths are relative to repo root (we run from ./levi, so prepend ../).
-            if [ -n "${{ inputs.prompt_bank_prompts_file }}" ]; then
-              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-prompts-file ../${{ inputs.prompt_bank_prompts_file }}"
-            fi
-            if [ -n "${{ inputs.prompt_bank_temperatures_file }}" ]; then
-              PROMPT_BANK_OPTS="$PROMPT_BANK_OPTS --prompt-bank-temperatures-file ../${{ inputs.prompt_bank_temperatures_file }}"
-            fi
           fi
 
-          # Punctuated Equilibrium overrides
-          PE_OPTS=""
-          if [ -n "${{ inputs.pe_interval }}" ]; then
-            PE_OPTS="$PE_OPTS --pe-interval ${{ inputs.pe_interval }}"
-          fi
-          if [ -n "${{ inputs.pe_n_clusters }}" ]; then
-            PE_OPTS="$PE_OPTS --pe-n-clusters ${{ inputs.pe_n_clusters }}"
-          fi
-          if [ -n "${{ inputs.pe_n_variants }}" ]; then
-            PE_OPTS="$PE_OPTS --pe-n-variants ${{ inputs.pe_n_variants }}"
-          fi
+          # Main feature toggles
+          FEATURE_OPTS=""
           if [ "${{ inputs.pe_disabled }}" = "true" ]; then
-            PE_OPTS="$PE_OPTS --no-pe"
+            FEATURE_OPTS="$FEATURE_OPTS --no-pe"
           fi
-
-          # Strategy Log
-          STRATEGY_OPTS=""
-          if [ "${{ inputs.strategy_log_disabled }}" = "true" ]; then
-            STRATEGY_OPTS="$STRATEGY_OPTS --no-strategy-log"
-          fi
-          if [ -n "${{ inputs.strategy_log_entries }}" ]; then
-            STRATEGY_OPTS="$STRATEGY_OPTS --strategy-log-entries ${{ inputs.strategy_log_entries }}"
-          fi
-
-          # Code Repair
-          REPAIR_OPTS=""
           if [ "${{ inputs.code_repair_disabled }}" = "true" ]; then
-            REPAIR_OPTS="$REPAIR_OPTS --no-code-repair"
+            FEATURE_OPTS="$FEATURE_OPTS --no-code-repair"
           fi
-          if [ -n "${{ inputs.code_repair_every_n }}" ]; then
-            REPAIR_OPTS="$REPAIR_OPTS --code-repair-every-n ${{ inputs.code_repair_every_n }}"
-          fi
-          if [ -n "${{ inputs.code_repair_max }}" ]; then
-            REPAIR_OPTS="$REPAIR_OPTS --code-repair-max ${{ inputs.code_repair_max }}"
-          fi
-          if [ -n "${{ inputs.code_repair_beta }}" ]; then
-            REPAIR_OPTS="$REPAIR_OPTS --code-repair-beta ${{ inputs.code_repair_beta }}"
-          fi
-          if [ -n "${{ inputs.code_repair_buffer }}" ]; then
-            REPAIR_OPTS="$REPAIR_OPTS --code-repair-buffer ${{ inputs.code_repair_buffer }}"
-          fi
-
-          # Adaptive Island Expansion
-          ISLAND_OPTS=""
           if [ "${{ inputs.adaptive_island_disabled }}" = "true" ]; then
-            ISLAND_OPTS="$ISLAND_OPTS --no-adaptive-island"
-          fi
-          if [ -n "${{ inputs.island_stagnation }}" ]; then
-            ISLAND_OPTS="$ISLAND_OPTS --island-stagnation ${{ inputs.island_stagnation }}"
-          fi
-          if [ -n "${{ inputs.island_max }}" ]; then
-            ISLAND_OPTS="$ISLAND_OPTS --island-max ${{ inputs.island_max }}"
-          fi
-          if [ -n "${{ inputs.island_max_centroids }}" ]; then
-            ISLAND_OPTS="$ISLAND_OPTS --island-max-centroids ${{ inputs.island_max_centroids }}"
-          fi
-
-          # PPS / SAL
-          SAL_OPTS=""
-          if [ -n "${{ inputs.sal_tau }}" ]; then
-            SAL_OPTS="$SAL_OPTS --sal-tau ${{ inputs.sal_tau }}"
+            FEATURE_OPTS="$FEATURE_OPTS --no-adaptive-island"
           fi
           if [ "${{ inputs.sal_disabled }}" = "true" ]; then
-            SAL_OPTS="$SAL_OPTS --no-sal"
+            FEATURE_OPTS="$FEATURE_OPTS --no-sal"
           fi
+
+          # Advanced options from JSON (if provided)
+          ADV_OPTS=""
+          [ -n "$ADV_PE_INTERVAL" ] && ADV_OPTS="$ADV_OPTS --pe-interval $ADV_PE_INTERVAL"
+          [ -n "$ADV_PE_N_CLUSTERS" ] && ADV_OPTS="$ADV_OPTS --pe-n-clusters $ADV_PE_N_CLUSTERS"
+          [ -n "$ADV_PE_N_VARIANTS" ] && ADV_OPTS="$ADV_OPTS --pe-n-variants $ADV_PE_N_VARIANTS"
+          [ -n "$ADV_CODE_REPAIR_EVERY_N" ] && ADV_OPTS="$ADV_OPTS --code-repair-every-n $ADV_CODE_REPAIR_EVERY_N"
+          [ -n "$ADV_CODE_REPAIR_MAX" ] && ADV_OPTS="$ADV_OPTS --code-repair-max $ADV_CODE_REPAIR_MAX"
+          [ -n "$ADV_ISLAND_STAGNATION" ] && ADV_OPTS="$ADV_OPTS --island-stagnation $ADV_ISLAND_STAGNATION"
+          [ -n "$ADV_SAL_TAU" ] && ADV_OPTS="$ADV_OPTS --sal-tau $ADV_SAL_TAU"
 
           uv run python ../scripts/run_levi.py \
             --example-dir "../${{ inputs.example_dir }}" \
@@ -342,11 +230,8 @@ jobs:
             $INIT_OPTS \
             $CVT_OPTS \
             $PROMPT_BANK_OPTS \
-            $PE_OPTS \
-            $STRATEGY_OPTS \
-            $REPAIR_OPTS \
-            $ISLAND_OPTS \
-            $SAL_OPTS
+            $FEATURE_OPTS \
+            $ADV_OPTS
 
       - name: Upload run artifacts
         if: always()
