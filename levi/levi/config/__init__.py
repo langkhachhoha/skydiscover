@@ -3,10 +3,11 @@ Configuration models for Levi.
 """
 
 from .models import (
+    AdaptiveIslandConfig,
     BehaviorConfig,
-    BlueprintConfig,
     BudgetConfig,
     CascadeConfig,
+    CodeRepairConfig,
     CVTConfig,
     InitConfig,
     LeviConfig,
@@ -19,6 +20,7 @@ from .models import (
     PunctuatedEquilibriumConfig,
     SalConfig,
     SamplerModelPair,
+    StrategyLogConfig,
 )
 
 __all__ = [
@@ -31,7 +33,9 @@ __all__ = [
     "CascadeConfig",
     "PipelineConfig",
     "PunctuatedEquilibriumConfig",
-    "BlueprintConfig",
+    "StrategyLogConfig",
+    "CodeRepairConfig",
+    "AdaptiveIslandConfig",
     "PromptOptConfig",
     "PromptBankConfig",
     "ProxyBenchmarkConfig",

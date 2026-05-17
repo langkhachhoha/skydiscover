@@ -8,6 +8,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Optional
 
+import numpy as np
+
 from ..clients.base import ClientInput, ClientSpec
 from ..clients.lm import DEFAULT_TIMEOUT, _LMResolver
 from ..config import BudgetConfig
@@ -16,45 +18,75 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Strategic Blueprint — heavy-model directive that persists across mutations.
-# Populated by Punctuated Equilibrium; consumed by the producer with TTL.
+# Strategy History — short post-mortems of past Punctuated Equilibrium events
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class StrategicBlueprint:
-    """Heavy-model strategic directive (HLS — Heavy-Light Synthesis).
+class StrategyRecord:
+    """A single algorithmic strategy that was already tried by Punctuated
+    Equilibrium.
 
-    The heavy paradigm-shift model emits a *short* structured blueprint
-    (~200-400 tokens) instead of a full code dump. Light implementers turn
-    each blueprint into a concrete program. The same blueprint is also
-    pushed into a TTL window so a fraction of subsequent main-loop mutations
-    can read its APPROACH section as a strategic hint.
+    Fields:
+      pe_event_id: monotonically increasing PE trigger number.
+      stage: which prompt template fired (``early`` / ``mid`` / ``late``).
+      summary: one-sentence description of the approach, produced by a light
+               summariser model from the paradigm-shift code.
+      best_before: best score in the archive just before this PE.
+      paradigm_score: the reference paradigm-shift candidate's score (NaN
+               when the heavy candidate failed to evaluate).
+      delta_score: best_after - best_before across the whole PE event
+               (paradigm + variants).
+      accepted: True when at least one PE candidate entered the archive.
     """
 
-    diagnosis: str = ""
-    approach: str = ""
-    invariants: str = ""
-    pseudocode: str = ""
-    raw: str = ""  # original text in case parsing partly failed
-    pe_event_id: int = 0  # which PE event produced this blueprint
-    accepted: bool = False  # at least one implementation entered the archive
-    ttl_evals: int = 0  # remaining evals during which producer may inject it
+    pe_event_id: int
+    stage: str
+    summary: str
+    best_before: float
+    paradigm_score: float
+    delta_score: float
+    accepted: bool
 
-    @property
-    def is_active(self) -> bool:
-        return self.ttl_evals > 0 and (self.approach or self.pseudocode)
+    def format_line(self) -> str:
+        """Render this record as one Markdown block for the heavy prompt.
 
-    def directive_text(self) -> str:
-        """Short rendering used by producer.inject_blueprint."""
-        if not self.approach and not self.pseudocode:
-            return ""
-        parts = []
-        if self.approach:
-            parts.append(self.approach.strip())
-        if self.pseudocode:
-            parts.append(f"Pseudocode sketch:\n{self.pseudocode.strip()}")
-        return "\n\n".join(parts)
+        Supports both legacy single-line summaries and the structured
+        four-label format produced by the new summariser. Multi-line
+        summaries are indented under the PE header so the heavy model
+        sees a clean nested layout.
+        """
+        outcome = "accepted" if self.accepted else "rejected"
+        delta = f"{self.delta_score:+.4g}"
+        score = (
+            f"{self.paradigm_score:.4g}"
+            if math.isfinite(self.paradigm_score)
+            else "n/a"
+        )
+        body = (self.summary or "").strip()
+        header = f"### PE #{self.pe_event_id} [{self.stage}] — Δ={delta}, score={score}, {outcome}"
+        if not body:
+            return header + "\n  (no summary)\n"
+        # Indent multi-line summary by 2 spaces so it nests under the header
+        # in the heavy prompt without breaking Markdown bullet logic.
+        indented = "\n".join("  " + line if line else "" for line in body.splitlines())
+        return header + "\n" + indented + "\n"
+
+
+# ---------------------------------------------------------------------------
+# Code Error Repair — bounded buffer of recently broken candidates
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ErrorRecord:
+    """A candidate that failed evaluation (syntax / runtime / score error)."""
+
+    code: str
+    parent_score: float
+    error_msg: str
+    parent_cell: Optional[int]
+    source: str  # "main_loop", "pe_paradigm", "pe_variant", "repair", ...
 
 
 class BudgetLimitReached(RuntimeError):
@@ -434,13 +466,31 @@ class PipelineState:
         self.new_best_history: Deque[tuple[int, float]] = deque(maxlen=32)
 
         # ------------------------------------------------------------------
-        # HLS — Strategic Blueprint (heavy-model directive, TTL-bounded)
+        # Strategy History — one record per Punctuated Equilibrium event.
+        # Light model produces a 1-sentence summary of each paradigm-shift
+        # solution; the next PE's heavy prompt receives the formatted log so
+        # the model can explicitly avoid re-trying approaches that didn't
+        # work.
         # ------------------------------------------------------------------
-        self.current_blueprint: Optional[StrategicBlueprint] = None
-        """Live blueprint with positive TTL; consumed by the producer."""
+        self.strategy_history: Deque[StrategyRecord] = deque(maxlen=12)
 
-        self.last_blueprint_text: str = ""
-        """Most recent blueprint raw text (for logging / snapshot)."""
+        # ------------------------------------------------------------------
+        # Code Error Repair — bounded buffer of recently failed candidates.
+        # Producer pops one at a time (rank-by-parent-score) and asks a
+        # light model for a one-shot fix. No retries beyond the single
+        # repair call.
+        # ------------------------------------------------------------------
+        self.error_buffer: Deque[ErrorRecord] = deque(maxlen=64)
+        self.repair_attempt_count: int = 0
+        self.repair_success_count: int = 0
+        self.last_repair_at_eval: int = -10**9
+
+        # ------------------------------------------------------------------
+        # Adaptive Island Expansion bookkeeping.
+        # Total number of times a PE candidate has opened a new cell at
+        # its own behaviour vector (per-run budget cap).
+        # ------------------------------------------------------------------
+        self.island_expansion_count: int = 0
 
     # ------------------------------------------------------------------
     # Delegation: BudgetTracker
@@ -809,27 +859,132 @@ class PipelineState:
         self.sal_init_finished = True
 
     # ------------------------------------------------------------------
-    # HLS — Strategic Blueprint helpers
+    # Strategy History helpers
     # ------------------------------------------------------------------
 
-    def install_blueprint(self, blueprint: StrategicBlueprint, ttl_evals: int) -> None:
-        """Make ``blueprint`` the active strategic directive for ``ttl_evals``.
+    def append_strategy_record(self, record: StrategyRecord) -> None:
+        """Append a post-mortem of a Punctuated Equilibrium event.
 
-        Called by Punctuated Equilibrium after a successful blueprint
-        generation. We refresh TTL on every PE event so a sequence of PEs
-        progressively replaces older strategies without leaving gaps.
+        Records are summarised in the next heavy prompt so the model can
+        explicitly avoid retracing approaches it has already tried.
         """
-        blueprint.ttl_evals = max(0, int(ttl_evals))
-        self.current_blueprint = blueprint
-        self.last_blueprint_text = blueprint.raw or ""
+        self.strategy_history.append(record)
 
-    def consume_blueprint_tick(self) -> None:
-        """Decrement TTL by one. Producer calls this when it injected a
-        blueprint into a mutation prompt so the strategy decays with use,
-        not just wall-clock evals."""
-        bp = self.current_blueprint
-        if bp is None or bp.ttl_evals <= 0:
+    def format_strategy_log(self, max_entries: int = 8) -> str:
+        """Render the strategy history as a ``## Strategy Log`` section.
+
+        Returns an empty string when the history is empty so callers can
+        splice it unconditionally and get a clean prompt in early runs.
+        """
+        if not self.strategy_history:
+            return ""
+        recent = list(self.strategy_history)[-max_entries:]
+        lines = ["", "## Strategy Log (already tried in this run)"]
+        lines.extend(r.format_line() for r in recent)
+        lines.append(
+            "\nDo NOT propose an approach whose summary appears above with "
+            "Δ ≤ 0. Aim for something structurally different from every "
+            "rejected entry."
+        )
+        lines.append("")
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Code Error Repair helpers
+    # ------------------------------------------------------------------
+
+    def fire_repair_if_due(self, code_repair_cfg) -> Optional[ErrorRecord]:
+        """Atomically (caller-protected) check whether we should fire a repair.
+
+        Returns the chosen :class:`ErrorRecord` or ``None`` when no repair is
+        due. The caller MUST already hold whatever lock protects pipeline
+        state (typically ``archive_lock``) so two producers cannot fire the
+        same repair concurrently. The state mutation (counter increment,
+        ``last_repair_at_eval`` advance) happens inside this method.
+        """
+        if code_repair_cfg is None or not getattr(code_repair_cfg, "enabled", False):
+            return None
+        if not self.error_buffer:
+            return None
+        if self.repair_attempt_count >= code_repair_cfg.max_per_run:
+            return None
+        every_n = max(1, int(code_repair_cfg.repair_every_n))
+        if (self.eval_count - self.last_repair_at_eval) < every_n:
+            return None
+        record = self.sample_error_for_repair(beta=float(code_repair_cfg.beta))
+        if record is None:
+            return None
+        self.last_repair_at_eval = self.eval_count
+        self.repair_attempt_count += 1
+        return record
+
+    def push_error_record(self, record: ErrorRecord) -> None:
+        """Append a failed candidate to the bounded repair buffer.
+
+        Deduplicated by the (truncated) code key so an avalanche of
+        identical errors does not crowd out informative variety.
+        """
+        signature = record.code[:200]
+        for existing in self.error_buffer:
+            if existing.code[:200] == signature:
+                return
+        self.error_buffer.append(record)
+
+    def sample_error_for_repair(self, beta: float = 1.5) -> Optional[ErrorRecord]:
+        """Pop one error record using Zipfian rank-by-parent-score.
+
+        Mirrors AdaptiveRankSampler's selection rule but uses ``parent_score``
+        (the score of the broken candidate's PARENT) as the ranking signal.
+        A higher β favours errors whose parent was strong, on the intuition
+        that fixing a near-elite is more valuable than fixing noise. The
+        returned record is removed from the buffer — repair is one-shot.
+        """
+        if not self.error_buffer:
+            return None
+        entries = list(self.error_buffer)
+        # Sort by parent_score descending, ties broken by insertion order.
+        order = sorted(
+            range(len(entries)),
+            key=lambda i: (
+                -coerce_finite_float(entries[i].parent_score, default=float("-inf")),
+                i,
+            ),
+        )
+        ranks = np.arange(1, len(order) + 1, dtype=float)
+        weights = ranks ** (-max(0.0, float(beta)))
+        total = float(weights.sum())
+        if total <= 0.0 or not np.isfinite(total):
+            probs = np.full(len(order), 1.0 / len(order))
+        else:
+            probs = weights / total
+        rank_idx = int(np.random.choice(len(order), p=probs))
+        chosen_idx = order[rank_idx]
+        chosen = entries[chosen_idx]
+        # Remove (one-shot — no retries).
+        # deque does not support O(1) deletion by index, so rebuild it.
+        new_buf: Deque[ErrorRecord] = deque(maxlen=self.error_buffer.maxlen)
+        for i, e in enumerate(entries):
+            if i != chosen_idx:
+                new_buf.append(e)
+        self.error_buffer = new_buf
+        return chosen
+
+    # ------------------------------------------------------------------
+    # Adaptive-CVT bookkeeping
+    # ------------------------------------------------------------------
+
+    def record_behavior_vector(self, vec: np.ndarray) -> None:
+        """Append a normalised behaviour vector to the recent window.
+
+        Stored vectors must be in the same space as ``pool._centroids``
+        (i.e. already passed through the pool's bound-aware normaliser).
+        """
+        try:
+            arr = np.asarray(vec, dtype=float)
+        except Exception:
             return
-        bp.ttl_evals -= 1
-        if bp.ttl_evals <= 0:
-            self.current_blueprint = None
+        if arr.ndim != 1 or arr.size == 0:
+            return
+        if not np.all(np.isfinite(arr)):
+            return
+        self.recent_behaviors.append(arr.copy())

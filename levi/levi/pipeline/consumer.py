@@ -13,7 +13,45 @@ from ..core import EvaluationResult
 from ..pool import CVTMAPElitesPool
 from ..selection import ComponentSelector
 from ..utils import ResilientProcessPool, coerce_score
-from .state import BudgetLimitReached, PipelineState
+from .state import BudgetLimitReached, ErrorRecord, PipelineState
+
+
+def _maybe_push_error(
+    config: LeviConfig,
+    state: PipelineState,
+    item: dict,
+    error_msg: str,
+) -> None:
+    """Push the broken code into ``state.error_buffer`` if eligible.
+
+    Repair candidates that errored again are NOT re-queued — they have
+    already had their single retry.
+    """
+    if not config.code_repair.enabled:
+        return
+    if item.get("is_repair"):
+        return
+    code = item.get("content")
+    if not code:
+        return
+    parent_score = item.get("parent_score")
+    try:
+        parent_score = float(parent_score) if parent_score is not None else float("-inf")
+    except (TypeError, ValueError):
+        parent_score = float("-inf")
+    if not math.isfinite(parent_score):
+        parent_score = float("-inf")
+    state.push_error_record(
+        ErrorRecord(
+            code=code,
+            parent_score=parent_score,
+            error_msg=(error_msg or "")[:300],
+            parent_cell=item.get("source_cell"),
+            source="repair_candidate" if item.get("is_repair") else "main_loop",
+        )
+    )
+
+
 
 SNAPSHOT_INTERVAL = 10  # Save snapshot every N evaluations
 
@@ -250,6 +288,7 @@ async def eval_consumer(
                                 llm_temperature=item.get("llm_temperature"),
                             )
                         state.record_error(score_error)
+                        _maybe_push_error(config, state, item, score_error)
                         label = _model_label(item)
                         logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {score_error[:50]}")
                     else:
@@ -268,6 +307,11 @@ async def eval_consumer(
 
                         if component_selector is not None and item.get("target") is not None:
                             component_selector.update(item["target"], accepted=accepted)
+
+                        # Code-repair telemetry — count one repair success when
+                        # the repaired candidate enters the archive.
+                        if item.get("is_repair") and accepted:
+                            state.repair_success_count += 1
 
                         if accepted:
                             state.record_accept()
@@ -331,6 +375,7 @@ async def eval_consumer(
                             llm_temperature=item.get("llm_temperature"),
                         )
                     state.record_error(result["error"])
+                    _maybe_push_error(config, state, item, result["error"])
                     label = _model_label(item)
                     logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {result['error'][:50]}")
 

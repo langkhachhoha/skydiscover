@@ -96,15 +96,15 @@ class CascadeConfig(BaseModel):
 class PunctuatedEquilibriumConfig(BaseModel):
     """Configuration for Punctuated Equilibrium feature.
 
-    Periodically triggers paradigm-shift generation using heavy model(s),
-    creating fundamentally new solutions to escape local optima.
+    Periodically triggers paradigm-shift generation using a heavy model
+    (early/mid/late prompt template chosen by PPS stagnation depth),
+    creating fundamentally new solutions to escape local optima. Light
+    variant models then produce a handful of nearby variants of the
+    accepted paradigm shift.
 
-    Under HLS (Heavy-Light Synthesis) the heavy model produces a short
-    *Strategic Blueprint* (diagnosis + approach + invariants + pseudocode)
-    rather than a full code dump; light models then implement the
-    blueprint in parallel. See ``BlueprintConfig`` for the persistence
-    knobs that let the blueprint also condition main-loop mutations via
-    a TTL window.
+    A 1-sentence summary of each paradigm-shift code is logged into
+    ``state.strategy_history`` by a *light* summariser model so the next
+    PE event can be told which approaches have already been tried.
     """
 
     enabled: bool = True
@@ -118,53 +118,107 @@ class PunctuatedEquilibriumConfig(BaseModel):
     component_selector: Any = "stagnation"
     share_main_selector_stats: bool = True
 
-    # HLS — when True, the heavy model emits a Strategic Blueprint (short,
-    # structured) and light models implement it. When False, the legacy
-    # "heavy generates full code" pathway is used for backward-compatible
-    # ablation runs.
-    use_blueprint: bool = True
+    model_config = {"arbitrary_types_allowed": True}
 
-    # HLS — when True the paradigm-shift "reference implementation" is
-    # also produced by a light model (cost reduction). The heavy model
-    # is only used for the blueprint. When False the heavy model also
-    # writes one reference implementation.
-    light_only_implementations: bool = True
+
+class StrategyLogConfig(BaseModel):
+    """Strategy-history logging (post-mortem of each PE event).
+
+    A *light* model summarises each Punctuated Equilibrium paradigm-shift
+    code into a one-sentence description of its algorithmic approach. The
+    rolling history is splined into the next heavy prompt so the heavy
+    model can avoid retracing approaches that already failed.
+
+    The summary call is cheap (small model, ~80 tokens output) and only
+    fires when a paradigm-shift candidate was successfully extracted —
+    there is no value in summarising garbage.
+    """
+
+    enabled: bool = True
+    max_entries: int = 8
+    """How many of the most recent strategy records are rendered into the
+    heavy prompt. The deque itself stores more (12) so older entries are
+    still visible to telemetry / snapshot dumps."""
+
+    summariser_model: Optional[ClientSpec] = None
+    """When None we fall back to ``mutation_models[0]`` (cheap & fast)."""
+
+    summariser_max_tokens: int = 400
+    """Output-token cap for the strategy summary. Sized to fit the
+    two-line IDEA / QUALITY template (≤ 60 words) with a small safety
+    margin; keeps the summariser cost negligible per PE."""
+
+    summariser_temperature: float = 0.2
 
     model_config = {"arbitrary_types_allowed": True}
 
 
-class BlueprintConfig(BaseModel):
-    """Strategic-Blueprint persistence (HLS — Heavy-Light Synthesis).
+class CodeRepairConfig(BaseModel):
+    """One-shot code-repair using a light model.
 
-    A Strategic Blueprint produced by Punctuated Equilibrium can also
-    condition a fraction of main-loop mutations during a TTL window,
-    turning the heavy model's single-shot reasoning into a durable
-    search-direction signal. This is the "Strategic Memory" component
-    of HLS.
+    When a candidate fails evaluation (syntax error, runtime exception,
+    invalid score), it is pushed into a bounded buffer in pipeline state.
+    Every ``repair_every_n`` producer iterations, a worker pulls one
+    broken candidate from the buffer using a rank-by-parent-score Zipfian
+    distribution (same shape as :class:`AdaptiveRankSampler`) and asks a
+    light model for the minimal fix. The repair is one-shot: if the fix
+    also fails, the record is discarded.
     """
 
     enabled: bool = True
+    buffer_size: int = 64
+    repair_every_n: int = 8
+    """Run a repair attempt every ``repair_every_n`` main-loop offspring."""
 
-    ttl_multiplier: float = 1.5
-    """Blueprint TTL (in evaluations) = ttl_multiplier × PE interval."""
+    beta: float = 1.5
+    """Zipfian exponent for rank-by-parent-score selection from the
+    error buffer. Higher β favours errors whose parent was strong."""
 
-    inject_probability: float = 0.3
-    """Per-mutation probability of injecting the blueprint into the prompt,
-    conditional on TTL > 0 and stagnation gate being active."""
+    max_per_run: int = 100
+    """Hard cap on total repair attempts to avoid budget runaway."""
 
-    stagnation_gate: float = 0.4
-    """Blueprint is injected only when s(t) ≥ this threshold. Keeps the
-    directive out of healthy phases (where it would just bias exploration)."""
+    model: Optional[ClientSpec] = None
+    """Repair model (defaults to ``mutation_models[0]``)."""
 
-    require_accepted: bool = True
-    """When True, only install a blueprint after at least one of its
-    implementations was accepted into the archive. Avoids polluting the
-    main loop with directives that already failed at PE time."""
+    max_tokens: int = 4000
+    temperature: Optional[float] = None
 
-    max_tokens: int = 600
-    """Cap on heavy-model output tokens for the blueprint call. Kept low
-    because a blueprint is intentionally short (diagnosis + approach +
-    invariants + pseudocode), not full code."""
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class AdaptiveIslandConfig(BaseModel):
+    """Adaptive Island Expansion (AdaEvolve-style archive growth).
+
+    Unifies the previous "stagnation rescue" and "adaptive CVT growth"
+    mechanisms into a single, more principled idea:
+
+        When the search is stuck (s(t) ≥ threshold) AND a Punctuated
+        Equilibrium candidate (paradigm-shift or variant) fails the
+        strict MAP-Elites admission test in its natural cell, do NOT
+        replace the incumbent — instead, append the candidate's own
+        normalised behaviour vector as a brand-new centroid and seed
+        that new cell with the candidate.
+
+    The archive thus grows *organically*: each rescued PE candidate
+    opens a new "island" in behaviour space exactly where it lives,
+    rather than relying on a separate buffer of recent behaviours or on
+    a relaxed admission threshold that risks evicting good incumbents.
+
+    The mechanism only fires for PE candidates (not main-loop offspring)
+    and is bounded by ``max_per_run`` plus the hard ceiling
+    ``max_total_centroids`` so a bad PE batch cannot inflate the
+    archive without bound.
+    """
+
+    enabled: bool = True
+    stagnation_threshold: float = 0.7
+    """Minimum stagnation depth s(t) at which expansion may fire."""
+
+    max_per_run: int = 16
+    """Maximum island expansions per run (hard cap)."""
+
+    max_total_centroids: int = 200
+    """Hard ceiling on total centroids — protects against runaway growth."""
 
 
 class PromptBankConfig(BaseModel):
@@ -366,7 +420,9 @@ class LeviConfig(BaseModel):
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     cascade: CascadeConfig = Field(default_factory=CascadeConfig)
     punctuated_equilibrium: PunctuatedEquilibriumConfig = Field(default_factory=PunctuatedEquilibriumConfig)
-    blueprint: BlueprintConfig = Field(default_factory=BlueprintConfig)
+    strategy_log: StrategyLogConfig = Field(default_factory=StrategyLogConfig)
+    code_repair: CodeRepairConfig = Field(default_factory=CodeRepairConfig)
+    adaptive_island: AdaptiveIslandConfig = Field(default_factory=AdaptiveIslandConfig)
     prompt_opt: PromptOptConfig = Field(default_factory=PromptOptConfig)
     prompt_bank: PromptBankConfig = Field(default_factory=PromptBankConfig)
     proxy_benchmark: ProxyBenchmarkConfig = Field(default_factory=ProxyBenchmarkConfig)
@@ -451,6 +507,12 @@ class LeviConfig(BaseModel):
             self.punctuated_equilibrium.heavy_models = list(self.paradigm_models)
         if self.punctuated_equilibrium.variant_models is None:
             self.punctuated_equilibrium.variant_models = list(self.mutation_models)
+
+        # Light-model defaults for strategy summarisation + code repair.
+        if self.strategy_log.summariser_model is None:
+            self.strategy_log.summariser_model = self.mutation_models[0]
+        if self.code_repair.model is None:
+            self.code_repair.model = self.mutation_models[0]
 
         if self.prompt_opt.teacher_model is None:
             self.prompt_opt.teacher_model = self.paradigm_models[0]

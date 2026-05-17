@@ -33,10 +33,11 @@ from .clients import BaseClient, ClaudeCodeClient, ClientResult, CodexClient, LM
 
 # Config types
 from .config import (
+    AdaptiveIslandConfig,
     BehaviorConfig,
-    BlueprintConfig,
     BudgetConfig,
     CascadeConfig,
+    CodeRepairConfig,
     CVTConfig,
     InitConfig,
     LeviConfig,
@@ -49,6 +50,7 @@ from .config import (
     PunctuatedEquilibriumConfig,
     SalConfig,
     SamplerModelPair,
+    StrategyLogConfig,
 )
 from .core import EvaluationResult, MetricDict, Program
 
@@ -119,7 +121,9 @@ __all__ = [
     "CascadeConfig",
     "PipelineConfig",
     "PunctuatedEquilibriumConfig",
-    "BlueprintConfig",
+    "StrategyLogConfig",
+    "CodeRepairConfig",
+    "AdaptiveIslandConfig",
     "PromptOptConfig",
     "PromptBankConfig",
     "ProxyBenchmarkConfig",

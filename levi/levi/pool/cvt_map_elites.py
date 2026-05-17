@@ -791,6 +791,49 @@ class CVTMAPElitesPool:
         self._generation += 1
 
     # ------------------------------------------------------------------
+    # Adaptive Island Expansion — open a brand-new cell at the
+    # candidate's own behaviour vector. Used by Punctuated Equilibrium
+    # when a candidate fails standard admission under high stagnation.
+    # ------------------------------------------------------------------
+
+    def add_as_new_cell(
+        self,
+        program: Program,
+        evaluation_result: EvaluationResult,
+        behavior: FeatureVector,
+    ) -> Optional[int]:
+        """Append a new centroid at this candidate's behaviour vector and
+        seed the new cell with the candidate.
+
+        Returns the new cell index (a fresh integer ≥ existing
+        ``n_centroids``), or ``None`` when the operation cannot proceed
+        (invalid result, missing centroid table, non-finite behaviour
+        vector).
+        """
+        if not evaluation_result.is_valid:
+            return None
+        if self._centroids is None:
+            return None
+        try:
+            vec = self._behavior_to_normalized_vector(behavior)
+        except Exception:
+            return None
+        if vec.shape != (self._centroids.shape[1],):
+            return None
+        if not np.all(np.isfinite(vec)):
+            return None
+
+        self._centroids = np.vstack([self._centroids, vec[None, :]])
+        new_idx = int(self._centroids.shape[0] - 1)
+        self._n_centroids = new_idx + 1
+
+        raw_behavior = behavior.values.copy()
+        self._elites[new_idx] = Elite(program, evaluation_result, behavior, raw_behavior)
+        new_score = evaluation_result.primary_score
+        self._best_score = max(self._best_score, new_score)
+        return new_idx
+
+    # ------------------------------------------------------------------
     # SAL Cơ chế B — behaviorally-far elite for contrastive context
     # ------------------------------------------------------------------
 

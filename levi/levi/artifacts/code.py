@@ -10,10 +10,9 @@ from ..clients.base import ClientSpec, client_name
 from ..config import LeviConfig
 from ..core import Program
 from ..equilibrium.prompts import (
-    BLUEPRINT_IMPLEMENTATION_PROMPT,
-    BLUEPRINT_VARIANT_PROMPT,
+    CODE_REPAIR_PROMPT,
     PARADIGM_SHIFT_PROMPTS,
-    STRATEGIC_BLUEPRINT_PROMPT,
+    STRATEGY_SUMMARY_PROMPT,
     VARIANT_GENERATION_PROMPT,
     get_budget_stage,
 )
@@ -307,7 +306,14 @@ class CodeAdapter(ArtifactAdapter):
         evals_since_best: int | None = None,
         top_failures: Sequence[str] | None = None,
         sal_thresholds: tuple[float, float] | None = None,
+        strategy_log_block: str = "",
     ) -> str:
+        """Build the early/mid/late paradigm-shift prompt.
+
+        ``strategy_log_block`` is a markdown section (or empty string) listing
+        past PE attempts; it is rendered just below the representative
+        solutions so the heavy model can see what has and hasn't worked.
+        """
         if sal_thresholds is not None:
             stage = get_budget_stage(
                 budget_progress,
@@ -349,7 +355,7 @@ class CodeAdapter(ArtifactAdapter):
 ## Current Best Solutions ({len(representatives)} regions, {n_evaluations} evaluations)
 
 {representative_solutions}
-{trajectory_block}
+{strategy_log_block}{trajectory_block}
 ## Your Task
 {override}
 
@@ -363,6 +369,7 @@ Output ONLY complete, runnable Python code in a ```python block.
             n_evaluations=n_evaluations,
             n_regions=len(representatives),
             representative_solutions=representative_solutions,
+            strategy_log_block=strategy_log_block,
         )
         if trajectory_block:
             # Insert trajectory block right before the final Output section so
@@ -384,88 +391,37 @@ Output ONLY complete, runnable Python code in a ```python block.
         )
 
     # ------------------------------------------------------------------
-    # HLS — Strategic Blueprint adapter methods
+    # Strategy Log — light-model post-mortem summariser
     # ------------------------------------------------------------------
 
-    def build_blueprint_prompt(
-        self,
-        representatives: Sequence[tuple[int, Any]],
-        *,
-        n_evaluations: int,
-        stagnation: float | None = None,
-        best_score: float | None = None,
-        evals_since_best: int | None = None,
-        top_failures: Sequence[str] | None = None,
-        max_words: int = 350,
-    ) -> str:
-        """Render the heavy-model strategic blueprint request.
+    def build_strategy_summary_prompt(self, code: str) -> str:
+        """Render the IDEA/QUALITY strategy summarisation prompt.
 
-        The blueprint is intentionally short (text-only, no code) so the
-        heavy model spends its tokens on reasoning rather than boilerplate;
-        light implementer models turn the blueprint into runnable code
-        afterwards. We pass trajectory context (stagnation, best score,
-        evals-since-best) so the diagnosis is grounded.
+        Passes the problem statement and function signature so the
+        summariser can phrase "what works / where this loses points" in
+        terms of *this* problem, not generic algorithmics.
         """
-        rep_text_parts = []
-        for idx, (cluster_id, elite) in enumerate(representatives):
-            score = elite.result.primary_score
-            content = elite.program.content
-            rep_text_parts.append(
-                f"### Region {idx + 1} (Cluster {cluster_id}, Score: {score:.17g})\n"
-                f"```python\n{content}\n```"
-            )
-        representative_solutions = "\n\n".join(rep_text_parts)
-
-        trajectory_block = _build_trajectory_block(
-            best_score=best_score,
-            evals_since_best=evals_since_best,
-            stagnation=stagnation,
-            top_failures=top_failures,
-        )
-
-        return STRATEGIC_BLUEPRINT_PROMPT.format(
+        return STRATEGY_SUMMARY_PROMPT.format(
             problem_description=self.config.problem_description,
             function_signature=self.config.function_signature,
-            n_evaluations=n_evaluations,
-            n_regions=len(representatives),
-            representative_solutions=representative_solutions,
-            trajectory_block=trajectory_block,
-            max_words=max_words,
+            code=code,
         )
 
-    def build_blueprint_implementation_prompt(
+    # ------------------------------------------------------------------
+    # Code Error Repair — one-shot light-model fix prompt
+    # ------------------------------------------------------------------
+
+    def build_code_repair_prompt(
         self,
-        blueprint_text: str,
-        representatives: Sequence[tuple[int, Any]],
+        broken_code: str,
+        *,
+        error_msg: str,
+        parent_score: float,
     ) -> str:
-        """Render the light-model implementation request for a blueprint."""
-        rep_text_parts = []
-        for idx, (cluster_id, elite) in enumerate(representatives):
-            score = elite.result.primary_score
-            content = elite.program.content
-            rep_text_parts.append(
-                f"### Reference {idx + 1} (Cluster {cluster_id}, Score: {score:.17g})\n"
-                f"```python\n{content}\n```"
-            )
-        representative_solutions = "\n\n".join(rep_text_parts) if rep_text_parts else "(none)"
-
-        return BLUEPRINT_IMPLEMENTATION_PROMPT.format(
+        return CODE_REPAIR_PROMPT.format(
             problem_description=self.config.problem_description,
             function_signature=self.config.function_signature,
-            blueprint_text=blueprint_text,
-            representative_solutions=representative_solutions,
-        )
-
-    def build_blueprint_variant_prompt(
-        self,
-        blueprint_text: str,
-        base_content: str,
-        base_score: float,
-    ) -> str:
-        return BLUEPRINT_VARIANT_PROMPT.format(
-            problem_description=self.config.problem_description,
-            function_signature=self.config.function_signature,
-            blueprint_text=blueprint_text,
-            base_code=base_content,
-            base_score=base_score,
+            broken_code=broken_code,
+            error_msg=(error_msg or "").strip() or "(unknown error)",
+            parent_score=parent_score,
         )

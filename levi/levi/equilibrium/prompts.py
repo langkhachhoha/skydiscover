@@ -1,58 +1,24 @@
-"""Prompts for Punctuated Equilibrium paradigm shift generation."""
+"""Prompts for Punctuated Equilibrium paradigm shift generation.
 
-import re
+The three paradigm-shift prompts (``early``, ``mid``, ``late``) are dispatched
+by :func:`get_budget_stage` keyed on the live PPS stagnation depth s(t):
+
+  * ``early``  (s low)  — radically different algorithmic paradigm
+  * ``mid``    (s med)  — synthesise strengths from existing solutions
+  * ``late``   (s high) — surgical refinement of the best solution
+
+All three accept a ``{strategy_log_block}`` placeholder so the strategy
+history compiled by :mod:`levi.equilibrium.equilibrium` is injected before
+the model writes its solution. The block is empty before any PE has fired.
+"""
+
 from typing import Optional
 
 
-_BLUEPRINT_SECTION_HEADERS = ("DIAGNOSIS", "APPROACH", "INVARIANTS", "PSEUDOCODE")
-
-
-def parse_blueprint(text: str) -> Optional[dict[str, str]]:
-    """Extract the four blueprint sections from a heavy-model response.
-
-    Returns a dict with keys ``diagnosis`` / ``approach`` / ``invariants`` /
-    ``pseudocode`` (lowercase). Missing sections are left as empty strings.
-    Returns None only when the response contains NONE of the expected
-    headers — that's the signal to fall back to legacy paradigm-shift code
-    generation rather than feeding garbage to the implementer prompts.
-
-    The parser is whitespace- and case-insensitive on the headers and
-    tolerates extra prose between sections.
-    """
-    if not text:
-        return None
-
-    upper = text.upper()
-    if not any(h in upper for h in _BLUEPRINT_SECTION_HEADERS):
-        return None
-
-    # Split on section headers while preserving the header in each chunk.
-    pattern = re.compile(
-        r"^\s*(DIAGNOSIS|APPROACH|INVARIANTS|PSEUDOCODE)\s*:\s*",
-        re.IGNORECASE | re.MULTILINE,
-    )
-    matches = list(pattern.finditer(text))
-    if not matches:
-        return None
-
-    sections: dict[str, str] = {h.lower(): "" for h in _BLUEPRINT_SECTION_HEADERS}
-    for i, m in enumerate(matches):
-        name = m.group(1).lower()
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        body = text[start:end].strip()
-        # Strip code fences if the model snuck one in for PSEUDOCODE.
-        body = re.sub(r"^```[a-zA-Z]*\n?", "", body)
-        body = re.sub(r"\n?```$", "", body)
-        sections[name] = body.strip()
-
-    return sections
-
-# Adaptive paradigm shift prompts keyed by budget stage.
-# Early: explore radically different approaches.
-# Mid: synthesize and recombine strengths from existing solutions.
-# Late: targeted refinement of weak spots while preserving what works.
-
+# Per-stage prompts. The {strategy_log_block} placeholder is filled by the
+# adapter with a short summary of past paradigm-shift attempts (see
+# StrategyRecord) so the heavy model knows which directions have already
+# been tried and how they fared.
 PARADIGM_SHIFT_PROMPTS = {
     "early": """# Algorithmic Paradigm Shift Challenge
 
@@ -70,22 +36,23 @@ The archive has evolved through {n_evaluations} evaluations across {n_regions} b
 Below are the best-performing solutions from each region:
 
 {representative_solutions}
+{strategy_log_block}
+## Your Challenge: PARADIGM SHIFT (early-stage exploration)
 
-## Your Challenge: PARADIGM SHIFT
-
-Analyze the representative solutions above and identify their core algorithmic paradigms.
-
-Your goal is to engineer a **fundamentally different algorithmic approach** that explores untapped regions of the solution space.
+We are still EARLY in the search. The archive only knows a handful of paradigms.
+Your goal is to engineer a **fundamentally different algorithmic approach** that
+explores untapped regions of the solution space.
 
 ### Analysis Steps:
-1. **Identify current paradigms**: What algorithmic strategies do the existing solutions use? (e.g., greedy, graph-based, dynamic programming, heuristic search, brute-force with pruning, etc.)
-2. **Find the gap**: What paradigms are NOT represented in the current solutions?
-3. **Design a novel approach**: Synthesize a solution using a completely different conceptual framework and data structure strategy than those found in the examples
+1. **Identify current paradigms**: What algorithmic family does each solution above belong to? (greedy, graph search, dynamic programming, simulated annealing, gradient methods, brute-force with pruning, …)
+2. **Find the gap**: Which paradigm classes are NOT represented in the archive or strategy log?
+3. **Design a novel approach**: Pick ONE gap-paradigm and design a complete solution around it. The internal data structures, control flow, and termination condition must all reflect that paradigm — not a re-skin of an existing solution.
 
 ### Instructions:
-1. Study the function signature carefully - match it EXACTLY
-2. Actively avoid the core logic, heuristics, and search patterns used in the existing solutions
-3. Design a solution using a COMPLETELY DIFFERENT strategy
+1. Match the function signature exactly.
+2. AVOID the core logic, heuristics, and search structures used in the archive.
+3. AVOID any approach whose summary already appears in the Strategy Log (especially ones with non-positive deltas).
+4. Pick a strategy that is structurally different, not just numerically retuned.
 
 ### Critical Requirements:
 - Your function signature MUST match exactly: `{function_signature}`
@@ -114,21 +81,24 @@ The archive has evolved through {n_evaluations} evaluations across {n_regions} b
 Below are the best-performing solutions from each region:
 
 {representative_solutions}
+{strategy_log_block}
+## Your Challenge: SYNTHESISE A STRONGER SOLUTION (mid-stage consolidation)
 
-## Your Challenge: SYNTHESIZE A STRONGER SOLUTION
-
-The archive has been evolving and found several decent approaches. Your goal is to **combine the best ideas** from the existing solutions into a stronger hybrid.
+Search has been running for a while and has accumulated several decent
+approaches across distinct behavioural regions. Pure exploration is no longer
+the best move — your goal is to **combine the best ideas** from the existing
+solutions into a stronger hybrid that beats each individually.
 
 ### Analysis Steps:
-1. **Identify strengths**: What does each solution do well? What cases does each handle effectively?
-2. **Identify weaknesses**: Where does each solution fall short? What edge cases or scenarios cause poor performance?
-3. **Synthesize**: Build a new solution that combines the strongest elements from multiple approaches while addressing their individual weaknesses
+1. **Per-region strengths**: For each region, identify *one* concrete mechanism it does well (e.g. better initialization, a clever tie-breaking rule, an aggressive prune).
+2. **Per-region weaknesses**: For each region, identify *one* concrete failure mode (e.g. blows up at the boundary, ignores a constraint, gets stuck on adversarial inputs).
+3. **Synthesis blueprint**: Choose 2-3 mechanisms to KEEP from different parents. Choose 1-2 weaknesses to FIX. State this implicitly via your code — do not write prose.
 
 ### Instructions:
-1. Study the function signature carefully - match it EXACTLY
-2. Borrow and adapt the best techniques from the existing solutions
-3. Address weaknesses you observe in the current approaches
-4. The result should meaningfully improve on the existing solutions, not just copy one of them
+1. Match the function signature exactly.
+2. Borrow and adapt the strongest mechanisms from multiple solutions; do not just copy one of them.
+3. Where the Strategy Log shows a synthesis that already produced no improvement, choose a different mechanism mix.
+4. The result must be a structurally coherent program — not three solutions stitched together with `if/elif/else`.
 
 ### Critical Requirements:
 - Your function signature MUST match exactly: `{function_signature}`
@@ -157,21 +127,23 @@ The archive has evolved through {n_evaluations} evaluations across {n_regions} b
 Below are the best-performing solutions from each region:
 
 {representative_solutions}
+{strategy_log_block}
+## Your Challenge: TARGETED IMPROVEMENT (late-stage exploitation)
 
-## Your Challenge: TARGETED IMPROVEMENT
-
-The archive is mature. The solutions above represent well-evolved approaches. Your goal is to make a **focused, high-impact improvement** to the best-performing approach.
+The archive is mature and stagnation is high. Radical rewrites at this stage
+usually under-perform the best incumbent. Your goal is a **focused, high-impact
+improvement** to the highest-scoring solution above.
 
 ### Analysis Steps:
-1. **Study the best solution carefully**: Understand exactly what it does and why
-2. **Find the weak spot**: What specific scenarios, edge cases, or parameter ranges cause the best solution to lose points?
-3. **Make a surgical fix**: Improve the handling of those weak cases without degrading performance on cases that already work well
+1. **Study the best solution carefully**: Understand exactly what it does, and crucially WHERE it loses points (which inputs / which constraints / which edge cases).
+2. **Find a single weak spot**: Pick ONE specific failure mode. Resist the urge to address several at once — those usually regress.
+3. **Make a surgical fix**: Add a targeted patch (extra branch, post-processing step, tighter constraint check, refined tie-breaking) that fixes that failure WITHOUT touching the parts that already work.
 
 ### Instructions:
-1. Study the function signature carefully - match it EXACTLY
-2. Start from the logic of the highest-scoring solution
-3. Make targeted changes to address its specific weaknesses
-4. Preserve the core strengths — do NOT rewrite from scratch
+1. Match the function signature exactly.
+2. Start from the logic of the highest-scoring solution; keep the overall control flow and data structures intact.
+3. Do NOT rewrite the algorithm from scratch.
+4. If the Strategy Log already shows a late-stage attempt with delta ≤ 0 targeting the same weak spot, choose a different weak spot.
 
 ### Critical Requirements:
 - Your function signature MUST match exactly: `{function_signature}`
@@ -186,14 +158,16 @@ Output ONLY complete, runnable Python code in a ```python block. No explanations
 """,
 }
 
-# Budget stage thresholds
+
+# Budget stage thresholds (legacy — used only by callers that don't pass
+# `stagnation`).
 EARLY_THRESHOLD = 0.3
 LATE_THRESHOLD = 0.6
 
 
 def get_budget_stage(
     budget_progress: float,
-    stagnation: float | None = None,
+    stagnation: Optional[float] = None,
     mid_threshold: float = 0.3,
     late_threshold: float = 0.7,
 ) -> str:
@@ -220,146 +194,8 @@ PARADIGM_SHIFT_PROMPT = PARADIGM_SHIFT_PROMPTS["early"]
 
 
 # ---------------------------------------------------------------------------
-# Heavy-Light Synthesis (HLS) — Strategic Blueprint prompts.
-#
-# The heavy model produces a SHORT structured blueprint (~200-400 tokens)
-# instead of full code. Light models then implement the blueprint in
-# parallel; the blueprint also conditions a fraction of subsequent main-
-# loop mutations through a TTL window. This keeps heavy-model spend
-# focused on reasoning, not on boilerplate, and turns one-shot heavy
-# guidance into a durable search-direction signal.
+# Variants of an accepted paradigm shift (light-model "explore around" prompt)
 # ---------------------------------------------------------------------------
-
-
-STRATEGIC_BLUEPRINT_PROMPT = """# Strategic Blueprint Request
-
-## Problem
-{problem_description}
-
-## Function Signature
-```python
-{function_signature}
-```
-
-## Archive Snapshot ({n_evaluations} evaluations, {n_regions} behavioural regions)
-
-Below are the best-performing solutions from each region. Treat them as
-*evidence about what the search has discovered so far*, not as code to
-edit:
-
-{representative_solutions}
-{trajectory_block}
-## Your Task: Strategic Blueprint (NOT code)
-
-You are the strategist for an evolutionary search system. Light implementer
-models will turn your blueprint into concrete Python on the next step. Your
-job is to **decide the next algorithmic direction**, not to write code.
-
-Write a blueprint with EXACTLY these four sections, each plain text:
-
-DIAGNOSIS:
-- 1-3 sentences identifying the dominant algorithmic family in the archive
-  and the structural weakness that explains the plateau.
-
-APPROACH:
-- 4-8 sentences describing ONE concrete new algorithmic direction that is
-  meaningfully different from what is already represented. Be specific
-  about data structures, optimisation routines, and the order of operations.
-
-INVARIANTS:
-- A bulleted list (3-5 items) of correctness conditions / output-shape
-  constraints / API contracts the implementation MUST preserve.
-
-PSEUDOCODE:
-- A short (5-20 lines) pseudocode sketch. Plain English with code-like
-  structure is fine; this is a sketch, not Python.
-
-Hard rules:
-- Do NOT emit Python code, ```python``` fences, or imports.
-- Do NOT propose minor parameter tweaks of an existing solution — propose
-  a different algorithmic strategy.
-- Stay under {max_words} words total. Brevity is the point.
-
-## Output
-Start your response with the literal word `DIAGNOSIS:` and follow the four-
-section format above. No preamble.
-"""
-
-
-BLUEPRINT_IMPLEMENTATION_PROMPT = """# Implement Strategic Blueprint
-
-## Problem
-{problem_description}
-
-## Function Signature
-```python
-{function_signature}
-```
-
-## Strategic Blueprint (from the search strategist)
-
-The blueprint below decides the algorithmic direction. Implement it
-faithfully — do NOT replace the APPROACH with an unrelated algorithm.
-
-{blueprint_text}
-
-## Reference Solutions (for context only; do NOT just copy them)
-
-{representative_solutions}
-
-## Your Task
-
-Write a complete Python implementation of the APPROACH described in the
-blueprint. The PSEUDOCODE sketch shows the intended structure; the
-INVARIANTS list MUST hold in your code.
-
-- Match the function signature EXACTLY: `{function_signature}`
-- Include all imports. Use standard libraries (numpy, math, heapq,
-  collections, itertools, functools) and torch if useful.
-- No placeholders, ellipses, or pseudocode in the final output.
-
-## Output
-Output ONLY complete, runnable Python code in a ```python``` block. No
-explanation before or after.
-"""
-
-
-BLUEPRINT_VARIANT_PROMPT = """# Variant Implementation of Strategic Blueprint
-
-## Problem
-{problem_description}
-
-## Function Signature
-```python
-{function_signature}
-```
-
-## Strategic Blueprint
-{blueprint_text}
-
-## Reference Implementation (already accepted, score {base_score:.17g})
-```python
-{base_code}
-```
-
-## Your Task
-
-Produce a DIFFERENT implementation of the SAME blueprint. Keep the APPROACH
-intact but vary:
-- Data structure choices (array vs heap vs dict) where the blueprint is
-  silent on the details.
-- Secondary heuristics, tie-breaking rules, constants.
-- Edge-case handling and early-exit conditions.
-- Numerical precision or stability tactics.
-
-Hard rules:
-- Stay faithful to APPROACH and INVARIANTS.
-- Match the function signature exactly: `{function_signature}`.
-- Output complete, runnable Python.
-
-## Output
-Output ONLY complete Python code in a ```python``` block. No prose.
-"""
 
 
 VARIANT_GENERATION_PROMPT = """# Generate Variant of Paradigm Shift Solution
@@ -388,6 +224,100 @@ Generate a VARIANT of the above paradigm shift solution by:
 
 The variant should explore nearby regions of the solution space while preserving the novel approach.
 
+### Critical Requirements:
+- Your function signature MUST match exactly: `{function_signature}`
+- Use only standard Python libraries (numpy, collections, itertools, math, heapq, functools, etc.) and torch if needed
+- The code must be syntactically valid and complete
+- Include ALL necessary imports at the top
+- Do NOT use placeholders, ellipses (...), or incomplete code
+- Ensure the solution handles all edge cases
+
 ## Output
-Output ONLY the complete Python code in a ```python block.
+Output ONLY complete, runnable Python code in a ```python block. No explanations before or after.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Strategy summarisation — light-model post-mortem after each PE event
+# ---------------------------------------------------------------------------
+
+STRATEGY_SUMMARY_PROMPT = """# Strategy Summary
+
+Extract the core strategy used by the Python solution below. The summary will
+be used by a later paradigm-shift step to avoid repeating weak ideas and to
+recognize genuinely different algorithmic directions.
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Solution
+```python
+{code}
+```
+
+## Task
+Identify:
+
+- the algorithmic family, not just surface implementation details;
+- the main tactic that makes this solution distinct for this problem;
+- the input shapes, constraints, or cases where the tactic is likely to help;
+- the specific reason it may lose points.
+
+## Output — EXACTLY two lines, no preamble, no extra labels
+
+IDEA: <one sentence naming the algorithmic family plus the concrete tactic used here>
+QUALITY: <one sentence naming where it should score well and the most likely failure mode>
+
+Hard rules:
+- Total output <= 150 words.
+- Be problem-specific: refer to constraints, data structure choices, pruning, ordering, approximation, search state, or objective handling when relevant.
+- Avoid vague words such as "efficient", "optimized", "robust", "simple", "good", or "fast" unless paired with a concrete mechanism.
+- Do not mention code style, imports, syntax, or implementation cleanliness.
+"""
+
+
+# ---------------------------------------------------------------------------
+# Code Error Repair — one-shot light-model fix for broken candidates
+# ---------------------------------------------------------------------------
+
+
+CODE_REPAIR_PROMPT = """# Code Repair
+
+You are repairing a buggy Python candidate. Produce the smallest complete fix
+that makes the solution run correctly for the reported error while preserving
+the candidate's algorithmic approach.
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Buggy Solution (parent score: {parent_score:.4g})
+```python
+{broken_code}
+```
+
+## Error
+{error_msg}
+
+## Rules
+- Match the function signature exactly.
+- Preserve the same algorithm, data structures, control flow shape, and heuristic intent.
+- Fix the reported failure directly: syntax errors, missing imports, undefined names, bad variable scope, type mismatches, indexing/key errors, unpacking errors, or invalid return shape.
+- Add helper functions only when needed to make the existing approach runnable.
+- Include every import required by the final code.
+- Keep changes conservative; do not replace the solution with a new paradigm.
+- Handle empty, minimal, and boundary inputs implied by the problem when they are related to the reported failure.
+- Do not add explanations, comments about the repair, placeholders, ellipses, pseudocode, or incomplete branches.
+
+## Output
+Output ONLY complete, runnable Python code in a ```python block. No explanations before or after.
 """

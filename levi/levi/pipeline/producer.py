@@ -65,11 +65,69 @@ async def llm_producer(
             break
 
         try:
+            # Code-repair branch — pull one broken candidate from the error
+            # buffer using Zipfian rank-by-parent-score and ask a light model
+            # for the minimal fix. Single retry: if the repair also errors
+            # the record is discarded. We piggyback on archive_lock so two
+            # producers cannot fire the same repair concurrently.
+            repair_record = None
             async with archive_lock:
                 if pool.size() == 0:
                     logger.error(f"[LLM-{worker_id}] Archive is empty; stopping pipeline")
                     stop_event.set()
                     break
+                repair_record = state.fire_repair_if_due(config.code_repair)
+
+            if repair_record is not None:
+                cfg = config.code_repair
+                if not hasattr(artifact_adapter, "build_code_repair_prompt"):
+                    # Adapter doesn't support repair (e.g. bundle/prompt
+                    # mode); skip and let the next iteration draw a normal
+                    # mutation instead.
+                    continue
+                repair_prompt = artifact_adapter.build_code_repair_prompt(
+                    repair_record.code,
+                    error_msg=repair_record.error_msg,
+                    parent_score=repair_record.parent_score,
+                )
+                repair_model = cfg.model
+                try:
+                    repair_temp = cfg.temperature if cfg.temperature is not None else config.pipeline.temperature
+                    response = await state.acompletion(
+                        repair_model,
+                        prompt=[{"role": "user", "content": repair_prompt}],
+                        temperature=repair_temp,
+                        max_tokens=cfg.max_tokens,
+                        timeout=300,
+                    )
+                    repair_content = response.text
+                except BudgetLimitReached:
+                    stop_event.set()
+                    break
+                except Exception as e:
+                    logger.warning(f"[Repair-{worker_id}] generation failed: {e}")
+                    continue
+
+                candidate = artifact_adapter.extract_candidate(repair_content)
+                if not candidate:
+                    continue
+
+                await code_queue.put(
+                    {
+                        "content": candidate,
+                        "sampler": "repair",
+                        "source_cell": repair_record.parent_cell,
+                        "model": client_name(repair_model),
+                        "target": None,
+                        "mutation_prompt_id": None,
+                        "llm_temperature": None,
+                        "is_repair": True,
+                        "parent_score": repair_record.parent_score,
+                    }
+                )
+                continue
+
+            async with archive_lock:
                 sampler_name, model, mutation_prompt_id, arm_llm_temperature = pool.get_weighted_sampler_config(
                     stagnation=state.stagnation_depth(config.sal.tau) if config.sal.enabled else None,
                 )
@@ -132,30 +190,6 @@ async def llm_producer(
             base_meta_advice = (
                 state.current_meta_advice if state.current_meta_advice and random.random() < 0.8 else None
             )
-
-            # HLS — when a Strategic Blueprint is live, inject its directive
-            # text into the mutation prompt with probability ``inject_probability``,
-            # conditional on (a) blueprint config enabled, (b) stagnation
-            # gate met, (c) blueprint TTL > 0. We splice into the existing
-            # meta_advice slot so adapters that don't know about blueprints
-            # still render it without code changes.
-            blueprint_directive_injected = False
-            bp_cfg = config.blueprint
-            if bp_cfg.enabled and state.current_blueprint is not None:
-                bp = state.current_blueprint
-                if (
-                    bp.is_active
-                    and live_stagnation >= bp_cfg.stagnation_gate
-                    and random.random() < bp_cfg.inject_probability
-                ):
-                    directive = bp.directive_text()
-                    if directive:
-                        prefix = "[STRATEGIC DIRECTIVE — current search direction]\n" + directive
-                        if base_meta_advice:
-                            base_meta_advice = prefix + "\n\n---\n\n" + base_meta_advice
-                        else:
-                            base_meta_advice = prefix
-                        blueprint_directive_injected = True
 
             mutation_kwargs = {
                 "meta_advice": base_meta_advice,
@@ -261,11 +295,6 @@ async def llm_producer(
             if not candidate_content:
                 continue
 
-            if blueprint_directive_injected:
-                # TTL is measured in *injections*, not wall-clock evals, so a
-                # blueprint that nobody actually reads doesn't decay.
-                state.consume_blueprint_tick()
-
             await code_queue.put(
                 {
                     "content": candidate_content,
@@ -275,7 +304,9 @@ async def llm_producer(
                     "target": target,
                     "mutation_prompt_id": mutation_prompt_id,
                     "llm_temperature": arm_llm_temperature,
-                    "blueprint_injected": blueprint_directive_injected,
+                    "parent_score": (
+                        parent_elite.result.primary_score if parent_elite is not None else float("nan")
+                    ),
                 }
             )
 

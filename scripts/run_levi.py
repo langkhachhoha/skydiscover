@@ -185,76 +185,11 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # ------------------------------------------------------------------
-    # HLS — Strategic Blueprint (Heavy-Light Synthesis) knobs.
-    # The blueprint pathway is the new default: heavy model writes a short
-    # structured blueprint, light models implement it, and the blueprint
-    # also conditions main-loop mutations via a TTL window. Knobs below
-    # tune that mechanism; leave alone for the published defaults.
-    # ------------------------------------------------------------------
-    p.add_argument(
-        "--no-blueprint",
-        action="store_true",
-        help=(
-            "Disable HLS: fall back to legacy 'heavy model writes full code' "
-            "paradigm-shift pathway. Use for ablation studies."
-        ),
-    )
-    p.add_argument(
-        "--blueprint-ttl-mult",
-        type=float,
-        default=None,
-        metavar="X",
-        help=(
-            "Strategic-Memory TTL multiplier (default 1.5). Blueprint TTL in "
-            "evaluations = X * PE interval. Larger X → blueprint conditions "
-            "more main-loop mutations before being replaced."
-        ),
-    )
-    p.add_argument(
-        "--blueprint-inject-prob",
-        type=float,
-        default=None,
-        metavar="P",
-        help=(
-            "Per-mutation probability of injecting the blueprint into the "
-            "prompt while TTL > 0 (default 0.3). Conditioned on the "
-            "stagnation gate."
-        ),
-    )
-    p.add_argument(
-        "--blueprint-stagnation-gate",
-        type=float,
-        default=None,
-        metavar="S",
-        help=(
-            "Stagnation threshold below which blueprint injection is "
-            "suppressed (default 0.4). Keeps the directive out of healthy "
-            "phases where it would just bias exploration."
-        ),
-    )
-    p.add_argument(
-        "--blueprint-max-tokens",
-        type=int,
-        default=None,
-        metavar="N",
-        help=(
-            "Output-token cap for the heavy-model blueprint call (default "
-            "600). Blueprints are intentionally short — they are text, not "
-            "code — so this should stay small."
-        ),
-    )
-    p.add_argument(
-        "--blueprint-heavy-only",
-        action="store_true",
-        help=(
-            "Send the reference implementation back to the heavy model "
-            "instead of a light model. Default is light-only implementations "
-            "to maximise cost savings."
-        ),
-    )
-
-    # ------------------------------------------------------------------
     # Punctuated Equilibrium overrides — handy for ablation runs.
+    # The heavy model writes a full paradigm-shift solution every interval
+    # (early/mid/late prompt template chosen by stagnation depth). Light
+    # variant models produce nearby variants. The strategy-log layer below
+    # summarises each PE so the next heavy prompt knows what was tried.
     # ------------------------------------------------------------------
     p.add_argument(
         "--pe-interval",
@@ -275,12 +210,112 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         metavar="N",
-        help="Light-model implementations of the blueprint per PE event (default 3).",
+        help="Light-model variants of the heavy paradigm shift per PE event (default 3).",
     )
     p.add_argument(
         "--no-pe",
         action="store_true",
-        help="Disable Punctuated Equilibrium entirely (turns off the blueprint pathway too).",
+        help="Disable Punctuated Equilibrium entirely.",
+    )
+
+    # ------------------------------------------------------------------
+    # Strategy Log — one-sentence summaries of past PEs, fed into the
+    # next heavy prompt so the model knows what has already been tried.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-strategy-log",
+        action="store_true",
+        help=(
+            "Disable the post-PE light-model strategy summariser. Heavy "
+            "prompts will no longer see the 'Strategy Log' section."
+        ),
+    )
+    p.add_argument(
+        "--strategy-log-entries",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "How many most-recent strategy records are rendered into the "
+            "heavy prompt (default 8)."
+        ),
+    )
+
+    # ------------------------------------------------------------------
+    # Code Error Repair — one-shot light-model fix for broken candidates.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-code-repair",
+        action="store_true",
+        help="Disable the code-repair sub-pipeline.",
+    )
+    p.add_argument(
+        "--code-repair-every-n",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Fire one repair attempt every N main-loop offspring (default 8). "
+            "Smaller → more aggressive repair, but more light-model spend."
+        ),
+    )
+    p.add_argument(
+        "--code-repair-max",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Hard cap on total repair attempts per run (default 100).",
+    )
+    p.add_argument(
+        "--code-repair-beta",
+        type=float,
+        default=None,
+        metavar="B",
+        help=(
+            "Zipfian exponent used to pick which broken candidate to repair "
+            "(rank by parent score, higher β → favour stronger parents)."
+        ),
+    )
+    p.add_argument(
+        "--code-repair-buffer",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Bounded error-buffer size (default 64).",
+    )
+
+    # ------------------------------------------------------------------
+    # Adaptive Island Expansion — AdaEvolve-style archive growth.
+    # When a PE candidate fails standard admission under high stagnation,
+    # we open a NEW cell at the candidate's own behaviour vector instead
+    # of replacing the incumbent. Unifies the previous rescue + adaptive-
+    # CVT mechanisms into a single trigger.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-adaptive-island",
+        action="store_true",
+        help="Disable Adaptive Island Expansion (PE candidates that fail to beat the incumbent are simply discarded).",
+    )
+    p.add_argument(
+        "--island-stagnation",
+        type=float,
+        default=None,
+        metavar="S",
+        help="Minimum stagnation depth s(t) at which island expansion may fire (default 0.7).",
+    )
+    p.add_argument(
+        "--island-max",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Maximum island expansions per run (default 16).",
+    )
+    p.add_argument(
+        "--island-max-centroids",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Hard ceiling on total centroids regardless of expansions (default 200).",
     )
 
     # ------------------------------------------------------------------
@@ -391,23 +426,8 @@ def main() -> int:
     if args.sal_tau is not None:
         sal_kwargs["tau"] = args.sal_tau
 
-    # --- HLS Strategic Blueprint ---
-    blueprint_kwargs: dict = {"enabled": not args.no_blueprint}
-    if args.blueprint_ttl_mult is not None:
-        blueprint_kwargs["ttl_multiplier"] = args.blueprint_ttl_mult
-    if args.blueprint_inject_prob is not None:
-        blueprint_kwargs["inject_probability"] = args.blueprint_inject_prob
-    if args.blueprint_stagnation_gate is not None:
-        blueprint_kwargs["stagnation_gate"] = args.blueprint_stagnation_gate
-    if args.blueprint_max_tokens is not None:
-        blueprint_kwargs["max_tokens"] = args.blueprint_max_tokens
-
     # --- Punctuated Equilibrium ---
-    pe_kwargs: dict = {
-        "enabled": not args.no_pe,
-        "use_blueprint": not args.no_blueprint,
-        "light_only_implementations": not args.blueprint_heavy_only,
-    }
+    pe_kwargs: dict = {"enabled": not args.no_pe}
     if args.pe_interval is not None:
         pe_kwargs["interval"] = args.pe_interval
     if args.pe_n_clusters is not None:
@@ -415,17 +435,38 @@ def main() -> int:
     if args.pe_n_variants is not None:
         pe_kwargs["n_variants"] = args.pe_n_variants
 
-    print(f"[levi] HLS blueprint = {'on' if not args.no_blueprint else 'OFF (ablation)'}")
-    if not args.no_blueprint:
-        bp_show = levi.BlueprintConfig(**blueprint_kwargs)
-        print(f"[levi]   TTL multiplier      = {bp_show.ttl_multiplier}")
-        print(f"[levi]   inject_probability  = {bp_show.inject_probability}")
-        print(f"[levi]   stagnation_gate     = {bp_show.stagnation_gate}")
-        print(f"[levi]   max_tokens          = {bp_show.max_tokens}")
+    # --- Strategy Log ---
+    strategy_kwargs: dict = {"enabled": not args.no_strategy_log}
+    if args.strategy_log_entries is not None:
+        strategy_kwargs["max_entries"] = args.strategy_log_entries
+
+    # --- Code Error Repair ---
+    repair_kwargs: dict = {"enabled": not args.no_code_repair}
+    if args.code_repair_every_n is not None:
+        repair_kwargs["repair_every_n"] = args.code_repair_every_n
+    if args.code_repair_max is not None:
+        repair_kwargs["max_per_run"] = args.code_repair_max
+    if args.code_repair_beta is not None:
+        repair_kwargs["beta"] = args.code_repair_beta
+    if args.code_repair_buffer is not None:
+        repair_kwargs["buffer_size"] = args.code_repair_buffer
+
+    # --- Adaptive Island Expansion ---
+    island_kwargs: dict = {"enabled": not args.no_adaptive_island}
+    if args.island_stagnation is not None:
+        island_kwargs["stagnation_threshold"] = args.island_stagnation
+    if args.island_max is not None:
+        island_kwargs["max_per_run"] = args.island_max
+    if args.island_max_centroids is not None:
+        island_kwargs["max_total_centroids"] = args.island_max_centroids
+
     print(f"[levi] SAL/PPS = {'on' if not args.no_sal else 'OFF (ablation)'}")
     if not args.no_sal and args.sal_tau is not None:
         print(f"[levi]   τ (plateau length)  = {args.sal_tau}")
     print(f"[levi] Punctuated Equilibrium = {'on' if not args.no_pe else 'OFF'}")
+    print(f"[levi] Strategy log = {'on' if not args.no_strategy_log else 'OFF'}")
+    print(f"[levi] Code repair  = {'on' if not args.no_code_repair else 'OFF'}")
+    print(f"[levi] Adaptive Island = {'on' if not args.no_adaptive_island else 'OFF'}")
 
     evolve_kw: dict = {
         "problem_description": problem.PROBLEM_DESCRIPTION,
@@ -446,8 +487,10 @@ def main() -> int:
         ),
         "output_dir": str(output_dir),
         "sal": levi.SalConfig(**sal_kwargs),
-        "blueprint": levi.BlueprintConfig(**blueprint_kwargs),
         "punctuated_equilibrium": levi.PunctuatedEquilibriumConfig(**pe_kwargs),
+        "strategy_log": levi.StrategyLogConfig(**strategy_kwargs),
+        "code_repair": levi.CodeRepairConfig(**repair_kwargs),
+        "adaptive_island": levi.AdaptiveIslandConfig(**island_kwargs),
     }
     if evolve_init is not None:
         evolve_kw["init"] = evolve_init
@@ -511,14 +554,6 @@ def main() -> int:
             "n_diverse_seeds": effective_init.n_diverse_seeds,
             "n_variants_per_seed": effective_init.n_variants_per_seed,
         },
-        "hls": {
-            "blueprint_enabled": not args.no_blueprint,
-            "ttl_multiplier": blueprint_kwargs.get("ttl_multiplier"),
-            "inject_probability": blueprint_kwargs.get("inject_probability"),
-            "stagnation_gate": blueprint_kwargs.get("stagnation_gate"),
-            "max_tokens": blueprint_kwargs.get("max_tokens"),
-            "light_only_implementations": not args.blueprint_heavy_only,
-        },
         "sal": {
             "enabled": not args.no_sal,
             "tau": args.sal_tau,
@@ -528,6 +563,23 @@ def main() -> int:
             "interval": args.pe_interval,
             "n_clusters": args.pe_n_clusters,
             "n_variants": args.pe_n_variants,
+        },
+        "strategy_log": {
+            "enabled": not args.no_strategy_log,
+            "max_entries": args.strategy_log_entries,
+        },
+        "code_repair": {
+            "enabled": not args.no_code_repair,
+            "repair_every_n": args.code_repair_every_n,
+            "max_per_run": args.code_repair_max,
+            "beta": args.code_repair_beta,
+            "buffer_size": args.code_repair_buffer,
+        },
+        "adaptive_island": {
+            "enabled": not args.no_adaptive_island,
+            "stagnation_threshold": args.island_stagnation,
+            "max_per_run": args.island_max,
+            "max_total_centroids": args.island_max_centroids,
         },
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2))

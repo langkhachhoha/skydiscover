@@ -99,38 +99,6 @@ on:
         type: string
         default: ""
 
-      # ---------------- HLS — Strategic Blueprint (Heavy-Light Synthesis) ----------------
-      blueprint:
-        description: "Enable HLS Strategic Blueprint (heavy writes short blueprint, light implements). On by default."
-        required: false
-        type: boolean
-        default: true
-      blueprint_ttl_mult:
-        description: "Blueprint Strategic-Memory TTL multiplier (default 1.5). TTL evals = X * PE interval. Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      blueprint_inject_prob:
-        description: "Probability of injecting blueprint into a main-loop mutation while TTL>0 (default 0.3). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      blueprint_stagnation_gate:
-        description: "Stagnation s(t) threshold below which blueprint injection is suppressed (default 0.4). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      blueprint_max_tokens:
-        description: "Heavy-model blueprint output token cap (default 600). Blank keeps default."
-        required: false
-        type: string
-        default: ""
-      blueprint_heavy_only:
-        description: "Use the heavy model for the reference implementation (off → light-only, the cheap default)."
-        required: false
-        type: boolean
-        default: false
-
       # ---------------- Punctuated Equilibrium overrides ----------------
       pe_interval:
         description: "Trigger PE every N evaluations (Levi default 10). Blank keeps default."
@@ -143,15 +111,78 @@ on:
         type: string
         default: ""
       pe_n_variants:
-        description: "Number of light-model implementations of the blueprint per PE event (default 3). Blank keeps default."
+        description: "Light-model variants of the heavy paradigm shift per PE event (default 3). Blank keeps default."
         required: false
         type: string
         default: ""
       pe_disabled:
-        description: "Disable Punctuated Equilibrium entirely (also disables HLS, since the blueprint lives inside PE)."
+        description: "Disable Punctuated Equilibrium entirely."
         required: false
         type: boolean
         default: false
+
+      # ---------------- Strategy Log (post-PE summariser) ----------------
+      strategy_log_disabled:
+        description: "Disable the strategy-history summariser (heavy prompt won't see past PE attempts)."
+        required: false
+        type: boolean
+        default: false
+      strategy_log_entries:
+        description: "How many most-recent strategy records to render into the heavy prompt (default 8). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+
+      # ---------------- Code Error Repair ----------------
+      code_repair_disabled:
+        description: "Disable the one-shot light-model code-repair sub-pipeline."
+        required: false
+        type: boolean
+        default: false
+      code_repair_every_n:
+        description: "Fire one repair attempt every N main-loop offspring (default 8). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      code_repair_max:
+        description: "Hard cap on total repair attempts per run (default 100). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      code_repair_beta:
+        description: "Zipfian exponent for rank-by-parent-score selection from the error buffer (default 1.5). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      code_repair_buffer:
+        description: "Bounded error-buffer size (default 64). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+
+      # ---------------- Adaptive Island Expansion ----------------
+      # AdaEvolve-style growth: when a PE candidate fails standard admission
+      # under high stagnation, open a NEW cell at its own behaviour vector.
+      adaptive_island_disabled:
+        description: "Disable Adaptive Island Expansion (PE candidates that fail standard admission are discarded)."
+        required: false
+        type: boolean
+        default: false
+      island_stagnation:
+        description: "Minimum stagnation s(t) for island expansion to fire (default 0.7). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      island_max:
+        description: "Maximum island expansions per run (default 16). Blank keeps default."
+        required: false
+        type: string
+        default: ""
+      island_max_centroids:
+        description: "Hard ceiling on total centroids (default 200). Blank keeps default."
+        required: false
+        type: string
+        default: ""
 
       # ---------------- PPS — Posterior-Plateau Stagnation ----------------
       sal_tau:
@@ -229,27 +260,6 @@ jobs:
             fi
           fi
 
-          # HLS Strategic Blueprint options
-          BLUEPRINT_OPTS=""
-          if [ "${{ inputs.blueprint }}" != "true" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --no-blueprint"
-          fi
-          if [ -n "${{ inputs.blueprint_ttl_mult }}" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-ttl-mult ${{ inputs.blueprint_ttl_mult }}"
-          fi
-          if [ -n "${{ inputs.blueprint_inject_prob }}" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-inject-prob ${{ inputs.blueprint_inject_prob }}"
-          fi
-          if [ -n "${{ inputs.blueprint_stagnation_gate }}" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-stagnation-gate ${{ inputs.blueprint_stagnation_gate }}"
-          fi
-          if [ -n "${{ inputs.blueprint_max_tokens }}" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-max-tokens ${{ inputs.blueprint_max_tokens }}"
-          fi
-          if [ "${{ inputs.blueprint_heavy_only }}" = "true" ]; then
-            BLUEPRINT_OPTS="$BLUEPRINT_OPTS --blueprint-heavy-only"
-          fi
-
           # Punctuated Equilibrium overrides
           PE_OPTS=""
           if [ -n "${{ inputs.pe_interval }}" ]; then
@@ -263,6 +273,48 @@ jobs:
           fi
           if [ "${{ inputs.pe_disabled }}" = "true" ]; then
             PE_OPTS="$PE_OPTS --no-pe"
+          fi
+
+          # Strategy Log
+          STRATEGY_OPTS=""
+          if [ "${{ inputs.strategy_log_disabled }}" = "true" ]; then
+            STRATEGY_OPTS="$STRATEGY_OPTS --no-strategy-log"
+          fi
+          if [ -n "${{ inputs.strategy_log_entries }}" ]; then
+            STRATEGY_OPTS="$STRATEGY_OPTS --strategy-log-entries ${{ inputs.strategy_log_entries }}"
+          fi
+
+          # Code Repair
+          REPAIR_OPTS=""
+          if [ "${{ inputs.code_repair_disabled }}" = "true" ]; then
+            REPAIR_OPTS="$REPAIR_OPTS --no-code-repair"
+          fi
+          if [ -n "${{ inputs.code_repair_every_n }}" ]; then
+            REPAIR_OPTS="$REPAIR_OPTS --code-repair-every-n ${{ inputs.code_repair_every_n }}"
+          fi
+          if [ -n "${{ inputs.code_repair_max }}" ]; then
+            REPAIR_OPTS="$REPAIR_OPTS --code-repair-max ${{ inputs.code_repair_max }}"
+          fi
+          if [ -n "${{ inputs.code_repair_beta }}" ]; then
+            REPAIR_OPTS="$REPAIR_OPTS --code-repair-beta ${{ inputs.code_repair_beta }}"
+          fi
+          if [ -n "${{ inputs.code_repair_buffer }}" ]; then
+            REPAIR_OPTS="$REPAIR_OPTS --code-repair-buffer ${{ inputs.code_repair_buffer }}"
+          fi
+
+          # Adaptive Island Expansion
+          ISLAND_OPTS=""
+          if [ "${{ inputs.adaptive_island_disabled }}" = "true" ]; then
+            ISLAND_OPTS="$ISLAND_OPTS --no-adaptive-island"
+          fi
+          if [ -n "${{ inputs.island_stagnation }}" ]; then
+            ISLAND_OPTS="$ISLAND_OPTS --island-stagnation ${{ inputs.island_stagnation }}"
+          fi
+          if [ -n "${{ inputs.island_max }}" ]; then
+            ISLAND_OPTS="$ISLAND_OPTS --island-max ${{ inputs.island_max }}"
+          fi
+          if [ -n "${{ inputs.island_max_centroids }}" ]; then
+            ISLAND_OPTS="$ISLAND_OPTS --island-max-centroids ${{ inputs.island_max_centroids }}"
           fi
 
           # PPS / SAL
@@ -290,11 +342,11 @@ jobs:
             $INIT_OPTS \
             $CVT_OPTS \
             $PROMPT_BANK_OPTS \
-            $BLUEPRINT_OPTS \
             $PE_OPTS \
+            $STRATEGY_OPTS \
+            $REPAIR_OPTS \
+            $ISLAND_OPTS \
             $SAL_OPTS
-
-
 
       - name: Upload run artifacts
         if: always()
