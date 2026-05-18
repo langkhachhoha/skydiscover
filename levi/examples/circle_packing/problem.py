@@ -12,6 +12,7 @@ import numpy as np
 
 N_CIRCLES = 26
 EPS = 1e-6
+TIMEOUT_SECONDS = 60
 
 # Used by scripts/run_levi.py → Levi BehaviorConfig.score_keys (numeric fields from score_fn).
 # BEHAVIOR_SCORE_KEYS = (
@@ -47,7 +48,7 @@ Return:
 Maximize `sum_radii`.
 
 ## Runtime Constraint
-Your solution must complete within **600 seconds**.
+Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
 """
 
 FUNCTION_SIGNATURE = f"""

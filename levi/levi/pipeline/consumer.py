@@ -16,6 +16,57 @@ from ..utils import ResilientProcessPool, coerce_score
 from .state import BudgetLimitReached, ErrorRecord, PipelineState
 
 
+_ERROR_LOG_TAIL_CHARS = 400
+"""Tail length used when echoing an error into the human-readable log.
+
+The full traceback always reaches the repair model via the error buffer
+(``_ERROR_MSG_MAX_CHARS``); the log line just needs enough of the tail
+to recognise which failure mode this is.
+"""
+
+
+def _format_error_for_log(error_msg: str) -> str:
+    """Render an error for a single ``[Eval #N] ERROR:`` log line.
+
+    The full message can be thousands of characters (a process-pool
+    traceback), so we keep the *tail* — that is where the exception
+    type and final line live. Newlines are collapsed to ``\\n`` so the
+    line stays single-line and greppable.
+    """
+    msg = (error_msg or "").strip()
+    if not msg:
+        return "(empty)"
+    if len(msg) > _ERROR_LOG_TAIL_CHARS:
+        msg = "…" + msg[-_ERROR_LOG_TAIL_CHARS:]
+    return msg.replace("\n", "\\n")
+
+
+_ERROR_MSG_MAX_CHARS = 4000
+"""Upper bound on error context handed to the repair model.
+
+We keep the *tail* of the message because Python tracebacks put the
+actual exception type and message at the bottom — that's the line the
+repair model needs to see. Heading frames are useful context but
+disposable when we run out of room.
+"""
+
+
+def _truncate_error_tail(error_msg: str, *, limit: int = _ERROR_MSG_MAX_CHARS) -> str:
+    """Return the last ``limit`` chars of ``error_msg`` with a header marker.
+
+    Python tracebacks end with the exception type and message
+    (``ZeroDivisionError: division by zero``); that suffix is what
+    actionable fix-it information lives in. Truncating the *head*
+    preserves it and explicitly tells the repair model that the upper
+    part of the stack was dropped, so it doesn't hallucinate context
+    that isn't there.
+    """
+    msg = error_msg or ""
+    if len(msg) <= limit:
+        return msg
+    return "[…truncated head; full traceback was longer…]\n" + msg[-limit:]
+
+
 def _maybe_push_error(
     config: LeviConfig,
     state: PipelineState,
@@ -45,7 +96,7 @@ def _maybe_push_error(
         ErrorRecord(
             code=code,
             parent_score=parent_score,
-            error_msg=(error_msg or "")[:300],
+            error_msg=_truncate_error_tail(error_msg),
             parent_cell=item.get("source_cell"),
             source="repair_candidate" if item.get("is_repair") else "main_loop",
         )
@@ -65,6 +116,10 @@ def _short_model(model: str) -> str:
 def _model_label(item: dict) -> str:
     model = _short_model(item.get("model", "unknown"))
     sampler = item.get("sampler", "")
+    # Surface the repair branch so [Eval #N] lines are immediately
+    # distinguishable from regular mutation evaluations in run.txt.
+    if item.get("is_repair") or sampler == "repair":
+        return f"repair/{model}"
     if "_T" in sampler:
         return f"{model}{sampler[sampler.index('_T') :]}"
     return model
@@ -290,7 +345,10 @@ async def eval_consumer(
                         state.record_error(score_error)
                         _maybe_push_error(config, state, item, score_error)
                         label = _model_label(item)
-                        logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {score_error[:50]}")
+                        logger.info(
+                            f"[Eval #{state.eval_count}] {label:30s} ERROR: "
+                            f"{_format_error_for_log(score_error)}"
+                        )
                     else:
                         result = dict(result)
                         result["score"] = score
@@ -310,8 +368,16 @@ async def eval_consumer(
 
                         # Code-repair telemetry — count one repair success when
                         # the repaired candidate enters the archive.
-                        if item.get("is_repair") and accepted:
-                            state.repair_success_count += 1
+                        if item.get("is_repair"):
+                            if accepted:
+                                state.repair_success_count += 1
+                            logger.info(
+                                f"[Repair] eval #{state.eval_count + 1} "
+                                f"{'ACCEPTED' if accepted else 'rejected'} | "
+                                f"score: {score:.4g} | "
+                                f"successes: {state.repair_success_count}/"
+                                f"{state.repair_attempt_count}"
+                            )
 
                         if accepted:
                             state.record_accept()
@@ -348,6 +414,8 @@ async def eval_consumer(
                             sampler=item["sampler"],
                             archive_size=pool.size(),
                             cell_index=cell_index,
+                            mutation_prompt_id=item.get("mutation_prompt_id"),
+                            llm_temperature=item.get("llm_temperature"),
                         )
 
                         if is_new_best:
@@ -377,7 +445,10 @@ async def eval_consumer(
                     state.record_error(result["error"])
                     _maybe_push_error(config, state, item, result["error"])
                     label = _model_label(item)
-                    logger.info(f"[Eval #{state.eval_count}] {label:30s} ERROR: {result['error'][:50]}")
+                    logger.info(
+                        f"[Eval #{state.eval_count}] {label:30s} ERROR: "
+                        f"{_format_error_for_log(result['error'])}"
+                    )
 
             if config.meta_advice.enabled and state.should_generate_meta_advice(config.meta_advice.interval):
                 asyncio.create_task(_generate_meta_advice(config, state))

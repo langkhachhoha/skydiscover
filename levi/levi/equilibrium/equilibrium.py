@@ -232,6 +232,19 @@ class PunctuatedEquilibrium:
             strategy_log_block = self.state.format_strategy_log(
                 max_entries=self.config.strategy_log.max_entries
             )
+            if strategy_log_block.strip():
+                n_recent = min(
+                    len(self.state.strategy_history),
+                    self.config.strategy_log.max_entries,
+                )
+                logger.info(
+                    f"[Strategy-Log] Injecting {n_recent} prior PE record(s) into heavy prompt "
+                    f"({len(strategy_log_block)} chars, of {len(self.state.strategy_history)} total)"
+                )
+            else:
+                logger.info(
+                    "[Strategy-Log] No prior PE records yet; heavy prompt has no strategy block"
+                )
 
         return self.artifact_adapter.build_paradigm_shift_prompt(
             representatives,
@@ -264,16 +277,30 @@ class PunctuatedEquilibrium:
 
         ``summary`` is "" when summarisation is disabled, the adapter does
         not implement it, or the API call failed. ``cost`` is best-effort
-        and may be 0.0 on failure.
+        and may be 0.0 on failure. Emits an INFO log at each decision
+        point so the strategy-log pipeline is observable in run.txt.
         """
         cfg = self.config.strategy_log
         if not cfg.enabled:
+            logger.info("[Strategy-Log] disabled by config; skipping summarisation")
             return "", 0.0
         if not hasattr(self.artifact_adapter, "build_strategy_summary_prompt"):
+            logger.info(
+                "[Strategy-Log] adapter has no build_strategy_summary_prompt; skipping"
+            )
             return "", 0.0
         if cfg.summariser_model is None:
+            logger.info(
+                "[Strategy-Log] summariser_model is None (mutation_models[0] not set?); skipping"
+            )
             return "", 0.0
         prompt = self.artifact_adapter.build_strategy_summary_prompt(code)
+        logger.info(
+            f"[Strategy-Log] Summarising paradigm shift "
+            f"(model={client_name(cfg.summariser_model)}, "
+            f"max_tokens={cfg.summariser_max_tokens}, "
+            f"temperature={cfg.summariser_temperature})"
+        )
         try:
             response = await self.state.acompletion(
                 cfg.summariser_model,
@@ -285,15 +312,26 @@ class PunctuatedEquilibrium:
         except BudgetLimitReached:
             raise
         except Exception as e:
-            logger.warning(f"[PE] Strategy summarisation failed: {e}")
+            logger.warning(f"[Strategy-Log] Summarisation failed: {e}")
             return "", 0.0
+        cost = float(getattr(response, "cost", 0.0) or 0.0)
         text = (response.text or "").strip()
-        # Take only the first non-empty line — model sometimes adds prose.
-        for line in text.splitlines():
-            line = line.strip()
-            if line:
-                return line, float(getattr(response, "cost", 0.0) or 0.0)
-        return "", float(getattr(response, "cost", 0.0) or 0.0)
+        # Keep all non-empty lines — the IDEA/QUALITY template is two
+        # lines and the heavy prompt renders them nested. We just strip
+        # leading/trailing blank lines and join the rest.
+        kept_lines = [ln for ln in (line.rstrip() for line in text.splitlines()) if ln.strip()]
+        summary = "\n".join(kept_lines)
+        if summary:
+            preview = summary.replace("\n", " | ")
+            if len(preview) > 200:
+                preview = preview[:197] + "..."
+            logger.info(
+                f"[Strategy-Log] Summary ok (cost=${cost:.4f}, "
+                f"lines={len(kept_lines)}): {preview}"
+            )
+        else:
+            logger.info(f"[Strategy-Log] Summary empty (cost=${cost:.4f})")
+        return summary, cost
 
     # ------------------------------------------------------------------
     # Adaptive Island Expansion — open a new cell at the candidate's
@@ -805,6 +843,7 @@ class PunctuatedEquilibrium:
             )
             delta = best_after - best_before if math.isfinite(best_before) else 0.0
             paradigm_score_val = stats.get("paradigm_score")
+            record_accepted = bool(stats.get("paradigm_accepted")) or stats.get("variants_accepted", 0) > 0
             self.state.append_strategy_record(
                 StrategyRecord(
                     pe_event_id=self.state.pe_trigger_count,
@@ -817,9 +856,15 @@ class PunctuatedEquilibrium:
                         else float("nan")
                     ),
                     delta_score=delta,
-                    accepted=bool(stats.get("paradigm_accepted"))
-                    or stats.get("variants_accepted", 0) > 0,
+                    accepted=record_accepted,
                 )
+            )
+            logger.info(
+                f"[Strategy-Log] Appended record PE#{self.state.pe_trigger_count} "
+                f"[{pe_stage}] Δ={delta:+.4g}, "
+                f"{'accepted' if record_accepted else 'rejected'} "
+                f"(history size {len(self.state.strategy_history)}/"
+                f"{self.state.strategy_history.maxlen})"
             )
             stats["strategy_summary"] = summary
             stats["strategy_delta"] = delta

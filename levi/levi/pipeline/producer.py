@@ -84,13 +84,36 @@ async def llm_producer(
                     # Adapter doesn't support repair (e.g. bundle/prompt
                     # mode); skip and let the next iteration draw a normal
                     # mutation instead.
+                    logger.info(
+                        f"[Repair-{worker_id}] adapter has no build_code_repair_prompt; skipping"
+                    )
                     continue
+                parent_score_str = (
+                    f"{repair_record.parent_score:.4g}"
+                    if math.isfinite(repair_record.parent_score)
+                    else "n/a"
+                )
+                repair_model = cfg.model
+                # Preview the tail of the error in the producer log line —
+                # the head is usually framework boilerplate, the tail is the
+                # actual exception/message. We keep this short because the
+                # full traceback already lives inside repair_record.error_msg
+                # and is handed verbatim to the repair model below.
+                err_preview = repair_record.error_msg.strip().splitlines()[-1] if repair_record.error_msg.strip() else ""
+                if len(err_preview) > 200:
+                    err_preview = "…" + err_preview[-200:]
+                logger.info(
+                    f"[Repair-{worker_id}] FIRE attempt #{state.repair_attempt_count} "
+                    f"(buffer={len(state.error_buffer)}, parent_score={parent_score_str}, "
+                    f"parent_cell={repair_record.parent_cell}, "
+                    f"model={client_name(repair_model)}, error={err_preview!r}, "
+                    f"full_error_chars={len(repair_record.error_msg)})"
+                )
                 repair_prompt = artifact_adapter.build_code_repair_prompt(
                     repair_record.code,
                     error_msg=repair_record.error_msg,
                     parent_score=repair_record.parent_score,
                 )
-                repair_model = cfg.model
                 try:
                     repair_temp = cfg.temperature if cfg.temperature is not None else config.pipeline.temperature
                     response = await state.acompletion(
@@ -110,8 +133,15 @@ async def llm_producer(
 
                 candidate = artifact_adapter.extract_candidate(repair_content)
                 if not candidate:
+                    logger.info(
+                        f"[Repair-{worker_id}] candidate extraction failed; discarding repair"
+                    )
                     continue
 
+                logger.info(
+                    f"[Repair-{worker_id}] candidate enqueued (parent_score={parent_score_str}, "
+                    f"parent_cell={repair_record.parent_cell})"
+                )
                 await code_queue.put(
                     {
                         "content": candidate,

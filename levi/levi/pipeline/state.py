@@ -135,6 +135,12 @@ class ScoreHistoryEntry:
     cell_index: int | None = None  # Which cell this evaluation fell into
     is_punctuated_equilibrium: bool = False  # Whether from PE
     cumulative_cost: float = 0.0
+    # Prompt-bank arm identifiers — captured so snapshot.json shows exactly
+    # which (prompt_id, llm_temperature) produced this candidate, not just
+    # the parent-selection sampler name. None for non-prompt-bank candidates
+    # (init seeds, PE-paradigm, PE-variant, repair).
+    mutation_prompt_id: str | None = None
+    llm_temperature: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -661,6 +667,8 @@ class PipelineState:
         archive_size: int,
         cell_index: int | None = None,
         is_punctuated_equilibrium: bool = False,
+        mutation_prompt_id: str | None = None,
+        llm_temperature: float | None = None,
     ) -> None:
         """Record a score in the history."""
         if score > self.best_score_so_far:
@@ -677,6 +685,8 @@ class PipelineState:
             cell_index=cell_index,
             is_punctuated_equilibrium=is_punctuated_equilibrium,
             cumulative_cost=self.total_cost,
+            mutation_prompt_id=mutation_prompt_id,
+            llm_temperature=llm_temperature,
         )
         self.score_history.append(entry)
 

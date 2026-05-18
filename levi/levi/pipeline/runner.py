@@ -24,6 +24,35 @@ logger = logging.getLogger(__name__)
 _MIN_STALL_TIMEOUT_SECONDS = 120.0
 
 
+def _format_sampler_label(entry) -> str:
+    """Render a human-readable sampler label for snapshot.json.
+
+    Examples:
+      adaptive_rank[surgical_local_refine@T=0.5]
+      adaptive_rank[T=0.8]
+      pe_paradigm_shift
+      repair
+      init_diversity
+
+    Falls back to the raw sampler name when neither prompt_id nor
+    temperature is set.
+    """
+    base = entry.sampler or "unknown"
+    parts: list[str] = []
+    pid = getattr(entry, "mutation_prompt_id", None)
+    if pid:
+        parts.append(str(pid))
+    temp = getattr(entry, "llm_temperature", None)
+    if temp is not None:
+        try:
+            parts.append(f"T={float(temp):g}")
+        except (TypeError, ValueError):
+            pass
+    if not parts:
+        return base
+    return f"{base}[{'@'.join(parts)}]"
+
+
 class PipelineRunner:
     def __init__(
         self,
@@ -402,7 +431,11 @@ class PipelineRunner:
                 "selected_indices": list(self.config.proxy_benchmark.selected_indices),
             }
 
-        # Add score history
+        # Add score history. ``sampler`` is rendered as a descriptive string
+        # that includes the bandit-arm identifiers (prompt_id, temperature)
+        # when they exist, so a snapshot consumer can tell *which* arm of
+        # the (sampler, prompt_id, temperature) cross product produced each
+        # candidate without correlating against the bandit log.
         snapshot["score_history"] = [
             {
                 "eval_number": entry.eval_number,
@@ -410,7 +443,10 @@ class PipelineRunner:
                 "best_score": entry.best_score,
                 "timestamp": entry.timestamp,
                 "accepted": entry.accepted,
-                "sampler": entry.sampler,
+                "sampler": _format_sampler_label(entry),
+                "sampler_base": entry.sampler,
+                "mutation_prompt_id": entry.mutation_prompt_id,
+                "llm_temperature": entry.llm_temperature,
                 "archive_size": entry.archive_size,
                 "cell_index": entry.cell_index,
                 "is_punctuated_equilibrium": entry.is_punctuated_equilibrium,
@@ -418,6 +454,36 @@ class PipelineRunner:
             }
             for entry in self.state.score_history
         ]
+
+        # Strategy history — paper-relevant trace of what the heavy model
+        # has already proposed. Dumped raw so downstream analysis can plot
+        # diversity / Δ trajectories.
+        snapshot["strategy_history"] = [
+            {
+                "pe_event_id": r.pe_event_id,
+                "stage": r.stage,
+                "summary": r.summary,
+                "best_before": (
+                    r.best_before if math.isfinite(r.best_before) else None
+                ),
+                "paradigm_score": (
+                    r.paradigm_score if math.isfinite(r.paradigm_score) else None
+                ),
+                "delta_score": r.delta_score,
+                "accepted": r.accepted,
+            }
+            for r in self.state.strategy_history
+        ]
+
+        # Code-repair telemetry block — lets the snapshot show how often
+        # repair fired vs. how many candidates it actually rescued.
+        snapshot["code_repair"] = {
+            "attempts": self.state.repair_attempt_count,
+            "successes": self.state.repair_success_count,
+            "buffer_size": len(self.state.error_buffer),
+            "last_repair_at_eval": self.state.last_repair_at_eval,
+            "island_expansions": self.state.island_expansion_count,
+        }
 
         # Save to file (overwrite)
         filepath = self.output_dir / "snapshot.json"
