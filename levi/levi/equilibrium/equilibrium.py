@@ -34,6 +34,153 @@ from .prompts import get_budget_stage
 logger = logging.getLogger(__name__)
 
 
+# Patterns OpenRouter / LiteLLM use when the request's max_tokens exceeds
+# what the account can pre-authorize. Matched case-insensitively against
+# the stringified exception.
+_TOKEN_CAP_ERROR_MARKERS = (
+    "fewer max_tokens",
+    "requires more credits",
+    "max_tokens",
+    "afford",
+    "context length",
+    "context_length",
+    "maximum context",
+    "too many tokens",
+)
+
+_TOKEN_RETRY_MIN = 1024
+"""Stop halving when max_tokens would drop below this — at that point the
+output budget is so small the call is unlikely to produce useful code."""
+
+
+def _looks_like_token_cap_error(exc: BaseException) -> bool:
+    """Heuristic: did the call fail because max_tokens was too high?
+
+    We match on the exception's stringified message rather than a specific
+    exception class because LiteLLM normalises provider errors into a
+    generic ``APIError`` whose discriminator lives in the message body.
+    """
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _TOKEN_CAP_ERROR_MARKERS)
+
+
+def _extract_affordable_tokens(exc: BaseException) -> int | None:
+    """Pull the "but can only afford N" hint out of an OpenRouter error.
+
+    Returning the number lets us jump directly to a known-affordable
+    max_tokens instead of blindly halving and probably overshooting again
+    on the next try.
+    """
+    import re
+
+    msg = str(exc)
+    m = re.search(r"can only afford\s+(\d+)", msg, re.IGNORECASE)
+    if m:
+        try:
+            return max(_TOKEN_RETRY_MIN, int(m.group(1)))
+        except ValueError:
+            return None
+    return None
+
+
+async def _acompletion_with_token_retry(
+    state: PipelineState,
+    *,
+    model,
+    prompt,
+    temperature,
+    timeout: float,
+    initial_max_tokens: int | None = None,
+    label: str = "PE",
+    **extras,
+):
+    """Call ``state.acompletion`` with progressive ``max_tokens`` halving.
+
+    Default behaviour: do NOT set ``max_tokens`` (let the model use its
+    own ceiling). If the provider rejects the request with a token-cap
+    error (OpenRouter "fewer max_tokens / afford N"), drop to the
+    affordable number it suggested and halve from there on each retry
+    until either the call succeeds or ``max_tokens`` falls below
+    :data:`_TOKEN_RETRY_MIN`.
+
+    Args:
+        initial_max_tokens: pre-set ``max_tokens`` for the first call,
+            or None to call without the parameter.
+
+    Raises:
+        BudgetLimitReached: propagated unchanged so callers can shut
+            down the pipeline cleanly.
+        Exception: the *last* observed provider error when retries are
+            exhausted or the failure does not look like a token-cap
+            issue (so the existing higher-level handlers can decide
+            whether to skip the PE event or fall back).
+    """
+    current_max_tokens = initial_max_tokens
+    attempt = 0
+    last_exc: Exception | None = None
+    while True:
+        attempt += 1
+        kwargs = dict(extras)
+        if current_max_tokens is not None:
+            kwargs["max_tokens"] = current_max_tokens
+        try:
+            return await state.acompletion(
+                model,
+                prompt=prompt,
+                temperature=temperature,
+                timeout=timeout,
+                **kwargs,
+            )
+        except BudgetLimitReached:
+            raise
+        except Exception as e:
+            last_exc = e
+            if not _looks_like_token_cap_error(e):
+                # Some other failure (network, server-side bug, etc.) —
+                # we don't know how to recover, let the caller decide.
+                raise
+
+            # First time we see a token-cap error: use the suggested
+            # affordable number if present, otherwise start from a
+            # conservative 32k cap (half of common 65k defaults).
+            if attempt == 1:
+                hint = _extract_affordable_tokens(e)
+                if hint is not None:
+                    # Provider tells us exactly what fits — go just under
+                    # it (round to nearest 1024) so a small concurrent
+                    # spend can't tip us back over the line.
+                    safe = max(_TOKEN_RETRY_MIN, (hint // 1024) * 1024)
+                    current_max_tokens = safe
+                else:
+                    current_max_tokens = 32768
+                logger.warning(
+                    f"[{label}] Token-cap error on attempt {attempt}; "
+                    f"retrying with max_tokens={current_max_tokens}. "
+                    f"Cause: {str(e)[-200:]}"
+                )
+                continue
+
+            # Subsequent retries: halve.
+            if current_max_tokens is None:
+                current_max_tokens = 32768
+            next_max_tokens = current_max_tokens // 2
+            if next_max_tokens < _TOKEN_RETRY_MIN:
+                logger.warning(
+                    f"[{label}] Token-cap error on attempt {attempt}; "
+                    f"giving up (next max_tokens={next_max_tokens} < {_TOKEN_RETRY_MIN}). "
+                    f"Cause: {str(e)[-200:]}"
+                )
+                break
+            current_max_tokens = next_max_tokens
+            logger.warning(
+                f"[{label}] Token-cap error on attempt {attempt}; "
+                f"halving to max_tokens={current_max_tokens}. "
+                f"Cause: {str(e)[-200:]}"
+            )
+    assert last_exc is not None
+    raise last_exc
+
+
 class PunctuatedEquilibrium:
     """
     Implements punctuated equilibrium for CVT-MAP-Elites.
@@ -302,12 +449,14 @@ class PunctuatedEquilibrium:
             f"temperature={cfg.summariser_temperature})"
         )
         try:
-            response = await self.state.acompletion(
-                cfg.summariser_model,
+            response = await _acompletion_with_token_retry(
+                self.state,
+                model=cfg.summariser_model,
                 prompt=[{"role": "user", "content": prompt}],
                 temperature=cfg.summariser_temperature,
-                max_tokens=cfg.summariser_max_tokens,
+                initial_max_tokens=cfg.summariser_max_tokens,
                 timeout=60,
+                label="Strategy-Log",
             )
         except BudgetLimitReached:
             raise
@@ -528,12 +677,13 @@ class PunctuatedEquilibrium:
                     extras["reasoning_effort"] = effective_reasoning_effort
                     logger.info(f"[PE] Using reasoning_effort={effective_reasoning_effort} for {ref_role}")
 
-            response = await self.state.acompletion(
-                ref_model,
+            response = await _acompletion_with_token_retry(
+                self.state,
+                model=ref_model,
                 prompt=[{"role": "user", "content": prompt}],
                 temperature=self.pe_config.temperature,
-                # max_tokens=4096,
                 timeout=300,
+                label=f"PE/{ref_role}",
                 **extras,
             )
             content = response.text
@@ -543,27 +693,80 @@ class PunctuatedEquilibrium:
             logger.info("[PE] Budget exhausted before paradigm shift generation")
             return stats
         except Exception as e:
-            logger.warning(f"[PE] {ref_role} generation failed: {e}")
-            return stats
+            logger.warning(f"[PE] {ref_role} generation failed (after retries): {e}")
+            content = None
 
-        if pe_target is not None and representatives:
-            anchor_elite = max(representatives, key=lambda item: item[1].result.primary_score)[1]
-            paradigm_code = self.artifact_adapter.extract_candidate(
-                content,
-                parent_content=anchor_elite.program.content,
-                target=pe_target,
+        # Elite-as-paradigm fallback — when the heavy model is unreachable
+        # (credit exhausted, repeated token-cap rejection, transient
+        # outage…), we still want the PE event to do useful work. Reuse
+        # the best cluster representative as the "paradigm" so the variant
+        # step can still mutate it. The strategy log records this with
+        # ``stage`` annotated so post-hoc analysis can tell rescued PEs
+        # apart from real heavy-model paradigms.
+        paradigm_code: str | None = None
+        used_elite_fallback = False
+        if content is not None:
+            if pe_target is not None and representatives:
+                anchor_elite = max(representatives, key=lambda item: item[1].result.primary_score)[1]
+                paradigm_code = self.artifact_adapter.extract_candidate(
+                    content,
+                    parent_content=anchor_elite.program.content,
+                    target=pe_target,
+                )
+            else:
+                paradigm_code = self.artifact_adapter.extract_candidate(content)
+            if not paradigm_code:
+                logger.warning("[PE] Failed to extract paradigm shift code; trying elite fallback")
+
+        if not paradigm_code and representatives:
+            fallback_elite = max(
+                representatives, key=lambda item: item[1].result.primary_score
+            )[1]
+            paradigm_code = fallback_elite.program.content
+            used_elite_fallback = True
+            stats["paradigm_score"] = fallback_elite.result.primary_score
+            stats["fallback_elite_paradigm"] = True
+            logger.info(
+                f"[PE] Using best elite as paradigm "
+                f"(score={fallback_elite.result.primary_score:.4g}); "
+                f"variants will mutate it as a rescue path."
             )
-        else:
-            paradigm_code = self.artifact_adapter.extract_candidate(content)
+
         if not paradigm_code:
-            logger.warning("[PE] Failed to extract paradigm shift code")
+            # No representatives + no heavy output — we have nothing to mutate.
+            logger.warning("[PE] No paradigm code available even after elite fallback; aborting PE")
             return stats
 
-        stats["paradigm_generated"] = True
+        stats["paradigm_generated"] = not used_elite_fallback
+        if used_elite_fallback:
+            stats["paradigm_source"] = "elite_fallback"
         logger.debug("[PE] Paradigm shift code generated (%d chars)", len(paradigm_code))
 
         # Step 4: Evaluate paradigm shift solution
-        if not can_start_pe_eval():
+        if used_elite_fallback:
+            # Reusing an archive elite — its score is already known, the
+            # archive already contains it, so skip the evaluation entirely
+            # and head straight to the variant step. ``paradigm_score`` is
+            # set during the fallback assignment above.
+            logger.info(
+                "[PE] Elite-fallback path: skipping paradigm eval, going "
+                "straight to variants."
+            )
+            score = stats["paradigm_score"]
+            result = {"score": score, "skipped_eval": True}
+            stats["evaluations"].append(
+                {
+                    "source": "paradigm_shift",
+                    "model": "elite_fallback",
+                    "score": score,
+                    "accepted": False,  # already in archive
+                    "skipped_eval": True,
+                    "archive_size": self.pool.size(),
+                }
+            )
+            # Fall through to the rest of the function, but flag so we
+            # skip the archive insert block below.
+        elif not can_start_pe_eval():
             logger.info("[PE] Skipping paradigm shift evaluation (budget exhausted)")
             stats["evaluations"].append(
                 {
@@ -574,92 +777,99 @@ class PunctuatedEquilibrium:
                 }
             )
             return stats
-
-        try:
-            pe_evals_started += 1
-            result = await self._evaluate(paradigm_code)
-        except Exception as e:
-            logger.warning(f"[PE] Paradigm shift evaluation failed: {e}")
-            result = {"error": str(e)}
-
-        if "error" not in result:
-            score, score_error = coerce_score(result)
-            if score_error is not None:
-                logger.warning(f"[PE] Paradigm shift invalid score: {score_error}")
-                result = {"error": score_error}
-            else:
-                result = dict(result)
-                result["score"] = score
-
-        if "error" not in result:
-            stats["paradigm_score"] = score
-
-            program = self.artifact_adapter.make_program(
-                paradigm_code,
-                metadata={
-                    "source": "punctuated_equilibrium",
-                    "pe_type": "paradigm_shift",
-                },
-            )
-            eval_result = EvaluationResult(
-                scores=result,
-                is_valid=True,
-            )
-
-            async with self.archive_lock:
-                accepted, cell_idx = self.pool.add(program, eval_result)
-                island_opened = False
-                # Adaptive Island Expansion — when standard admission
-                # fails under high stagnation, open a brand-new cell at
-                # the candidate's own behaviour vector instead of
-                # discarding the work or evicting the incumbent.
-                if not accepted:
-                    s_for_island = (
-                        self.state.stagnation_depth(sal.tau)
-                        if sal.enabled
-                        else 0.0
-                    )
-                    island_opened, new_cell = self._try_island_expansion(
-                        program, eval_result, stagnation=s_for_island
-                    )
-                    if island_opened:
-                        accepted = True
-                        cell_idx = new_cell
-
-            stats["paradigm_accepted"] = accepted
-            stats["paradigm_cell"] = cell_idx
-            if island_opened:
-                stats["paradigm_island_expanded"] = True
-            if pe_target is not None and self.pe_component_selector is not None:
-                self.pe_component_selector.update(pe_target, accepted=accepted)
-            stats["evaluations"].append(
-                {
-                    "source": "paradigm_shift",
-                    "model": client_name(ref_model),
-                    "score": score,
-                    "accepted": accepted,
-                    "island_expanded": island_opened,
-                    "cell_index": cell_idx,
-                    "archive_size": self.pool.size(),
-                }
-            )
-
-            logger.info(
-                f"[PE] Paradigm shift: score={score:.17g}, accepted={accepted}, "
-                f"cell={cell_idx}{', new island' if island_opened else ''}"
-            )
         else:
-            error_message = str(result.get("error", "unknown"))
-            logger.info(f"[PE] Paradigm shift eval error: {error_message[:100]}")
-            stats["evaluations"].append(
-                {
-                    "source": "paradigm_shift",
-                    "model": client_name(ref_model),
-                    "error": error_message,
-                    "archive_size": self.pool.size(),
-                }
-            )
-            paradigm_code = None  # Can't generate variants
+            try:
+                pe_evals_started += 1
+                result = await self._evaluate(paradigm_code)
+            except Exception as e:
+                logger.warning(f"[PE] Paradigm shift evaluation failed: {e}")
+                result = {"error": str(e)}
+
+        if used_elite_fallback:
+            # Skip the archive insertion + result-score parsing block —
+            # the elite is already in the archive and its score is the
+            # one we stored in stats["paradigm_score"] above. Use the
+            # known score to drive the variant step below.
+            score = stats["paradigm_score"]
+        else:
+            if "error" not in result:
+                score, score_error = coerce_score(result)
+                if score_error is not None:
+                    logger.warning(f"[PE] Paradigm shift invalid score: {score_error}")
+                    result = {"error": score_error}
+                else:
+                    result = dict(result)
+                    result["score"] = score
+
+            if "error" not in result:
+                stats["paradigm_score"] = score
+
+                program = self.artifact_adapter.make_program(
+                    paradigm_code,
+                    metadata={
+                        "source": "punctuated_equilibrium",
+                        "pe_type": "paradigm_shift",
+                    },
+                )
+                eval_result = EvaluationResult(
+                    scores=result,
+                    is_valid=True,
+                )
+
+                async with self.archive_lock:
+                    accepted, cell_idx = self.pool.add(program, eval_result)
+                    island_opened = False
+                    # Adaptive Island Expansion — when standard admission
+                    # fails under high stagnation, open a brand-new cell at
+                    # the candidate's own behaviour vector instead of
+                    # discarding the work or evicting the incumbent.
+                    if not accepted:
+                        s_for_island = (
+                            self.state.stagnation_depth(sal.tau)
+                            if sal.enabled
+                            else 0.0
+                        )
+                        island_opened, new_cell = self._try_island_expansion(
+                            program, eval_result, stagnation=s_for_island
+                        )
+                        if island_opened:
+                            accepted = True
+                            cell_idx = new_cell
+
+                stats["paradigm_accepted"] = accepted
+                stats["paradigm_cell"] = cell_idx
+                if island_opened:
+                    stats["paradigm_island_expanded"] = True
+                if pe_target is not None and self.pe_component_selector is not None:
+                    self.pe_component_selector.update(pe_target, accepted=accepted)
+                stats["evaluations"].append(
+                    {
+                        "source": "paradigm_shift",
+                        "model": client_name(ref_model),
+                        "score": score,
+                        "accepted": accepted,
+                        "island_expanded": island_opened,
+                        "cell_index": cell_idx,
+                        "archive_size": self.pool.size(),
+                    }
+                )
+
+                logger.info(
+                    f"[PE] Paradigm shift: score={score:.17g}, accepted={accepted}, "
+                    f"cell={cell_idx}{', new island' if island_opened else ''}"
+                )
+            else:
+                error_message = str(result.get("error", "unknown"))
+                logger.info(f"[PE] Paradigm shift eval error: {error_message[:100]}")
+                stats["evaluations"].append(
+                    {
+                        "source": "paradigm_shift",
+                        "model": client_name(ref_model),
+                        "error": error_message,
+                        "archive_size": self.pool.size(),
+                    }
+                )
+                paradigm_code = None  # Can't generate variants
 
         # Step 5: Generate variants (only if paradigm was valid)
         if paradigm_code and stats["paradigm_score"] is not None:
@@ -683,12 +893,13 @@ class PunctuatedEquilibrium:
 
             async def generate_variant(model, idx: int):
                 try:
-                    response = await self.state.acompletion(
-                        model,
+                    response = await _acompletion_with_token_retry(
+                        self.state,
+                        model=model,
                         prompt=[{"role": "user", "content": variant_prompt}],
                         temperature=self.pe_config.temperature,
-                        # max_tokens=4096,
                         timeout=300,
+                        label=f"PE/variant#{idx}",
                     )
                     return {
                         "idx": idx,

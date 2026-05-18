@@ -10,6 +10,7 @@ from ..artifacts import ArtifactAdapter
 from ..clients.base import client_name, short_client_name
 from ..config import LeviConfig
 from ..core import EvaluationResult
+from ..equilibrium.equilibrium import _acompletion_with_token_retry
 from ..pool import CVTMAPElitesPool
 from ..selection import ComponentSelector
 from ..utils import ResilientProcessPool, coerce_score
@@ -587,12 +588,14 @@ async def _generate_meta_advice(config: LeviConfig, state: PipelineState) -> Non
         if "deepseek" in client_name(config.meta_advice.model).lower():
             extras["reasoning"] = {"enabled": True}
 
-        response = await state.acompletion(
-            config.meta_advice.model,
+        response = await _acompletion_with_token_retry(
+            state,
+            model=config.meta_advice.model,
             prompt=[{"role": "user", "content": prompt}],
             temperature=config.meta_advice.temperature,
-            max_tokens=config.meta_advice.max_tokens,
+            initial_max_tokens=config.meta_advice.max_tokens,
             timeout=60,
+            label="Meta-Advice",
             **extras,
         )
         advice = response.text.strip()

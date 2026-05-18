@@ -8,6 +8,7 @@ import random
 from ..artifacts import ArtifactAdapter, apply_diff as _apply_diff
 from ..clients.base import client_name
 from ..config import LeviConfig
+from ..equilibrium.equilibrium import _acompletion_with_token_retry
 from ..pool import CVTMAPElitesPool
 from ..prompts import ProgramWithScore
 from ..selection import ComponentSelector
@@ -116,12 +117,14 @@ async def llm_producer(
                 )
                 try:
                     repair_temp = cfg.temperature if cfg.temperature is not None else config.pipeline.temperature
-                    response = await state.acompletion(
-                        repair_model,
+                    response = await _acompletion_with_token_retry(
+                        state,
+                        model=repair_model,
                         prompt=[{"role": "user", "content": repair_prompt}],
                         temperature=repair_temp,
-                        max_tokens=cfg.max_tokens,
+                        initial_max_tokens=cfg.max_tokens,
                         timeout=300,
+                        label=f"Repair-{worker_id}",
                     )
                     repair_content = response.text
                 except BudgetLimitReached:
@@ -292,12 +295,14 @@ async def llm_producer(
             )
 
             try:
-                response = await state.acompletion(
-                    model,
+                response = await _acompletion_with_token_retry(
+                    state,
+                    model=model,
                     prompt=[{"role": "user", "content": prompt}],
                     temperature=call_temperature,
-                    max_tokens=config.pipeline.max_tokens,
+                    initial_max_tokens=config.pipeline.max_tokens,
                     timeout=300,
+                    label=f"LLM-{worker_id}",
                 )
                 content = response.text
             except BudgetLimitReached:
