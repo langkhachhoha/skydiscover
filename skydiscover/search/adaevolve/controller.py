@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 from skydiscover.context_builder.adaevolve import AdaEvolveContextBuilder
 from skydiscover.context_builder.default import DefaultContextBuilder
 from skydiscover.evaluation.llm_judge import LLMJudge
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.llm.llm_pool import LLMPool
 from skydiscover.search.adaevolve.paradigm import ParadigmGenerator
 from skydiscover.search.base_database import Program
@@ -372,7 +373,9 @@ class AdaEvolveController(DiscoveryController):
 
         if paradigms:
             self.database.set_paradigms(paradigms)
-            logger.info(f"Generated {len(paradigms)} breakthrough paradigms")
+            logger.info(
+                f"Generated {len(paradigms)} breakthrough paradigms{format_cost_suffix()}"
+            )
         else:
             logger.warning("Failed to generate paradigms")
 
@@ -432,6 +435,7 @@ class AdaEvolveController(DiscoveryController):
             f"completed in {result.iteration_time:.2f}s"
             f" (llm: {result.llm_generation_time:.2f}s,"
             f" eval: {result.eval_time:.2f}s)"
+            f"{format_cost_suffix()}"
         )
 
         # Log metrics
@@ -440,17 +444,25 @@ class AdaEvolveController(DiscoveryController):
                 f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
                 for k, v in child.metrics.items()
             )
-            logger.info(f"Metrics: {metrics_str}")
+            logger.info(f"Metrics: {metrics_str}{format_cost_suffix()}")
 
         # Check for new best
         if self.database.is_multiobjective_enabled():
             pareto_front_ids = {program.id for program in self.database.get_pareto_front()}
             if child.id in pareto_front_ids:
-                logger.info(f"Program entered the global Pareto front at iteration {iteration}")
+                logger.info(
+                    f"Program entered the global Pareto front at iteration {iteration}"
+                    f"{format_cost_suffix()}"
+                )
             if self.database.best_program_id == child.id:
-                logger.info(f"New representative Pareto solution found at iteration {iteration}")
+                logger.info(
+                    f"New representative Pareto solution found at iteration {iteration}"
+                    f"{format_cost_suffix()}"
+                )
         elif self.database.best_program_id == child.id:
-            logger.info(f"New best solution found at iteration {iteration}")
+            logger.info(
+                f"New best solution found at iteration {iteration}{format_cost_suffix()}"
+            )
 
         # Checkpoint callback
         if iteration > 0 and iteration % self.config.checkpoint_interval == 0:

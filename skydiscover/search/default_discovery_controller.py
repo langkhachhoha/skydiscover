@@ -21,6 +21,7 @@ from skydiscover.context_builder.evox import EvoxContextBuilder
 from skydiscover.evaluation import create_evaluator
 from skydiscover.evaluation.llm_judge import LLMJudge
 from skydiscover.llm.base import LLMResponse
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.llm.llm_pool import LLMPool
 from skydiscover.search.base_database import Program, ProgramDatabase
 from skydiscover.search.utils.discovery_utils import SerializableResult, build_image_content
@@ -957,6 +958,7 @@ class DiscoveryController:
                 f"completed in {result.iteration_time:.2f}s"
                 f" (llm: {result.llm_generation_time:.2f}s,"
                 f" eval: {result.eval_time:.2f}s)"
+                f"{format_cost_suffix()}"
             )
 
         if iteration > 0 and iteration % self.config.checkpoint_interval == 0:
@@ -973,7 +975,7 @@ class DiscoveryController:
                     f"{k}={v:.4f}" if isinstance(v, (int, float)) else f"{k}={v}"
                     for k, v in child_program.metrics.items()
                 )
-                logger.info(f"Metrics: {metrics_str}")
+                logger.info(f"Metrics: {metrics_str}{format_cost_suffix()}")
 
             if not hasattr(self, "_warned_about_combined_score"):
                 self._warned_about_combined_score = False
@@ -992,4 +994,6 @@ class DiscoveryController:
                 self._warned_about_combined_score = True
 
         if self.database.best_program_id == child_program.id and verbose:
-            logger.info(f"🌟 New best solution found at iteration {iteration}")
+            logger.info(
+                f"🌟 New best solution found at iteration {iteration}{format_cost_suffix()}"
+            )

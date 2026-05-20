@@ -29,6 +29,7 @@ import uuid
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from skydiscover.config import DatabaseConfig
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.search.base_database import Program, ProgramDatabase
 
 logger = logging.getLogger(__name__)
@@ -663,11 +664,12 @@ class OpenEvolveNativeDatabase(ProgramDatabase):
             self.best_program_id = program.id
             if "combined_score" in program.metrics and "combined_score" in current_best.metrics:
                 logger.info(
-                    "New best program %s replaces %s (%.4f -> %.4f)",
+                    "New best program %s replaces %s (%.4f -> %.4f)%s",
                     program.id,
                     old_id,
                     current_best.metrics["combined_score"],
                     program.metrics["combined_score"],
+                    format_cost_suffix(),
                 )
 
     def _update_island_best_program(self, program: Program, island_idx: int) -> None:

@@ -153,3 +153,16 @@ def get_totals_snapshot() -> Dict[str, Any]:
             "total_prompt_tokens": _TOTAL_PROMPT_TOKENS,
             "total_completion_tokens": _TOTAL_COMPLETION_TOKENS,
         }
+
+
+def format_cost_suffix() -> str:
+    """Return a `[cost=$X.XXXX, calls=N]` suffix when tracking is on, else ``""``.
+
+    Designed to be appended to iteration log lines so each iteration line
+    carries the cumulative LLM spend at that point — making score-vs-cost
+    curves derivable from log scrape alone.
+    """
+    if cost_log_path() is None:
+        return ""
+    with _LOCK:
+        return f" [cost=${_TOTAL_COST:.4f}, llm_calls={_TOTAL_CALLS}]"

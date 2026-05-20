@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.search.default_discovery_controller import (
     DiscoveryController,
     DiscoveryControllerInput,
@@ -154,6 +155,7 @@ class CoEvolutionController(DiscoveryController):
                 if iteration < self.total_solution_iterations and self._should_evolve_search():
                     logger.info(
                         f"Stagnation detected -> evolving search strategy (solution_iter={completed_solution_iter})"
+                        f"{format_cost_suffix()}"
                     )
                     await self._evolve_search(completed_solution_iter)
 
@@ -427,6 +429,7 @@ class CoEvolutionController(DiscoveryController):
                 self.evaluator.llm_judge.database = new_db
             logger.info(
                 f"Switched to search algorithm {search_program_id} ({migrated_count} programs migrated)"
+                f"{format_cost_suffix()}"
             )
 
             self._active_search_algorithm_code = search_code
@@ -570,6 +573,7 @@ class CoEvolutionController(DiscoveryController):
         if is_new_best:
             logger.info(
                 f"New best search score: {score:.6f} (+{score - self._best_search_score:.6f})"
+                f"{format_cost_suffix()}"
             )
         if is_new_best or self._best_search_score is None:
             self._best_search_score = score

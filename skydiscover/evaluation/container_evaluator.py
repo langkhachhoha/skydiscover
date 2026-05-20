@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 from skydiscover.config import EvaluatorConfig
 from skydiscover.evaluation.evaluation_result import EvaluationResult
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.utils.async_utils import TaskPool
 from skydiscover.utils.metrics import format_metrics
 
@@ -158,7 +159,7 @@ class ContainerizedEvaluator:
                 elapsed = time.time() - start_time
                 logger.info(
                     f"Evaluated program{label} [{mode}] in {elapsed:.2f}s:"
-                    f" {format_metrics(result.metrics)}"
+                    f" {format_metrics(result.metrics)}{format_cost_suffix()}"
                 )
                 return result
 

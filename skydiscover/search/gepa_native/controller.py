@@ -24,6 +24,7 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from skydiscover.context_builder.gepa_native import GEPANativeContextBuilder
+from skydiscover.llm.cost_tracker import format_cost_suffix
 from skydiscover.search.base_database import Program
 from skydiscover.search.default_discovery_controller import (
     DiscoveryController,
@@ -124,7 +125,9 @@ class GEPANativeController(DiscoveryController):
                 result = await self._run_iteration(iteration, retry_times=retry_times)
 
                 if result.error:
-                    logger.warning(f"Iteration {iteration} failed: {result.error}")
+                    logger.warning(
+                        f"Iteration {iteration} failed: {result.error}{format_cost_suffix()}"
+                    )
                     self._iterations_without_improvement += 1
 
                     if self._should_merge():
@@ -261,6 +264,7 @@ class GEPANativeController(DiscoveryController):
             logger.info(
                 f"Iteration {iteration}: REJECTED child "
                 f"(child_score={child_score:.4f} <= parent_score={parent_score:.4f})"
+                f"{format_cost_suffix()}"
             )
             self._iterations_without_improvement += 1
             return False
@@ -317,6 +321,7 @@ class GEPANativeController(DiscoveryController):
             f"(stagnation={self._iterations_without_improvement}, "
             f"attempt={self._merge_attempts_used}/{self.max_merge_attempts}, "
             f"scores: {score_a:.4f}, {score_b:.4f})"
+            f"{format_cost_suffix()}"
         )
 
         merge_prompt = self._build_merge_prompt(prog_a, prog_b)
@@ -358,6 +363,7 @@ class GEPANativeController(DiscoveryController):
             f"Iteration {iteration}: Merge completed"
             f" (llm: {llm_generation_time:.2f}s,"
             f" eval: {eval_time:.2f}s)"
+            f"{format_cost_suffix()}"
         )
 
         # GEPA acceptance criterion for merges: must meet or exceed both parents
@@ -392,6 +398,7 @@ class GEPANativeController(DiscoveryController):
             logger.info(
                 f"Merge ACCEPTED: score={merged_score:.4f} "
                 f"(>= max({score_a:.4f}, {score_b:.4f}))"
+                f"{format_cost_suffix()}"
             )
 
             if merged_score > self._best_score_seen:
@@ -410,7 +417,9 @@ class GEPANativeController(DiscoveryController):
                     )  # Never crash discovery due to monitor
         else:
             logger.info(
-                f"Merge REJECTED: score={merged_score:.4f} " f"< max({score_a:.4f}, {score_b:.4f})"
+                f"Merge REJECTED: score={merged_score:.4f} "
+                f"< max({score_a:.4f}, {score_b:.4f})"
+                f"{format_cost_suffix()}"
             )
             # Stagnation counter NOT reset on rejected merge
 
