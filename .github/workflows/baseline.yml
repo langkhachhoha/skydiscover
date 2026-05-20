@@ -1,0 +1,174 @@
+name: Circle Packing Baselines
+
+# Run a single baseline (openevolve_native | gepa_native | adaevolve | evox)
+# on the circle_packing benchmark with a hard 3-hour wall-clock cap.
+#
+# Cost tracking: skydiscover's OpenAI wrapper records each LLM call's
+# OpenRouter usage.cost into cost_log.jsonl, with a running cost_log.totals.json.
+# This is per-call accurate and unaffected by other traffic on a shared key.
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "Which baseline to run"
+        required: true
+        type: choice
+        default: "evox"
+        options:
+          - openevolve_native
+          - gepa_native
+          - adaevolve
+          - evox
+      iterations:
+        description: "Max iterations (large number; the 3h cap usually hits first)"
+        required: false
+        default: "100000"
+      model:
+        description: "OpenRouter model id routed through SkyDiscover"
+        required: false
+        default: "openrouter/openai/gpt-5"
+      runtime_minutes:
+        description: "Hard wall-clock cap in minutes (default 180 = 3h)"
+        required: false
+        default: "180"
+
+concurrency:
+  group: baseline-${{ github.ref }}-${{ inputs.baseline }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    # GitHub-hosted runners cap at 6h; 3h leaves slack for setup + upload.
+    timeout-minutes: 210
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_BASE: https://openrouter.ai/api/v1
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      PYTHONUNBUFFERED: "1"
+      OUTPUT_DIR: outputs/github-actions/baseline_${{ inputs.baseline }}_${{ github.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Validate OpenRouter secret
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::Missing GitHub secret OPENROUTER_API_KEY"
+            exit 1
+          fi
+
+      - name: Probe OpenRouter (key + remaining credit)
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, urllib.request
+          key = os.environ["OPENROUTER_API_KEY"]
+          req = urllib.request.Request(
+              "https://openrouter.ai/api/v1/credits",
+              headers={"Authorization": f"Bearer {key}"},
+          )
+          data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+          d = data.get("data", data)
+          remaining = float(d["total_credits"]) - float(d["total_usage"])
+          print(f"OpenRouter credits remaining: ${remaining:.4f}")
+          if remaining <= 0:
+              print("::error::OpenRouter key has no remaining credit")
+              sys.exit(1)
+          PY
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv run python scripts/install_benchmark_requirements.py \
+            benchmarks/math/circle_packing
+
+      - name: Prepare output dir
+        run: mkdir -p "${{ env.OUTPUT_DIR }}"
+
+      - name: Run ${{ inputs.baseline }} on circle_packing (capped at ${{ inputs.runtime_minutes }} min)
+        id: run_baseline
+        continue-on-error: true
+        env:
+          # Per-call OpenRouter usage.cost is appended here by skydiscover.llm.cost_tracker.
+          # A running aggregate is rewritten at cost_log.totals.json on every call.
+          SKYDISCOVER_COST_LOG: ${{ env.OUTPUT_DIR }}/cost_log.jsonl
+        run: |
+          # Hard wall-clock cap. `timeout` returns 124 on cap-hit, which we
+          # treat as success (the run completed its budget). Anything else is
+          # a real failure.
+          set +e
+          timeout --signal=TERM --kill-after=60s "${{ inputs.runtime_minutes }}m" \
+            uv run skydiscover-run benchmarks/math/circle_packing/initial_program.py \
+              benchmarks/math/circle_packing/evaluator.py \
+              --config benchmarks/math/circle_packing/config.yaml \
+              --search "${{ inputs.baseline }}" \
+              --model "${{ inputs.model }}" \
+              --iterations "${{ inputs.iterations }}" \
+              --output "${{ env.OUTPUT_DIR }}/run"
+          rc=$?
+          set -e
+          echo "baseline_exit=$rc" >> "$GITHUB_OUTPUT"
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::notice::Hit ${{ inputs.runtime_minutes }}-minute wall-clock cap (exit=$rc) — treating as completed budget"
+          elif [ "$rc" -ne 0 ]; then
+            echo "::warning::Baseline exited with code $rc"
+          fi
+
+      - name: Cost summary
+        if: always()
+        run: |
+          LOG="${{ env.OUTPUT_DIR }}/cost_log.jsonl"
+          TOTALS="${{ env.OUTPUT_DIR }}/cost_log.totals.json"
+          echo "## Baseline: ${{ inputs.baseline }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$TOTALS" ]; then
+            echo "### Cost totals" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat "$TOTALS" >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo ""
+            echo "Cost totals:"
+            cat "$TOTALS"
+          else
+            echo "_No cost log produced (no LLM calls reached the tracker)._" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "$LOG" ]; then
+            CALLS=$(wc -l < "$LOG" | tr -d ' ')
+            echo ""
+            echo "Recorded $CALLS LLM call(s). First 3 and last 3:"
+            head -n 3 "$LOG"
+            echo "..."
+            tail -n 3 "$LOG"
+          fi
+
+      - name: Fail job if baseline crashed (non-timeout)
+        if: always()
+        run: |
+          rc="${{ steps.run_baseline.outputs.baseline_exit }}"
+          if [ -z "$rc" ]; then
+            echo "::error::No exit code recorded from baseline step"
+            exit 1
+          fi
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            exit 0
+          fi
+          echo "::error::Baseline ${{ inputs.baseline }} crashed with exit code $rc"
+          exit "$rc"
+
+      - name: Upload run outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-${{ inputs.baseline }}-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}
+          if-no-files-found: warn

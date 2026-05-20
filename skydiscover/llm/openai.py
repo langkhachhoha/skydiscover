@@ -13,6 +13,7 @@ import openai
 
 from skydiscover.config import LLMModelConfig
 from skydiscover.llm.base import LLMInterface, LLMResponse
+from skydiscover.llm.cost_tracker import inject_openrouter_usage, record_call
 from skydiscover.llm.responses_utils import (
     convert_messages_to_responses_input,
     extract_responses_output,
@@ -232,9 +233,17 @@ class OpenAILLM(LLMInterface):
 
     async def _call_api(self, params: Dict[str, Any]) -> str:
         loop = asyncio.get_running_loop()
+        inject_openrouter_usage(params, self.api_base)
         try:
             response = await loop.run_in_executor(
                 None, lambda: self.client.chat.completions.create(**params)
+            )
+            record_call(
+                response,
+                model=self.model,
+                api_base=self.api_base,
+                api_kind="chat.completions",
+                call_site="OpenAILLM._call_api",
             )
             return response.choices[0].message.content
         except (openai.BadRequestError, openai.APIStatusError) as exc:
@@ -269,8 +278,16 @@ class OpenAILLM(LLMInterface):
             resp_params["reasoning"] = {"effort": params["reasoning_effort"]}
 
         loop = asyncio.get_running_loop()
+        inject_openrouter_usage(resp_params, self.api_base)
         response = await loop.run_in_executor(
             None, lambda: self.client.responses.create(**resp_params)
+        )
+        record_call(
+            response,
+            model=self.model,
+            api_base=self.api_base,
+            api_kind="responses",
+            call_site="OpenAILLM._call_api_via_responses",
         )
         text, _ = self._extract_responses_output(response)
         return text or ""
@@ -327,7 +344,15 @@ class OpenAILLM(LLMInterface):
 
         for attempt in range(retries + 1):
             try:
+                inject_openrouter_usage(params, self.api_base)
                 response = await asyncio.wait_for(self._call_responses_api(params), timeout=timeout)
+                record_call(
+                    response,
+                    model=self.model,
+                    api_base=self.api_base,
+                    api_kind="responses",
+                    call_site="OpenAILLM._generate_with_image",
+                )
                 text, image_b64, _ = extract_responses_output(response)
 
                 image_path = None

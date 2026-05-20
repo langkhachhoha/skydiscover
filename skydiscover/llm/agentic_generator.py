@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from skydiscover.llm.cost_tracker import inject_openrouter_usage, record_call
 from skydiscover.llm.openai import is_openai_reasoning_model
 from skydiscover.llm.responses_utils import (
     convert_messages_to_responses_input,
@@ -204,6 +205,7 @@ class AgenticGenerator:
                 params["max_tokens"] = model.max_tokens
 
         loop = asyncio.get_running_loop()
+        inject_openrouter_usage(params, getattr(model, "api_base", None))
         try:
             resp = await loop.run_in_executor(
                 None, lambda: model.client.chat.completions.create(**params)
@@ -215,6 +217,13 @@ class AgenticGenerator:
             model._use_responses_api = True
             return await self._call_llm_responses(model, system_message, conversation)
 
+        record_call(
+            resp,
+            model=model.model,
+            api_base=getattr(model, "api_base", None),
+            api_kind="chat.completions",
+            call_site="AgenticGenerator._call_llm_chat",
+        )
         msg = resp.choices[0].message
         out: Dict[str, Any] = {"role": "assistant", "content": msg.content or ""}
         if msg.tool_calls:
@@ -258,8 +267,16 @@ class AgenticGenerator:
                 resp_params["max_output_tokens"] = model.max_tokens
 
         loop = asyncio.get_running_loop()
+        inject_openrouter_usage(resp_params, getattr(model, "api_base", None))
         resp = await loop.run_in_executor(
             None, lambda: model.client.responses.create(**resp_params)
+        )
+        record_call(
+            resp,
+            model=model.model,
+            api_base=getattr(model, "api_base", None),
+            api_kind="responses",
+            call_site="AgenticGenerator._call_llm_responses",
         )
 
         text, _, tool_calls = extract_responses_output(resp)
