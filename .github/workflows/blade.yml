@@ -1,0 +1,205 @@
+name: BLADE
+
+# Run BLADE — Behavior-Latent Adaptive Discovery Engine — on a self-contained
+# LEVI example directory under ./levi/examples/<name>/ (problem.py exports
+# PROBLEM_DESCRIPTION, FUNCTION_SIGNATURE, score_fn, optionally SEED_PROGRAM
+# and INPUTS).
+#
+# BLADE shares LEVI's frontier 3-phase paradigm prompts, async producer/
+# consumer parallelism, error-archive self-repair, and meta-advisor wiring.
+# It replaces three subsystems:
+#
+#   * Behavioral archive  : CVT-MAP-Elites → description-embedding top-K pool
+#   * Stagnation signal   : PPS formula     → 3 sliding-window stats
+#   * Sampler             : 4-D Thompson    → UCB-style selection (novelty +
+#                                              recency − diversity penalty)
+#
+# This workflow invokes ``scripts/run_blade.py``. Only the knobs that
+# change run-to-run are first-class inputs; everything else (problem
+# module name, eval-processes / timeout, pe-interval, embedding model,
+# pool/family thresholds, repair toggle) is funnelled through a single
+# JSON ``advanced_options`` input — same pattern as legacy blade.yml /
+# `_levi.yml`. Keeps the dispatch UI usable and stays well under the
+# GitHub Actions ≤21-input limit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      example_dir:
+        description: "Path to the LEVI example dir (e.g. levi/examples/blade_demo)"
+        required: true
+        type: string
+      evaluations:
+        description: "Max evaluations (blank to disable)"
+        required: false
+        type: string
+        default: "100"
+      dollars:
+        description: "Max USD spend (blank to disable)"
+        required: false
+        type: string
+        default: ""
+      seconds:
+        description: "Wall-clock cap in seconds (blank to disable)"
+        required: false
+        type: string
+        default: ""
+      mutation_model:
+        description: "OpenRouter id of the small / mutation model"
+        required: false
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        description: "OpenRouter id of the larger frontier (paradigm-shift) model"
+        required: false
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        description: "Concurrent LLM workers"
+        required: false
+        type: string
+        default: "4"
+      advanced_options:
+        description: >-
+          Advanced BLADE knobs as a JSON object. Recognised keys:
+          problem_module, target_score, embedding_model, eval_processes,
+          eval_timeout, pe_interval, pool_k, niche_threshold,
+          family_threshold, max_per_family, repair_disabled. Example:
+          '{"pe_interval":25,"family_threshold":0.70,"repair_disabled":false}'
+        required: false
+        type: string
+        default: ""
+
+  workflow_call:
+    inputs:
+      example_dir:
+        required: true
+        type: string
+      evaluations:
+        required: false
+        type: string
+        default: "100"
+      dollars:
+        required: false
+        type: string
+        default: ""
+      seconds:
+        required: false
+        type: string
+        default: ""
+      mutation_model:
+        required: false
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        required: false
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        required: false
+        type: string
+        default: "4"
+      advanced_options:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  blade:
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_BASE: https://openrouter.ai/api/v1
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      PYTHONUNBUFFERED: "1"
+      OUTPUT_DIR: outputs/github-actions/blade_${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify in-tree LEVI + BLADE modules
+        run: |
+          test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml"; exit 1; }
+          test -d levi/levi/blade   || { echo "::error::Expected ./levi/levi/blade/ (BLADE orchestrator)"; exit 1; }
+          test -d levi/levi/simple  || { echo "::error::Expected ./levi/levi/simple/ (BLADE core modules)"; exit 1; }
+          test -f scripts/run_blade.py || { echo "::error::Expected ./scripts/run_blade.py"; exit 1; }
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Validate OpenRouter secret
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::Missing GitHub secret OPENROUTER_API_KEY"
+            exit 1
+          fi
+
+      - name: Install LEVI (vendored in-repo)
+        working-directory: levi
+        run: uv sync
+
+      - name: Parse advanced options
+        if: inputs.advanced_options != ''
+        run: |
+          echo "${{ inputs.advanced_options }}" | python3 -c "
+          import json, sys
+          try:
+              opts = json.loads(sys.stdin.read())
+              for k, v in opts.items():
+                  env_name = f'ADV_{k.upper()}'
+                  print(f'{env_name}={v}')
+          except Exception as e:
+              print(f'Error parsing advanced options: {e}', file=sys.stderr)
+              sys.exit(1)
+          " >> $GITHUB_ENV
+
+      - name: Run BLADE on ${{ inputs.example_dir }}
+        working-directory: levi
+        run: |
+          # ----- defaults that match scripts/run_blade.py CLI defaults -----
+          PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
+          EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
+          EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
+          EVAL_TIMEOUT="${ADV_EVAL_TIMEOUT:-600}"
+          PE_INTERVAL="${ADV_PE_INTERVAL:-50}"
+
+          # ----- optional scalar overrides from advanced_options -----
+          EXTRA_OPTS=""
+          [ -n "$ADV_TARGET_SCORE" ]    && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
+          [ -n "$ADV_POOL_K" ]          && EXTRA_OPTS="$EXTRA_OPTS --pool-k $ADV_POOL_K"
+          [ -n "$ADV_NICHE_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --niche-threshold $ADV_NICHE_THRESHOLD"
+          [ -n "$ADV_FAMILY_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --family-threshold $ADV_FAMILY_THRESHOLD"
+          [ -n "$ADV_MAX_PER_FAMILY" ]  && EXTRA_OPTS="$EXTRA_OPTS --max-per-family $ADV_MAX_PER_FAMILY"
+          [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
+
+          uv run python ../scripts/run_blade.py \
+            --example-dir "../${{ inputs.example_dir }}" \
+            --problem-module "$PROBLEM_MODULE" \
+            --mutation-model "${{ inputs.mutation_model }}" \
+            --paradigm-model "${{ inputs.paradigm_model }}" \
+            --embedding-model "$EMBEDDING_MODEL" \
+            --evals "${{ inputs.evaluations }}" \
+            --dollars "${{ inputs.dollars }}" \
+            --seconds "${{ inputs.seconds }}" \
+            --workers "${{ inputs.workers }}" \
+            --eval-processes "$EVAL_PROCESSES" \
+            --eval-timeout "$EVAL_TIMEOUT" \
+            --pe-interval "$PE_INTERVAL" \
+            --output-dir "../${{ env.OUTPUT_DIR }}" \
+            $EXTRA_OPTS
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blade-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14

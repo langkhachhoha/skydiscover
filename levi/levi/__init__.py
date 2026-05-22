@@ -64,6 +64,7 @@ from .prompts import (
 
 # Methods
 from .methods import evolve_code, evolve_prompts
+from .methods.blade import BladeConfig, BladeResult, evolve_code_blade
 
 # Protocols and pools
 from .pool import CVTMAPElitesPool, ProgramPool, SampleResult
@@ -131,4 +132,8 @@ __all__ = [
     # Methods
     "evolve_code",
     "evolve_prompts",
+    # BLADE
+    "evolve_code_blade",
+    "BladeConfig",
+    "BladeResult",
 ]
