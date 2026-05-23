@@ -486,12 +486,14 @@ jobs:
 ```
 
 **First-class inputs (10 total — well under GitHub's 21-input limit).**
-All values are strings; blanks fall back to the default.
+All values are strings; for budget fields (`evaluations`, `dollars`,
+`seconds`) blank means "no cap", and for everything else blank falls
+back to the listed default.
 
 | Input             | Default                                            | Notes                                                                  |
 | ----------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
 | `benchmark`       | `circle_packing` (dispatch only)                   | Dropdown over `levi/examples/<name>/`. Workflow builds the full path.  |
-| `evaluations`     | `100`                                              | Max evaluations. Blank disables the cap.                               |
+| `evaluations`     | `""` (unset)                                       | Max evaluations. Blank = no cap.                                       |
 | `dollars`         | `""` (unset)                                       | Max USD spend. Blank disables.                                         |
 | `seconds`         | `""` (unset)                                       | Wall-clock cap in seconds. Blank disables.                             |
 | `mutation_model`  | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small / high-frequency mutation model.                                 |

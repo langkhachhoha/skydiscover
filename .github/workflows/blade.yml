@@ -40,10 +40,10 @@ on:
           - pupa
           - quickstart
       evaluations:
-        description: "Max evaluations (blank to disable)"
+        description: "Max evaluations (blank = no cap)"
         required: false
         type: string
-        default: "100"
+        default: ""
       dollars:
         description: "Max USD spend (blank to disable)"
         required: false
@@ -99,7 +99,7 @@ on:
       evaluations:
         required: false
         type: string
-        default: "100"
+        default: ""
       dollars:
         required: false
         type: string

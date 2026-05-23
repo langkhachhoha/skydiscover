@@ -87,7 +87,7 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # Budget
-    p.add_argument("--evals", default="100", help="Max evaluations (default: 100; '' to disable).")
+    p.add_argument("--evals", default="", help="Max evaluations (default: unset / no cap).")
     p.add_argument("--dollars", default="", help="Max USD spend (default: unset).")
     p.add_argument("--seconds", default="", help="Wall-clock cap in seconds (default: unset).")
     p.add_argument("--target-score", default="", help="Stop early at this score (default: unset).")
