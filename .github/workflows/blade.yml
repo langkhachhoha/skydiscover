@@ -25,10 +25,20 @@ name: BLADE
 on:
   workflow_dispatch:
     inputs:
-      example_dir:
-        description: "Path to the LEVI example dir (e.g. levi/examples/blade_demo)"
+      benchmark:
+        description: "Benchmark name under levi/examples/<name>/"
         required: true
-        type: string
+        type: choice
+        default: "circle_packing"
+        options:
+          - ADRS
+          - blade_demo
+          - circle_packing
+          - hotpotqa
+          - hover
+          - ifbench
+          - pupa
+          - quickstart
       evaluations:
         description: "Max evaluations (blank to disable)"
         required: false
@@ -59,20 +69,31 @@ on:
         required: false
         type: string
         default: "4"
+      pe_interval:
+        description: "Paradigm-shift cadence (every N evaluations)"
+        required: false
+        type: string
+        default: "50"
+      eval_timeout:
+        description: "Per-candidate evaluation timeout in seconds"
+        required: false
+        type: string
+        default: "600"
       advanced_options:
         description: >-
           Advanced BLADE knobs as a JSON object. Recognised keys:
           problem_module, target_score, embedding_model, eval_processes,
-          eval_timeout, pe_interval, pool_k, niche_threshold,
-          family_threshold, max_per_family, repair_disabled. Example:
-          '{"pe_interval":25,"family_threshold":0.70,"repair_disabled":false}'
+          pool_k, niche_threshold, family_threshold, max_per_family,
+          repair_disabled. Example:
+          '{"target_score":0.95,"family_threshold":0.70,"repair_disabled":false}'
         required: false
         type: string
         default: ""
 
   workflow_call:
     inputs:
-      example_dir:
+      benchmark:
+        description: "Benchmark name under levi/examples/<name>/"
         required: true
         type: string
       evaluations:
@@ -99,6 +120,14 @@ on:
         required: false
         type: string
         default: "4"
+      pe_interval:
+        required: false
+        type: string
+        default: "50"
+      eval_timeout:
+        required: false
+        type: string
+        default: "600"
       advanced_options:
         required: false
         type: string
@@ -160,15 +189,13 @@ jobs:
               sys.exit(1)
           " >> $GITHUB_ENV
 
-      - name: Run BLADE on ${{ inputs.example_dir }}
+      - name: Run BLADE on ${{ inputs.benchmark }}
         working-directory: levi
         run: |
           # ----- defaults that match scripts/run_blade.py CLI defaults -----
           PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
           EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
           EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
-          EVAL_TIMEOUT="${ADV_EVAL_TIMEOUT:-600}"
-          PE_INTERVAL="${ADV_PE_INTERVAL:-50}"
 
           # ----- optional scalar overrides from advanced_options -----
           EXTRA_OPTS=""
@@ -179,8 +206,8 @@ jobs:
           [ -n "$ADV_MAX_PER_FAMILY" ]  && EXTRA_OPTS="$EXTRA_OPTS --max-per-family $ADV_MAX_PER_FAMILY"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
 
-          uv run python ../scripts/run_blade.py \
-            --example-dir "../${{ inputs.example_dir }}" \
+          uv run --active python ../scripts/run_blade.py \
+            --example-dir "levi/examples/${{ inputs.benchmark }}" \
             --problem-module "$PROBLEM_MODULE" \
             --mutation-model "${{ inputs.mutation_model }}" \
             --paradigm-model "${{ inputs.paradigm_model }}" \
@@ -190,16 +217,16 @@ jobs:
             --seconds "${{ inputs.seconds }}" \
             --workers "${{ inputs.workers }}" \
             --eval-processes "$EVAL_PROCESSES" \
-            --eval-timeout "$EVAL_TIMEOUT" \
-            --pe-interval "$PE_INTERVAL" \
-            --output-dir "../${{ env.OUTPUT_DIR }}" \
+            --eval-timeout "${{ inputs.eval_timeout }}" \
+            --pe-interval "${{ inputs.pe_interval }}" \
+            --output-dir "${{ env.OUTPUT_DIR }}" \
             $EXTRA_OPTS
 
       - name: Upload run artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blade-${{ github.run_id }}
+          name: blade-${{ inputs.benchmark }}-${{ github.run_id }}
           path: ${{ env.OUTPUT_DIR }}
           if-no-files-found: warn
           retention-days: 14

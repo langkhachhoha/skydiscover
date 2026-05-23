@@ -207,9 +207,12 @@ def main() -> int:
     eval_timeout = float(args.eval_timeout)
     pe_interval = _opt_int(args.pe_interval) or 50
 
-    # Output dir.
+    # Output dir. Resolve relative paths against REPO_ROOT so callers can
+    # invoke the script from any working directory (e.g. CI runs it from
+    # ``levi/`` but the workflow artifact step expects the repo-root path).
     if args.output_dir:
-        output_dir = Path(args.output_dir)
+        out_arg = Path(args.output_dir)
+        output_dir = out_arg if out_arg.is_absolute() else (REPO_ROOT / out_arg).resolve()
     else:
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         output_dir = REPO_ROOT / "outputs" / "blade" / example_dir.name / ts

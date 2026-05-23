@@ -474,22 +474,50 @@ jobs:
   bench:
     uses: ./.github/workflows/blade.yml
     with:
-      example_dir: levi/examples/blade_demo
+      benchmark: circle_packing
       evaluations: "100"
       mutation_model: openrouter/qwen/qwen3-30b-a3b-instruct-2507
       paradigm_model: openrouter/openai/gpt-5
+      pe_interval: "50"
+      eval_timeout: "600"
       # Everything else is a JSON blob, matching `_levi.yml`'s pattern:
-      advanced_options: '{"pe_interval":25,"family_threshold":0.70}'
+      advanced_options: '{"target_score":0.95,"family_threshold":0.70}'
     secrets: inherit
 ```
 
-The workflow exposes 8 top-level inputs (well under GitHub's 21-input
-limit). The remaining knobs — problem module name, target score,
-embedding model, eval-process count, eval timeout, pe interval, pool K,
-niche/family thresholds, max-per-family, repair toggle — live inside
-the `advanced_options` JSON. Each run uploads its
-`outputs/github-actions/blade_<run_id>` directory as the artifact
-`blade-<run_id>` for 14 days.
+**First-class inputs (10 total — well under GitHub's 21-input limit).**
+All values are strings; blanks fall back to the default.
+
+| Input             | Default                                            | Notes                                                                  |
+| ----------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `benchmark`       | `circle_packing` (dispatch only)                   | Dropdown over `levi/examples/<name>/`. Workflow builds the full path.  |
+| `evaluations`     | `100`                                              | Max evaluations. Blank disables the cap.                               |
+| `dollars`         | `""` (unset)                                       | Max USD spend. Blank disables.                                         |
+| `seconds`         | `""` (unset)                                       | Wall-clock cap in seconds. Blank disables.                             |
+| `mutation_model`  | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small / high-frequency mutation model.                                 |
+| `paradigm_model`  | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                |
+| `workers`         | `4`                                                | Concurrent LLM workers.                                                |
+| `pe_interval`     | `50`                                               | Paradigm-shift cadence (every N evaluations).                          |
+| `eval_timeout`    | `600`                                              | Per-candidate evaluation timeout in seconds.                           |
+| `advanced_options`| `""`                                               | JSON object for the rarely-used knobs (see next table).                |
+
+**`advanced_options` JSON keys.** All are optional; omit any you don't
+want to override.
+
+| Key                  | Default                                          | Effect                                                       |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `problem_module`     | `problem`                                        | Python module name imported from the benchmark dir.          |
+| `target_score`       | unset                                            | Stop early once a candidate reaches this score.              |
+| `embedding_model`    | `openrouter/openai/text-embedding-3-small`       | Description-embedding model used by the pool.                |
+| `eval_processes`     | `4`                                              | Concurrent evaluator subprocesses.                           |
+| `pool_k`             | `100`                                            | Maximum programs retained in the pool.                       |
+| `niche_threshold`    | `0.92`                                           | Cosine threshold for near-duplicate dedup.                   |
+| `family_threshold`   | `0.72`                                           | Single-linkage cosine threshold for family clustering.       |
+| `max_per_family`     | `8`                                              | Max programs co-existing per family.                         |
+| `repair_disabled`    | `false`                                          | Set `true` to skip the one-shot self-repair branch.          |
+
+Each run uploads its `outputs/github-actions/blade_<run_id>` directory
+as the artifact `blade-<benchmark>-<run_id>` for 14 days.
 
 ---
 
@@ -518,17 +546,68 @@ changes.
 ## 9. Tuning knobs
 
 Sensible defaults are baked in; you should rarely need to override
-them. Listed roughly in order of impact:
+them. The full default set, grouped by config dataclass, is below.
+Source of truth: [`levi/levi/blade/orchestrator.py`](../levi/levi/blade/orchestrator.py)
+(`BladeConfig`), [`levi/levi/simple/pool.py`](../levi/levi/simple/pool.py)
+(`PoolConfig`), [`levi/levi/simple/monitor.py`](../levi/levi/simple/monitor.py)
+(`MonitorConfig`), [`levi/levi/simple/selector.py`](../levi/levi/simple/selector.py)
+(`SelectorConfig`).
 
-| Knob                             | Default | What it does                                                                                                  |
-| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `pe_cron_interval`               | 50      | Frontier paradigm shift fires every N evals. Smaller = more frontier cost; larger = less diversity injection. |
-| `n_workers`                      | 4       | Mutation workers in parallel. Caps simultaneous LLM calls.                                                    |
-| `pool.K`                         | 100     | Maximum programs retained.                                                                                    |
-| `pool.family_cosine_threshold`   | 0.72    | Single-linkage threshold for "same family". Lower = more permissive merging; higher = more families.          |
-| `pool.max_per_family`            | 8       | How many programs from one family may co-exist.                                                               |
-| `selector.recency_tau`           | 30      | Half-life-ish of the recency boost.                                                                           |
-| `monitor.plateau_max`            | 100     | Denominator of `stagnation_level()` — flips routing to the "late" frontier prompt when reached.               |
+### 9.1 `BladeConfig` — orchestrator-level
+
+| Knob                       | Default                                            | What it does                                                                                         |
+| -------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `mutation_model`           | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small model for the high-frequency mutation / crossover / repair calls.                              |
+| `paradigm_model`           | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                                              |
+| `embedding_model`          | `openrouter/openai/text-embedding-3-small`         | Description-embedding model used by the pool.                                                        |
+| `budget_evals`             | `None`                                             | Stop after N evaluations. `None` = no cap.                                                           |
+| `budget_dollars`           | `None`                                             | Stop after $N spent. `None` = no cap.                                                                |
+| `budget_seconds`           | `None`                                             | Stop after N wall-clock seconds. `None` = no cap.                                                    |
+| `target_score`             | `None`                                             | Stop early once any candidate reaches this score.                                                    |
+| `n_workers`                | `4`                                                | Concurrent LLM workers (mutation pipeline).                                                          |
+| `n_eval_processes`         | `4`                                                | Concurrent evaluator subprocesses.                                                                   |
+| `eval_timeout`             | `120.0`                                            | Per-candidate evaluation timeout, seconds. Workflow defaults override to `600`.                      |
+| `llm_temperature`          | `0.8`                                              | Mutation temperature when the monitor is healthy.                                                    |
+| `llm_temperature_stuck`    | `1.1`                                              | Mutation temperature when `is_stuck()` fires.                                                        |
+| `llm_max_tokens`           | `1200`                                             | Token cap for mutation / crossover / repair calls.                                                   |
+| `paradigm_max_tokens`      | `None`                                             | **Leave at None.** Capping the GPT-5 paradigm call empties its content (reasoning burns the budget). |
+| `pe_cron_interval`         | `50`                                               | Frontier paradigm shift fires every N completed evaluations.                                         |
+| `paradigm_min_pool_size`   | `5`                                                | Skip paradigm shift if the pool has fewer programs (not enough representatives).                     |
+| `p_crossover_healthy`      | `0.30`                                             | Probability of a crossover (vs single-parent mutation) when healthy.                                 |
+| `p_crossover_stuck`        | `0.70`                                             | Probability of a crossover when `is_stuck()` fires.                                                  |
+| `enable_repair`            | `True`                                             | Toggle the one-shot self-repair branch on errored candidates.                                        |
+| `output_dir`               | `"runs/blade"`                                     | Where `snapshot.json` / `best.py` / `summary.json` are written.                                      |
+
+### 9.2 `PoolConfig` — top-K + family caps
+
+| Knob                       | Default | What it does                                                                                            |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `K`                        | `100`   | Maximum programs retained.                                                                              |
+| `niche_cosine_threshold`   | `0.92`  | Cosine threshold for near-duplicate dedup (admission filter).                                           |
+| `family_cosine_threshold`  | `0.72`  | Single-linkage cosine threshold for family clustering. Lower = more permissive; higher = more families. |
+| `max_per_family`           | `8`     | Maximum programs co-existing per family before weakest-in-family eviction.                              |
+
+### 9.3 `MonitorConfig` — stagnation sliding windows
+
+| Knob                          | Default | What it does                                                                            |
+| ----------------------------- | ------- | --------------------------------------------------------------------------------------- |
+| `plateau_max`                 | `100`   | Denominator of `stagnation_level()` — routes to the "late" paradigm prompt when hit.    |
+| `accept_window_size`          | `50`    | Window over which the accept-rate is averaged.                                          |
+| `diversity_window_size`       | `20`    | Window for the pairwise-cosine diversity statistic.                                     |
+| `stuck_plateau_threshold`     | `80`    | `is_stuck()` triggers when `plateau_steps` exceeds this.                                |
+| `stuck_accept_threshold`      | `0.08`  | `is_stuck()` triggers when the accept-rate drops below this.                            |
+| `collapse_diversity_threshold`| `0.78`  | `is_collapsing()` triggers when mean diversity exceeds this (programs too similar).     |
+
+### 9.4 `SelectorConfig` — UCB-style priority weights
+
+| Knob                              | Default       | What it does                                                                        |
+| --------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
+| `alpha_healthy` / `alpha_stuck`   | `0.5` / `0.8` | Novelty (UCB) weight in `priority(p; S)`. Higher when stuck.                        |
+| `beta_healthy` / `beta_stuck`     | `0.3` / `0.5` | Recency-boost weight.                                                               |
+| `gamma_healthy` / `gamma_stuck`   | `0.4` / `0.7` | Diversity-penalty weight (max cosine vs already-picked).                            |
+| `recency_tau`                     | `30.0`        | Half-life-ish of the recency boost (in eval steps).                                 |
+| `n_inspirations`                  | `3`           | How many inspiration programs are shown to the mutation model.                      |
+| `crossover_min_family_separation` | `0.65`        | Minimum cosine distance between the two parents of a crossover (cross-family bias). |
 
 All are exposed via `BladeConfig` (Python entry) or the
 `advanced_options` JSON (workflow entry). Most production papers will
