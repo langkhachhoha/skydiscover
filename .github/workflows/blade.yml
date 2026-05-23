@@ -53,15 +53,15 @@ on:
         description: "Wall-clock cap in seconds (blank to disable)"
         required: false
         type: string
-        default: ""
+        default: "10800"
       mutation_model:
         description: "OpenRouter id of the small / mutation model"
-        required: false
+        required: true
         type: string
         default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
       paradigm_model:
         description: "OpenRouter id of the larger frontier (paradigm-shift) model"
-        required: false
+        required: true
         type: string
         default: "openrouter/openai/gpt-5"
       workers:
@@ -73,7 +73,7 @@ on:
         description: "Paradigm-shift cadence (every N evaluations)"
         required: false
         type: string
-        default: "50"
+        default: "10"
       eval_timeout:
         description: "Per-candidate evaluation timeout in seconds"
         required: false
@@ -83,7 +83,7 @@ on:
         description: "Phase-0 diverse seeds from the frontier model (sequential)"
         required: false
         type: string
-        default: "5"
+        default: "4"
       n_variants_per_seed:
         description: "Phase-0 mutation-model variants per seed (parallel)"
         required: false
@@ -118,13 +118,13 @@ on:
       seconds:
         required: false
         type: string
-        default: ""
+        default: "10800"
       mutation_model:
-        required: false
+        required: true
         type: string
         default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
       paradigm_model:
-        required: false
+        required: true
         type: string
         default: "openrouter/openai/gpt-5"
       workers:
@@ -134,7 +134,7 @@ on:
       pe_interval:
         required: false
         type: string
-        default: "50"
+        default: "10"
       eval_timeout:
         required: false
         type: string
@@ -142,7 +142,7 @@ on:
       n_diverse_seeds:
         required: false
         type: string
-        default: "5"
+        default: "4"
       n_variants_per_seed:
         required: false
         type: string

@@ -1,0 +1,406 @@
+warning: `VIRTUAL_ENV=/home/runner/work/skydiscover/skydiscover/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[levi] example       = /home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing
+[levi] small model   = openrouter/qwen/qwen3-30b-a3b-instruct-2507
+[levi] large model   = openrouter/openai/gpt-5
+[levi] budget evals  = None
+[levi] budget $      = 3.0
+[levi] budget secs   = 10800.0
+[levi] target_score  = None
+[levi] output_dir    = /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409
+[levi] SAL/PPS = on
+[levi] Punctuated Equilibrium = on
+[levi] Strategy log = on
+[levi] Code repair  = on
+[levi] Adaptive Island = on
+[levi] prompt_bank     = enabled
+[levi]   prompts_file        = /home/runner/work/skydiscover/skydiscover/levi/examples/mutation_prompts.json
+[levi]   temperatures_file   = /home/runner/work/skydiscover/skydiscover/levi/examples/mutation_temperatures.json
+15:01:48 [INFO] [Levi] Starting evolutionary optimization
+15:01:48 [INFO] [Levi] Budget: dollars=3.0 evaluations=None seconds=10800.0 target_score=None
+15:01:48 [INFO] [Levi] Sampler-model pairs: 15
+15:01:48 [INFO] [Levi] Running init phase
+15:01:48 [INFO] [Init Phase 1] Generating 5 diverse seeds with openrouter/openai/gpt-5
+15:04:13 [INFO]   [Seed 1] OK - score: 1.4084507042225347
+15:13:26 [INFO]   [Seed 2] OK - score: 2.041448474021561
+15:16:14 [INFO]   [Seed 3] OK - score: 2.6001901944668613
+15:19:04 [INFO]   [Seed 4] OK - score: 1.8769892850292216
+15:20:55 [INFO]   [Seed 5] OK - score: 1.4590569599547376
+15:20:55 [INFO] [Init Phase 1] Generated 5 seeds
+15:20:55 [INFO] [Init Phase 2] Generating 100 variants with ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']
+15:39:10 [INFO] [Init Phase 2] Evaluating 100 candidates
+16:54:46 [INFO] [Init Phase 2] Finished evaluating 100 candidates
+16:54:47 [INFO] [Init Phase 2] Valid programs: 89
+16:54:47 [INFO] [Init Phase 2] Sample failures (5 unique errors shown):
+16:54:47 [INFO]   - Boundary violation on x
+16:54:47 [INFO]     Content: import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+ ...
+16:54:47 [INFO]   - Overlap between circles 12 and 25
+16:54:47 [INFO]     Content: import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+ ...
+16:54:47 [INFO]   - run_packing() must return (centers, radii, sum_radii)
+16:54:47 [INFO]     Content: import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+ ...
+16:54:47 [INFO]   - index 25 is out of bounds for axis 0 with size 25
+16:54:47 [INFO]     Content: import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+ ...
+16:54:47 [INFO]   - name 'eps_shrink' is not defined
+16:54:47 [INFO]     Content: import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+ ...
+16:54:47 [INFO] [Init Phase 3] Built 50 centroids
+16:54:47 [INFO] [Init Phase 3] Done: 50 cells filled, archive size: 50, best: 2.6007581023722715, cost: $0.709
+16:54:47 [INFO] [Levi] Init phase complete, cost: $0.709
+16:54:47 [INFO] [Levi] Starting evolution pipeline
+16:54:47 [INFO] [Pipeline] Starting with 4 generation workers, 4 eval workers
+16:54:47 [INFO] [Pipeline] Punctuated equilibrium enabled (interval=10)
+16:55:17 [INFO] [Status] Cost: $0.711 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 | Best: 2.6007581023722715
+16:55:47 [INFO] [Status] Cost: $0.715 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 50 | Best: 2.6007581023722715
+16:56:17 [INFO] [Status] Cost: $0.717 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:56:47 [INFO] [Status] Cost: $0.723 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:57:17 [INFO] [Status] Cost: $0.727 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:57:47 [INFO] [Status] Cost: $0.732 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:58:17 [INFO] [Status] Cost: $0.740 | Evals: 105 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:58:47 [INFO] [Status] Cost: $0.742 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:59:11 [INFO] [Eval #106] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.742
+16:59:17 [INFO] [Status] Cost: $0.742 | Evals: 106 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+16:59:47 [INFO] [Status] Cost: $0.742 | Evals: 106 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:00:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:00:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:01:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:01:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:02:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:02:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:03:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:03:17 [INFO] [Eval #107] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.744
+17:03:47 [INFO] [Status] Cost: $0.744 | Evals: 107 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:04:17 [INFO] [Status] Cost: $0.744 | Evals: 107 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:04:47 [INFO] [Status] Cost: $0.746 | Evals: 107 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:05:04 [INFO] [Eval #108] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0396049037907473 | best: 2.6007581023722715 | $0.746
+17:05:17 [INFO] [Status] Cost: $0.746 | Evals: 108 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:05:18 [INFO] [Eval #109] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0389290300725542 | best: 2.6007581023722715 | $0.746
+17:05:22 [INFO] [Eval #110] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
+17:05:23 [INFO] [PE] Triggering punctuated equilibrium #1 at eval 110
+17:05:23 [INFO] [PE] Clustered 50 elites into 3 clusters
+17:05:23 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
+17:05:23 [INFO] [PE] Cluster 2 rep: score=2.6001901944668613
+17:05:23 [INFO] [PE] Cluster 1 rep: score=2.0958337189091334
+17:05:47 [INFO] [Status] Cost: $0.750 | Evals: 110 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:05:54 [INFO] [Eval #111] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.039007421593158 | best: 2.6007581023722715 | $0.750
+<string>:266: RuntimeWarning: divide by zero encountered in log
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:277: RuntimeWarning: divide by zero encountered in divide
+17:06:17 [INFO] [Status] Cost: $0.750 | Evals: 111 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:06:45 [INFO] [Eval #112] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5648660635756659 | best: 2.6007581023722715 | $0.830
+17:06:47 [INFO] [Status] Cost: $0.830 | Evals: 112 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:06:51 [INFO] [Eval #113] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.832
+17:07:17 [INFO] [Status] Cost: $0.832 | Evals: 113 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:07:47 [INFO] [Status] Cost: $0.835 | Evals: 113 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:08:17 [INFO] [Status] Cost: $0.837 | Evals: 113 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
+17:08:18 [INFO] [PE] Paradigm shift: score=2.6007581026297464, accepted=True, cell=14
+17:08:18 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
+17:08:23 [INFO] [Eval #114] qwen3-30b-a3b-instruct-2507    ERROR: Overlap between 0 and 25
+17:08:47 [INFO] [Status] Cost: $0.837 | Evals: 114 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:09:11 [INFO] [Eval #115] qwen3-30b-a3b-instruct-2507    accepted     | score: 1.5499999999984488 | best: 2.6007581023722715 | $0.838
+17:09:17 [INFO] [Status] Cost: $0.838 | Evals: 115 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:09:47 [INFO] [Status] Cost: $0.843 | Evals: 115 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:09:52 [INFO] [Eval #116] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.843
+17:10:17 [INFO] [Status] Cost: $0.843 | Evals: 116 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:10:47 [INFO] [Status] Cost: $0.846 | Evals: 116 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:10:49 [INFO] [Eval #117] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.846
+17:10:54 [INFO] [Eval #118] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
+17:11:17 [INFO] [Status] Cost: $0.848 | Evals: 118 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:11:47 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:12:17 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:12:47 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:12:54 [INFO] [Eval #119] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.851
+17:12:58 [INFO] [Eval #120] qwen3-30b-a3b-instruct-2507    ERROR: index 5 is out of bounds for axis 0 with size 5
+17:13:11 [INFO] [Eval #121] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0385265376767108 | best: 2.6007581023722715 | $0.851
+17:13:16 [INFO] [Eval #122] qwen3-30b-a3b-instruct-2507    ERROR: Cannot take a larger sample than population when r
+17:13:17 [INFO] [Status] Cost: $0.851 | Evals: 122 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
+17:13:20 [INFO] [PE] Adaptive Island expansion: opened cell 50 (score=2.592277044503631, s=0.84, expansions_used=1/16, n_centroids=51)
+17:13:20 [INFO] [PE] Variant 0: score=2.5922770445036312, accepted=True, new island
+17:13:47 [INFO] [Status] Cost: $0.851 | Evals: 122 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:14:17 [INFO] [Status] Cost: $0.852 | Evals: 122 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:14:47 [INFO] [Status] Cost: $0.859 | Evals: 122 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:14:48 [INFO] [Eval #123] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.859
+17:15:00 [INFO] [Eval #124] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.859
+17:15:05 [INFO] [Eval #125] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
+17:15:09 [INFO] [Eval #126] qwen3-30b-a3b-instruct-2507    ERROR: Overlap between circles 0 and 5
+17:15:17 [INFO] [Status] Cost: $0.859 | Evals: 126 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:15:47 [INFO] [Status] Cost: $0.860 | Evals: 126 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:16:17 [INFO] [Status] Cost: $0.866 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:16:47 [INFO] [Status] Cost: $0.866 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:17:00 [INFO] [Eval #127] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.866
+17:17:17 [INFO] [Status] Cost: $0.866 | Evals: 127 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:17:44 [INFO] [Eval #128] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007580192629862 | best: 2.6007581023722715 | $0.866
+17:17:47 [INFO] [Status] Cost: $0.866 | Evals: 128 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:18:17 [INFO] [Status] Cost: $0.868 | Evals: 128 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
+17:18:32 [INFO] [PE] Adaptive Island expansion: opened cell 51 (score=2.5238818867943733, s=0.84, expansions_used=2/16, n_centroids=52)
+17:18:32 [INFO] [PE] Variant 1: score=2.5238818867943733, accepted=True, new island
+17:18:47 [INFO] [Status] Cost: $0.868 | Evals: 128 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+<string>:286: RuntimeWarning: invalid value encountered in log
+17:19:17 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:19:47 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:20:17 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:20:47 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:20:55 [INFO] [Eval #129] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.870
+17:21:03 [INFO] [Eval #130] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.1699999999988302 | best: 2.6007581023722715 | $0.870
+17:21:08 [INFO] [Eval #131] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.9997999999999998 | best: 2.6007581023722715 | $0.870
+17:21:17 [INFO] [Status] Cost: $0.870 | Evals: 131 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:21:24 [INFO] [Eval #132] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.8769892850292216 | best: 2.6007581023722715 | $0.870
+17:21:47 [INFO] [Status] Cost: $0.870 | Evals: 132 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
+17:21:53 [INFO] [Eval #133] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4593679908596116 | best: 2.6007581023722715 | $0.872
+17:22:13 [INFO] [PE] Adaptive Island expansion: opened cell 52 (score=2.558483950547613, s=0.85, expansions_used=3/16, n_centroids=53)
+17:22:13 [INFO] [PE] Variant 2: score=2.5584839505476129, accepted=True, new island
+17:22:15 [INFO] [PE] Complete: paradigm_accepted=True, variants=3/3, cost=$0.084
+17:22:15 [INFO] [Eval #134] PE/gpt-5                       NEW BEST ★   | score: 2.6007581026297464 | best: 2.6007581026297464 | $0.874
+17:22:15 [INFO] [Eval #135] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5922770445036312 | best: 2.6007581026297464 | $0.874
+17:22:15 [INFO] [Eval #136] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5238818867943733 | best: 2.6007581026297464 | $0.874
+17:22:15 [INFO] [Eval #137] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5584839505476129 | best: 2.6007581026297464 | $0.874
+17:22:17 [INFO] [Status] Cost: $0.874 | Evals: 137 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+<string>:265: RuntimeWarning: divide by zero encountered in log
+<string>:273: RuntimeWarning: divide by zero encountered in divide
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:276: RuntimeWarning: divide by zero encountered in divide
+17:22:47 [INFO] [Status] Cost: $0.876 | Evals: 137 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:23:10 [INFO] [Eval #138] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.9838238902621206 | best: 2.6007581026297464 | $0.882
+<string>:266: RuntimeWarning: divide by zero encountered in log
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:277: RuntimeWarning: divide by zero encountered in divide
+17:23:17 [INFO] [Status] Cost: $0.882 | Evals: 138 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:23:47 [INFO] [Status] Cost: $0.882 | Evals: 138 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:24:17 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:24:47 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:25:17 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:25:17 [INFO] [Eval #139] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $0.883
+17:25:43 [INFO] [Eval #140] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.392156862742314 | best: 2.6007581026297464 | $0.883
+17:25:45 [INFO] [PE] Triggering punctuated equilibrium #2 at eval 140
+17:25:45 [INFO] [PE] Clustered 53 elites into 3 clusters
+17:25:45 [INFO] [PE] Cluster 2 rep: score=2.6007581023722715
+17:25:45 [INFO] [PE] Cluster 0 rep: score=2.6007581026297464
+17:25:45 [INFO] [PE] Cluster 1 rep: score=2.0958337189091334
+17:25:47 [INFO] [Status] Cost: $0.883 | Evals: 140 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:26:15 [INFO] [Eval #141] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $0.886
+17:26:17 [INFO] [Status] Cost: $0.886 | Evals: 141 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+<string>:266: RuntimeWarning: divide by zero encountered in log
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:277: RuntimeWarning: divide by zero encountered in divide
+17:26:47 [INFO] [Status] Cost: $0.886 | Evals: 141 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:27:17 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:27:47 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:28:17 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:28:26 [INFO] [Eval #142] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.8911194387895975 | best: 2.6007581026297464 | $0.888
+17:28:47 [INFO] [Status] Cost: $1.046 | Evals: 142 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:29:17 [INFO] [Status] Cost: $1.046 | Evals: 142 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:29:20 [INFO] [Eval #143] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $1.046
+17:29:26 [INFO] [PE] Paradigm shift: score=1.3918897271912924, accepted=False, cell=5
+17:29:26 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
+17:29:47 [INFO] [Status] Cost: $1.048 | Evals: 143 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:29:49 [INFO] [Eval #144] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581026297464 | $1.048
+<string>:266: RuntimeWarning: divide by zero encountered in log
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:277: RuntimeWarning: divide by zero encountered in divide
+17:29:55 [INFO] [Eval #145] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5571795701980591 | best: 2.6007581026297464 | $1.048
+17:30:17 [INFO] [Status] Cost: $1.053 | Evals: 145 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:30:47 [INFO] [Status] Cost: $1.055 | Evals: 145 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:31:00 [INFO] [Eval #146] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026297464 | best: 2.6007581026297464 | $1.056
+17:31:17 [INFO] [Status] Cost: $1.058 | Evals: 146 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:31:47 [INFO] [Status] Cost: $1.059 | Evals: 146 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:31:47 [INFO] [Eval #147] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0383454140975035 | best: 2.6007581026297464 | $1.059
+17:31:50 [INFO] [Eval #148] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5929827359041404 | best: 2.6007581026297464 | $1.061
+<string>:267: RuntimeWarning: divide by zero encountered in log
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:276: RuntimeWarning: divide by zero encountered in divide
+<string>:278: RuntimeWarning: divide by zero encountered in divide
+17:31:57 [INFO] [PE] Variant 0: score=1.4016685063213612, accepted=False
+<string>:266: RuntimeWarning: divide by zero encountered in log
+<string>:274: RuntimeWarning: divide by zero encountered in divide
+<string>:275: RuntimeWarning: divide by zero encountered in divide
+<string>:277: RuntimeWarning: divide by zero encountered in divide
+17:32:17 [INFO] [Status] Cost: $1.061 | Evals: 148 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:32:47 [INFO] [Status] Cost: $1.061 | Evals: 148 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:33:03 [INFO] [Eval #149] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $1.062
+17:33:11 [INFO] [PE] Variant 1: score=1.3971486890175391, accepted=False
+17:33:17 [INFO] [Status] Cost: $1.064 | Evals: 149 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:33:47 [INFO] [Status] Cost: $1.064 | Evals: 149 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:34:17 [INFO] [Status] Cost: $1.066 | Evals: 149 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:34:47 [INFO] [Status] Cost: $1.066 | Evals: 149 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
+17:34:52 [INFO] [Eval #150] qwen3-30b-a3b-instruct-2507    NEW BEST ★   | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.066
+17:34:58 [INFO] [Eval #151] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999874485 | best: 2.6027338770617208 | $1.066
+17:34:59 [INFO] [PE] Variant 2: score=1.3881728706460885, accepted=False
+17:35:00 [INFO] [Meta-Advice] Generated new advice ($0.0002)
+17:35:01 [INFO] [PE] Complete: paradigm_accepted=False, variants=0/3, cost=$0.166
+17:35:01 [INFO] [Eval #152] PE/gpt-5                       rejected     | score: 1.3918897271912924 | best: 2.6027338770617208 | $1.067
+17:35:01 [INFO] [Eval #153] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.4016685063213612 | best: 2.6027338770617208 | $1.067
+17:35:01 [INFO] [Eval #154] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.3971486890175391 | best: 2.6027338770617208 | $1.067
+17:35:01 [INFO] [Eval #155] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.3881728706460885 | best: 2.6027338770617208 | $1.067
+17:35:03 [INFO] [Eval #156] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
+17:35:17 [INFO] [Status] Cost: $1.067 | Evals: 156 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:35:19 [INFO] [Eval #157] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6027338770617208 | $1.067
+17:35:47 [INFO] [Status] Cost: $1.068 | Evals: 157 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:36:17 [INFO] [Status] Cost: $1.071 | Evals: 157 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:36:24 [INFO] [Eval #158] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5804701782710269 | best: 2.6027338770617208 | $1.071
+17:36:40 [INFO] [Eval #159] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581023722715 | best: 2.6027338770617208 | $1.071
+17:36:47 [INFO] [Status] Cost: $1.074 | Evals: 159 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:37:17 [INFO] [Status] Cost: $1.075 | Evals: 159 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:37:47 [INFO] [Status] Cost: $1.078 | Evals: 159 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:38:03 [INFO] [Eval #160] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5799026508179961 | best: 2.6027338770617208 | $1.078
+17:38:03 [INFO] [PE] Triggering punctuated equilibrium #3 at eval 160
+17:38:03 [INFO] [PE] Clustered 53 elites into 3 clusters
+17:38:03 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
+17:38:03 [INFO] [PE] Cluster 2 rep: score=2.6007581026297464
+17:38:03 [INFO] [PE] Cluster 1 rep: score=2.6027338770617208
+17:38:17 [INFO] [Status] Cost: $1.078 | Evals: 160 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:38:45 [INFO] [Eval #161] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001898200068423 | best: 2.6027338770617208 | $1.078
+17:38:47 [INFO] [Status] Cost: $1.078 | Evals: 161 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:39:17 [INFO] [Status] Cost: $1.167 | Evals: 161 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:39:36 [INFO] [Eval #162] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.170
+17:39:47 [INFO] [Status] Cost: $1.172 | Evals: 162 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:40:17 [INFO] [Status] Cost: $1.172 | Evals: 162 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:40:42 [INFO] [Eval #163] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.174
+17:40:46 [INFO] [Eval #164] qwen3-30b-a3b-instruct-2507    ERROR: The truth value of an array with more than one ele
+17:40:47 [INFO] [Status] Cost: $1.174 | Evals: 164 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:40:54 [INFO] [Eval #165] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0383722214368074 | best: 2.6027338770617208 | $1.174
+17:41:10 [INFO] [PE] Paradigm shift: score=2.1281330650488215, accepted=True, cell=9
+17:41:10 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
+17:41:17 [INFO] [Status] Cost: $1.176 | Evals: 165 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:41:47 [INFO] [Status] Cost: $1.178 | Evals: 165 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:42:13 [INFO] [Eval #166] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.180
+17:42:17 [INFO] [Status] Cost: $1.180 | Evals: 166 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:42:17 [INFO] [Eval #167] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:42:37 [INFO] [Eval #168] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.182
+17:42:47 [INFO] [Status] Cost: $1.182 | Evals: 168 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:43:13 [INFO] [PE] Variant 0: score=1.8746623111628189, accepted=False
+17:43:17 [INFO] [Status] Cost: $1.183 | Evals: 168 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:43:17 [INFO] [Eval #169] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:43:47 [INFO] [Status] Cost: $1.183 | Evals: 169 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:43:52 [INFO] [Eval #170] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026323479 | best: 2.6027338770617208 | $1.186
+17:44:17 [INFO] [Status] Cost: $1.186 | Evals: 170 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:44:47 [INFO] [Status] Cost: $1.190 | Evals: 170 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:44:53 [INFO] [Eval #171] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.0385909893685321 | best: 2.6027338770617208 | $1.190
+17:44:58 [INFO] [Eval #172] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4905307446328702 | best: 2.6027338770617208 | $1.190
+17:44:58 [INFO] [Eval #173] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:45:02 [INFO] [Eval #174] qwen3-30b-a3b-instruct-2507    ERROR: Syntax error: cannot assign to expression (<string
+17:45:17 [INFO] [Status] Cost: $1.193 | Evals: 174 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:45:29 [INFO] [PE] Variant 1: score=2.1451111245857848, accepted=True
+17:45:47 [INFO] [Status] Cost: $1.195 | Evals: 174 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:46:12 [INFO] [Eval #175] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4808269481758534 | best: 2.6027338770617208 | $1.195
+17:46:17 [INFO] [Status] Cost: $1.200 | Evals: 175 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:46:47 [INFO] [Status] Cost: $1.203 | Evals: 175 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:46:54 [INFO] [Eval #176] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.203
+17:46:58 [INFO] [Eval #177] qwen3-30b-a3b-instruct-2507    ERROR: The truth value of an array with more than one ele
+17:47:17 [INFO] [Status] Cost: $1.203 | Evals: 177 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:47:47 [INFO] [Status] Cost: $1.205 | Evals: 177 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:48:17 [INFO] [Status] Cost: $1.208 | Evals: 177 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:48:43 [INFO] [Eval #178] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5828806162700935 | best: 2.6027338770617208 | $1.208
+17:48:47 [INFO] [Status] Cost: $1.208 | Evals: 178 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:49:17 [INFO] [Status] Cost: $1.208 | Evals: 178 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:49:47 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:50:17 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:50:47 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:50:49 [INFO] [Eval #179] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0958337189091334 | best: 2.6027338770617208 | $1.210
+17:51:00 [INFO] [Eval #180] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5867311886911359 | best: 2.6027338770617208 | $1.210
+17:51:17 [INFO] [Status] Cost: $1.210 | Evals: 180 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:51:47 [INFO] [Status] Cost: $1.210 | Evals: 180 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:52:17 [INFO] [Status] Cost: $1.212 | Evals: 180 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:52:18 [INFO] [Eval #181] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5713125709258051 | best: 2.6027338770617208 | $1.212
+17:52:23 [INFO] [Eval #182] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:52:47 [INFO] [Status] Cost: $1.213 | Evals: 182 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:53:17 [INFO] [Status] Cost: $1.213 | Evals: 182 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:53:23 [INFO] [Eval #183] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.217
+17:53:47 [INFO] [Status] Cost: $1.217 | Evals: 183 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:54:00 [INFO] [Eval #184] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.217
+17:54:05 [INFO] [Eval #185] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:54:17 [INFO] [Status] Cost: $1.217 | Evals: 185 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+Warning: [WARNING] [PE] Variant 2 eval error: 'NoneType' object has no attribute 'astype'
+17:54:34 [INFO] [PE] Complete: paradigm_accepted=True, variants=1/3, cost=$0.093
+17:54:34 [INFO] [Eval #186] PE/gpt-5                       accepted     | score: 2.1281330650488215 | best: 2.6027338770617208 | $1.218
+17:54:34 [INFO] [Eval #187] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.8746623111628189 | best: 2.6027338770617208 | $1.218
+17:54:34 [INFO] [Eval #188] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.1451111245857848 | best: 2.6027338770617208 | $1.218
+17:54:34 [INFO] [Eval #189] PE/qwen3-30b-a3b-instruct-2507 ERROR (variant): 'NoneType' object has no attribute 'astype'
+17:54:47 [INFO] [Status] Cost: $1.218 | Evals: 189 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:54:58 [INFO] [Eval #190] qwen3-30b-a3b-instruct-2507    ERROR: Timeout
+17:55:00 [INFO] [PE] Triggering punctuated equilibrium #4 at eval 190
+17:55:00 [INFO] [PE] Clustered 53 elites into 3 clusters
+17:55:00 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
+17:55:00 [INFO] [PE] Cluster 2 rep: score=2.6007581026323479
+17:55:00 [INFO] [PE] Cluster 1 rep: score=2.6027338770617208
+17:55:05 [INFO] [Eval #191] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.220
+17:55:17 [INFO] [Status] Cost: $1.220 | Evals: 191 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:55:27 [INFO] [Eval #192] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:55:27 [INFO] [Eval #193] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4908015728636741 | best: 2.6027338770617208 | $1.220
+17:55:47 [INFO] [Status] Cost: $1.220 | Evals: 193 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:56:17 [INFO] [Status] Cost: $1.220 | Evals: 193 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:56:17 [INFO] [Eval #194] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4859646077169257 | best: 2.6027338770617208 | $1.220
+17:56:35 [INFO] [Eval #195] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.222
+17:56:47 [INFO] [Status] Cost: $1.222 | Evals: 195 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:56:58 [INFO] [Eval #196] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.222
+17:57:03 [INFO] [Eval #197] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+17:57:17 [INFO] [Status] Cost: $1.336 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:57:41 [INFO] [PE] Paradigm shift: score=2.4867189086265391, accepted=False, cell=10
+17:57:41 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
+17:57:47 [INFO] [Status] Cost: $1.336 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:58:17 [INFO] [Status] Cost: $1.339 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:58:46 [INFO] [Eval #198] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5994578926891876 | best: 2.6027338770617208 | $1.341
+17:58:47 [INFO] [Status] Cost: $1.341 | Evals: 198 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:59:05 [INFO] [Eval #199] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.341
+17:59:17 [INFO] [Status] Cost: $1.341 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+17:59:47 [INFO] [Status] Cost: $1.341 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+18:00:17 [INFO] [Status] Cost: $1.343 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+18:00:23 [INFO] [Eval #200] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.343
+18:00:27 [INFO] [Eval #201] qwen3-30b-a3b-instruct-2507    ERROR: Syntax error: cannot assign to expression (<string
+18:00:47 [INFO] [Status] Cost: $1.343 | Evals: 201 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
+18:00:49 [INFO] [Eval #202] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5584357406874751 | best: 2.6027338770617208 | $1.343
+18:00:53 [INFO] [Eval #203] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
+18:00:57 [INFO] [Eval #204] qwen3-30b-a3b-instruct-2507    ERROR: list index out of range
+18:01:17 [INFO] [Status] Cost: $1.348 | Evals: 204 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 53 | Best: 2.6027338770617208
+18:01:44 [INFO] [PE] Variant 0: score=2.485409276118248, accepted=False
+18:01:45 [INFO] [Eval #205] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
+18:01:47 [INFO] [Status] Cost: $1.348 | Evals: 205 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 53 | Best: 2.6027338770617208
+18:01:48 [INFO] [Snapshot] Saved final snapshot to /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409/snapshot.json
+18:01:48 [INFO] [Levi] Complete - best score: 2.6027338770617208, evals: 205, cost: $1.350
+18:01:48 [INFO] [Levi] Snapshot: /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409/snapshot.json
+18:01:48 [INFO] [Levi] Best code:
+import numpy as np
+import time
+
+def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
+    '''
+    Construct a packing of 26 circles in the unit square.
+
+    Algorithm: Hybrid approach combining geometric construction with barrier optimization.
+    - Start with a geometric initial configuration using circle triple tangency
+    - Refine using interior-point barrier optimization with Adam
+    - Use selective feasibility repair to ensure robustness
+
+    Returns:
+        centers: numpy array of ...
+
+Best score        : 2.602734
+Evaluations used  : 205
+Total cost        : $1.3503
+Archive size      : 53
+Runtime           : 10800.1s

@@ -1,0 +1,49 @@
+{
+  "example_dir": "/home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing",
+  "best_score": 2.6027338770617208,
+  "total_evaluations": 205,
+  "total_cost": 1.3503087399999998,
+  "archive_size": 53,
+  "runtime_seconds": 10800.139734745026,
+  "budget": {
+    "evaluations": null,
+    "dollars": 3.0,
+    "seconds": 10800.0,
+    "target_score": null
+  },
+  "small_model": "openrouter/qwen/qwen3-30b-a3b-instruct-2507",
+  "large_model": "openrouter/openai/gpt-5",
+  "n_centroids": null,
+  "behavior_score_keys": null,
+  "init": {
+    "n_diverse_seeds": 4,
+    "n_variants_per_seed": 20
+  },
+  "sal": {
+    "enabled": true,
+    "tau": null
+  },
+  "punctuated_equilibrium": {
+    "enabled": true,
+    "interval": null,
+    "n_clusters": null,
+    "n_variants": null
+  },
+  "strategy_log": {
+    "enabled": true,
+    "max_entries": null
+  },
+  "code_repair": {
+    "enabled": true,
+    "repair_every_n": null,
+    "max_per_run": null,
+    "beta": null,
+    "buffer_size": null
+  },
+  "adaptive_island": {
+    "enabled": true,
+    "stagnation_threshold": null,
+    "max_per_run": null,
+    "max_total_centroids": null
+  }
+}

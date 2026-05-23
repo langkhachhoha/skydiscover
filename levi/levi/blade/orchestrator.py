@@ -292,6 +292,10 @@ class BladeOrchestrator:
         self._eval_processes: ResilientProcessPool | None = None
         self._semaphore = asyncio.Semaphore(config.n_workers)
 
+        # In-flight counters (LEVI-parity status line)
+        self._client_in_flight: int = 0  # LLM calls currently awaiting a response
+        self._eval_in_flight: int = 0  # evaluator subprocess slots currently busy
+
     # ------------------------------------------------------------------
     # Budget
     # ------------------------------------------------------------------
@@ -338,11 +342,15 @@ class BladeOrchestrator:
             effective_max_tokens: int | None = self.config.llm_max_tokens
         else:
             effective_max_tokens = max_tokens  # type: ignore[assignment]
-        result = await client.acompletion(
-            prompt,
-            temperature=temperature,
-            max_tokens=effective_max_tokens,
-        )
+        self._client_in_flight += 1
+        try:
+            result = await client.acompletion(
+                prompt,
+                temperature=temperature,
+                max_tokens=effective_max_tokens,
+            )
+        finally:
+            self._client_in_flight -= 1
         self.cost.record(result.cost)
         # Defensive: some providers return ``None`` content when the model
         # exhausted its token budget on internal reasoning before emitting
@@ -371,23 +379,100 @@ class BladeOrchestrator:
     async def _evaluate_code(self, code: str) -> tuple[float, dict, str | None]:
         """Returns (score, scores_dict, error_msg)."""
         assert self._eval_processes is not None
+        self._eval_in_flight += 1
         try:
-            result = await self._eval_processes.run(
-                evaluate_code,
-                code,
-                self.config.score_fn,
-                self.config.inputs,
-                self.config.fn_name,
-                timeout=self.config.eval_timeout,
-            )
-        except Exception as e:
-            return float("-inf"), {}, f"executor error: {e}"
+            try:
+                result = await self._eval_processes.run(
+                    evaluate_code,
+                    code,
+                    self.config.score_fn,
+                    self.config.inputs,
+                    self.config.fn_name,
+                    timeout=self.config.eval_timeout,
+                )
+            except Exception as e:
+                return float("-inf"), {}, f"executor error: {e}"
+        finally:
+            self._eval_in_flight -= 1
         if not isinstance(result, dict):
             return float("-inf"), {}, f"non-dict result: {type(result).__name__}"
         if "error" in result and result.get("error"):
             return float("-inf"), result, str(result["error"])
         score = float(result.get("score", 0.0))
         return score, result, None
+
+    def _model_label(self, source: str) -> str:
+        """Map a candidate's source tag to the model name that produced its code.
+
+        Used purely for the ``[Eval #N]`` log line so readers can tell at a glance
+        which model an evaluation came from (LEVI prints the model id; BLADE has
+        only two so we expose just the trailing component for brevity)."""
+        paradigm_sources = {"paradigm"}
+        # The frontier (paradigm) model only writes the seed itself; everything
+        # else — paradigm variants, init variants, mutate, crossover, repair —
+        # is written by the mutation model.
+        model_id = (
+            self.config.paradigm_model if source in paradigm_sources else self.config.mutation_model
+        )
+        # Strip the provider prefix so e.g. "openrouter/qwen/qwen3-30b-..." becomes
+        # "qwen3-30b-..." (LEVI parity).
+        return model_id.rsplit("/", 1)[-1]
+
+    def _record_reject(
+        self,
+        *,
+        source: str,
+        score: float = float("-inf"),
+        error_msg: str | None = None,
+    ) -> None:
+        """Single hook for the ~20 spots that increment ``eval_count`` without
+        admitting a program (parse miss, eval crash, LLM error, etc.). Bumps the
+        monitor and emits the LEVI-style log line in one go."""
+        self.monitor.record_eval(score=score, accepted=False, embedding=None)
+        self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg)
+
+    def _log_eval(
+        self,
+        *,
+        source: str,
+        score: float,
+        accepted: bool,
+        is_new_best: bool,
+        error_msg: str | None = None,
+    ) -> None:
+        """Emit one LEVI-style ``[Eval #N]`` log line.
+
+        Must be called *after* ``monitor.record_eval`` so ``eval_count`` already
+        reflects this evaluation."""
+        model = self._model_label(source)
+        if error_msg is not None:
+            logger.info(
+                "[Eval #%d] %-27s ERROR (%s): %s",
+                self.monitor.eval_count,
+                model,
+                source,
+                error_msg[:80],
+            )
+            return
+        if is_new_best:
+            status = "NEW BEST ★"
+        elif accepted:
+            status = "accepted"
+        else:
+            status = "rejected"
+        best = self.monitor.best_score
+        best_str = f"{best:.6f}" if best != float("-inf") else "n/a"
+        score_str = f"{score:.6f}" if score != float("-inf") else "n/a"
+        logger.info(
+            "[Eval #%d] %-27s %-12s | source: %-18s | score: %s | best: %s | $%.3f",
+            self.monitor.eval_count,
+            model,
+            status,
+            source,
+            score_str,
+            best_str,
+            self.cost.cost,
+        )
 
     async def _admit(
         self,
@@ -408,12 +493,15 @@ class BladeOrchestrator:
             source=source,  # type: ignore[arg-type]
             created_at_eval=self.monitor.eval_count + 1,
         )
+        prev_best = self.monitor.best_score
         accepted, reason = self.pool.add(program)
         self.monitor.record_eval(
             score=score,
             accepted=accepted,
             embedding=embedding if accepted else None,
         )
+        is_new_best = score > prev_best  # monitor.best_score updated above
+        self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best)
         if not accepted and reason == "dropped_duplicate" and parent_score is not None:
             # Surface near-duplicate non-improvements at debug level.
             logger.debug("[BLADE] drop near-duplicate score=%.4f parent=%.4f", score, parent_score)
@@ -462,7 +550,7 @@ class BladeOrchestrator:
                 if not self.pool.programs():
                     # Still empty — count this as a reject so eval_count
                     # advances and the budget eventually triggers a clean exit.
-                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    self._record_reject(source="bootstrap_failed", error_msg="empty pool after rebootstrap")
                 return
 
             stuck = self.monitor.is_stuck()
@@ -512,13 +600,12 @@ class BladeOrchestrator:
                     # Still count the attempt — otherwise a chronically
                     # malformed-output provider produces no eval progress and
                     # the loop appears to hang.
-                    logger.debug("[BLADE] no code in mutation output; counting as reject")
-                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    self._record_reject(source=op, error_msg="parse_miss (no code in output)")
                     return
                 score, _scores_dict, err = await self._evaluate_code(parsed.code)
                 if err is not None:
                     self.error_buffer.append((parsed.code, parent_score, err))
-                    self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                    self._record_reject(source=op, score=score, error_msg=err)
                     return
 
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
@@ -531,12 +618,12 @@ class BladeOrchestrator:
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as e:
                 # Count the failed worker as a reject so eval_count advances
                 # and the main loop doesn't appear stuck. Common causes:
                 # provider 5xx, rate-limit, transient network errors.
                 logger.exception("[BLADE] worker step failed; counting as reject")
-                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                self._record_reject(source=op, error_msg=f"worker exception: {e}")
 
     async def _repair_one(self) -> None:
         """One-shot self-repair on the freshest error in the buffer."""
@@ -552,18 +639,18 @@ class BladeOrchestrator:
         )
         try:
             raw = await self._call(self.mutation_lm, prompt, temperature=0.4)
-        except Exception:
+        except Exception as e:
             logger.exception("[BLADE] repair LLM call failed; counting as reject")
-            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+            self._record_reject(source="repair", error_msg=f"LLM error: {e}")
             return
         parsed = self.parser.parse(raw)
         if not parsed.has_code:
-            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+            self._record_reject(source="repair", error_msg="parse_miss (no code in output)")
             return
         score, _scores, err = await self._evaluate_code(parsed.code)
         if err is not None:
             # Drop — one-shot only, per design (no infinite repair loops).
-            self.monitor.record_eval(score=score, accepted=False, embedding=None)
+            self._record_reject(source="repair", score=score, error_msg=err)
             return
         description = await self._summarize_if_needed(parsed.code, parsed.description)
         await self._admit(
@@ -638,9 +725,9 @@ class BladeOrchestrator:
                 temperature=0.7,
                 max_tokens=cfg.paradigm_max_tokens,  # None — never cap frontier
             )
-        except Exception:
+        except Exception as e:
             logger.exception("[BLADE PE] frontier call failed; counting as reject")
-            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+            self._record_reject(source="paradigm", error_msg=f"LLM error: {e}")
             return
 
         parsed = self.parser.parse(raw)
@@ -655,7 +742,7 @@ class BladeOrchestrator:
             )
             self.paradigm_trials.append(trial)
             self.recent_trials.append(trial.render())
-            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+            self._record_reject(source="paradigm", error_msg="parse_miss (no code in output)")
             return
 
         score, _scores, err = await self._evaluate_code(parsed.code)
@@ -671,7 +758,7 @@ class BladeOrchestrator:
             )
         else:
             self.error_buffer.append((parsed.code, prev_best, err))
-            self.monitor.record_eval(score=score, accepted=False, embedding=None)
+            self._record_reject(source="paradigm", score=score, error_msg=err)
 
         delta = None
         if accepted and prev_best != float("-inf"):
@@ -728,18 +815,18 @@ class BladeOrchestrator:
                     v_prompt,
                     temperature=cfg.paradigm_variant_temperature,
                 )
-            except Exception:
+            except Exception as e:
                 logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
-                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                self._record_reject(source="paradigm_variant", error_msg=f"LLM error: {e}")
                 return
             parsed_v = self.parser.parse(raw_v)
             if not parsed_v.has_code:
-                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                self._record_reject(source="paradigm_variant", error_msg="parse_miss (no code in output)")
                 return
             v_score, _vscores, v_err = await self._evaluate_code(parsed_v.code)
             if v_err is not None:
                 self.error_buffer.append((parsed_v.code, base_score, v_err))
-                self.monitor.record_eval(score=v_score, accepted=False, embedding=None)
+                self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err)
                 return
             v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
             await self._admit(
@@ -795,7 +882,7 @@ class BladeOrchestrator:
                 logger.info("[BLADE init] seed_program admitted (score=%.4f)", score)
             else:
                 logger.warning("[BLADE init] seed_program failed to evaluate: %s", err)
-                self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                self._record_reject(source="init", score=score, error_msg=err)
 
         # Generate the remaining diverse seeds sequentially. If there's no
         # user seed, generate one extra to compensate (LEVI parity).
@@ -816,6 +903,8 @@ class BladeOrchestrator:
                     function_signature=cfg.function_signature,
                     existing_seeds=[(c, s) for c, s, _ in diverse_seeds],
                 )
+                logger.info("[BLADE init] %s requesting diverse seed from %s",
+                            tag, self.config.paradigm_model.rsplit("/", 1)[-1])
                 try:
                     raw = await self._call(
                         self.paradigm_lm,
@@ -823,22 +912,22 @@ class BladeOrchestrator:
                         temperature=cfg.init_diversity_temperature,
                         max_tokens=cfg.paradigm_max_tokens,  # None — never cap frontier
                     )
-                except Exception:
+                except Exception as e:
                     logger.exception("[BLADE init] %s frontier call failed", tag)
-                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    self._record_reject(source="init", error_msg=f"LLM error: {e}")
                     continue
 
                 parsed = self.parser.parse(raw)
                 if not parsed.has_code:
                     logger.info("[BLADE init] %s no code in frontier output", tag)
-                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    self._record_reject(source="init", error_msg="parse_miss (no code in output)")
                     continue
 
                 score, _scores, err = await self._evaluate_code(parsed.code)
                 if err is not None:
                     logger.info("[BLADE init] %s eval failed: %s", tag, str(err)[:80])
                     self.error_buffer.append((parsed.code, float("-inf"), err))
-                    self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                    self._record_reject(source="init", score=score, error_msg=err)
                     continue
 
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
@@ -900,18 +989,18 @@ class BladeOrchestrator:
                     prompt,
                     temperature=cfg.init_variant_temperature,
                 )
-            except Exception:
+            except Exception as e:
                 logger.exception("[BLADE init] variant LLM call failed; counting as reject")
-                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                self._record_reject(source="init", error_msg=f"LLM error: {e}")
                 return
             parsed = self.parser.parse(raw)
             if not parsed.has_code:
-                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                self._record_reject(source="init", error_msg="parse_miss (no code in output)")
                 return
             score, _scores, err = await self._evaluate_code(parsed.code)
             if err is not None:
                 self.error_buffer.append((parsed.code, float("-inf"), err))
-                self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                self._record_reject(source="init", score=score, error_msg=err)
                 return
             description = await self._summarize_if_needed(parsed.code, parsed.description)
             await self._admit(
@@ -933,14 +1022,48 @@ class BladeOrchestrator:
         self.start_time = time.time()
         # Spin up evaluator subprocess pool.
         self._eval_processes = ResilientProcessPool(max_workers=self.config.n_eval_processes)
+        cfg = self.config
+        logger.info(
+            "[BLADE] starting — budget: $%s evals=%s seconds=%s target=%s",
+            cfg.budget_dollars,
+            cfg.budget_evals,
+            cfg.budget_seconds,
+            cfg.target_score,
+        )
+        logger.info(
+            "[BLADE] models: mutation=%s | paradigm=%s | embedding=%s",
+            cfg.mutation_model,
+            cfg.paradigm_model,
+            cfg.embedding_model,
+        )
+        logger.info(
+            "[BLADE] knobs: workers=%d | pe_interval=%d | n_diverse_seeds=%d | n_variants/seed=%d | n_paradigm_var=%d",
+            cfg.n_workers,
+            cfg.pe_cron_interval,
+            cfg.n_diverse_seeds,
+            cfg.n_variants_per_seed,
+            cfg.n_paradigm_variants,
+        )
+        # Background status monitor — emits a [Status] heartbeat every 30 s so the
+        # log isn't silent during long bootstrap/eval stretches. Starts immediately
+        # (alongside the bootstrap) so phase-1 progress is visible too.
+        status_task = asyncio.create_task(self._status_monitor())
         try:
+            logger.info("[BLADE init] phase 1 starting — %d diverse seeds (sequential, frontier model)",
+                        cfg.n_diverse_seeds)
             await self._bootstrap_population()
+            logger.info("[BLADE] bootstrap complete — pool=%d best=%.6f cost=$%.3f evals=%d",
+                        len(self.pool),
+                        self.monitor.best_score if self.monitor.best_score != float("-inf") else float("nan"),
+                        self.cost.cost,
+                        self.monitor.eval_count)
             # Background coroutines that run alongside the main loop:
             #   * _pe_monitor       fires paradigm shifts on cron boundaries
             #   * _meta_advice_monitor refreshes the lessons-learnt block
             pe_monitor_task = asyncio.create_task(self._pe_monitor())
             advisor_task = asyncio.create_task(self._meta_advice_monitor())
             try:
+                logger.info("[BLADE] entering evolutionary main loop (n_workers=%d)", cfg.n_workers)
                 await self._main_loop()
             finally:
                 for t in (pe_monitor_task, advisor_task):
@@ -950,6 +1073,11 @@ class BladeOrchestrator:
                     except (asyncio.CancelledError, Exception):
                         pass
         finally:
+            status_task.cancel()
+            try:
+                await status_task
+            except (asyncio.CancelledError, Exception):
+                pass
             try:
                 self._eval_processes.shutdown()
             except Exception:  # pragma: no cover — defensive
@@ -1022,6 +1150,40 @@ class BladeOrchestrator:
             await asyncio.gather(*leftovers, return_exceptions=True)
 
     # ------------------------------------------------------------------
+    # Status monitor (LEVI-parity heartbeat)
+    # ------------------------------------------------------------------
+
+    async def _status_monitor(self) -> None:
+        """Emit a one-line ``[Status]`` heartbeat every 30 s.
+
+        Mirrors :meth:`levi.pipeline.runner.PipelineRunner._status_monitor` so
+        long stretches with no admissions (bootstrap-phase evaluations, eval
+        timeouts, PE in-progress) still show progress in the log."""
+        try:
+            while not self.stop_event.is_set():
+                await asyncio.sleep(30.0)
+                if self.stop_event.is_set():
+                    break
+                best = self.monitor.best_score
+                best_str = f"{best:.6f}" if best != float("-inf") else "n/a"
+                elapsed = time.time() - self.start_time
+                logger.info(
+                    "[Status] Cost: $%.3f | Evals: %d | Clients in-flight: %d | "
+                    "Eval in-flight: %d | Pool: %d | Best: %s | Elapsed: %.0fs",
+                    self.cost.cost,
+                    self.monitor.eval_count,
+                    self._client_in_flight,
+                    self._eval_in_flight,
+                    len(self.pool),
+                    best_str,
+                    elapsed,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[Status] monitor crashed")
+
+    # ------------------------------------------------------------------
     # PE monitor (LEVI-style cron-modulo + freshness)
     # ------------------------------------------------------------------
 
@@ -1065,10 +1227,20 @@ class BladeOrchestrator:
                     self.last_pe_eval_count = ec
                     async with self._pe_lock:
                         self.pe_trigger_count += 1
+                        stage_preview = get_budget_stage(
+                            budget_progress=self._budget_progress(),
+                            stagnation=self.monitor.stagnation_level(),
+                        )
+                        best = self.monitor.best_score
+                        best_str = f"{best:.6f}" if best != float("-inf") else "n/a"
                         logger.info(
-                            "[BLADE PE] trigger #%d at eval=%d (stage routing inline)",
+                            "[BLADE PE] trigger #%d at eval=%d | stage=%s | best=%s | pool=%d | families=%d",
                             self.pe_trigger_count,
                             ec,
+                            stage_preview,
+                            best_str,
+                            len(self.pool),
+                            self.pool.num_families(),
                         )
                         try:
                             await self._paradigm_shift()

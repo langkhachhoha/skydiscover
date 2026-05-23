@@ -4,6 +4,7 @@ definitions plug in without changes."""
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,18 @@ from ..blade.orchestrator import BladeConfig, BladeOrchestrator, BladeResult
 from ..utils.code_extraction import extract_fn_name
 
 __all__ = ["evolve_code_blade", "BladeConfig", "BladeResult"]
+
+
+def _setup_logging() -> None:
+    """Configure logging for BLADE (mirrors levi._setup_logging)."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+    logging.getLogger("litellm").setLevel(logging.ERROR)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def evolve_code_blade(
@@ -118,6 +131,7 @@ def evolve_code_blade(
     # Pass through any advanced BladeConfig overrides.
     cfg_kwargs.update(overrides)
 
+    _setup_logging()
     config = BladeConfig(**cfg_kwargs)
     orchestrator = BladeOrchestrator(config)
     return asyncio.run(orchestrator.run())
