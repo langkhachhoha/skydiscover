@@ -129,6 +129,17 @@ class BladeConfig:
     """Skip paradigm shift if the pool has fewer than this many programs
     (not enough representatives to make the prompt useful)."""
 
+    paradigm_n_anchors: int = 3
+    """Number of anchor programs (full code + description + score) shown to
+    the frontier model during a paradigm shift. The frontier uses these to
+    read the actual mechanism, not just paraphrases of it."""
+
+    paradigm_n_inspirations: int = 5
+    """Number of *additional* programs shown as description-only sketches
+    alongside the anchors. These widen the model's view of the archive
+    without exploding the token count. Inspirations are picked diversely
+    (MMR) from the pool, excluding the anchors. Set to 0 to disable."""
+
     # Initial population (LEVI-style 2-phase bootstrap)
     n_diverse_seeds: int = 5
     """Number of diverse seeds the frontier model generates SEQUENTIALLY
@@ -701,10 +712,30 @@ class BladeOrchestrator:
             budget_progress=self._budget_progress(),
             stagnation=self.monitor.stagnation_level(),
         )
-        reps = self.pool.representatives(stage, n=3)  # type: ignore[arg-type]
-        rep_pairs = [(p.description, p.score) for p in reps]
-        for p in reps:
+        anchors = self.pool.representatives(stage, n=cfg.paradigm_n_anchors)  # type: ignore[arg-type]
+        anchor_triples = [(p.code, p.description, p.score) for p in anchors]
+        for p in anchors:
             self.pool.mark_used(p)
+
+        # Build a diverse pool of *additional* inspirations (description-only).
+        # We over-fetch from ``representatives("early", …)`` (which uses MMR with
+        # a low score weight, so the selection is diversity-biased) and skip
+        # any program that already appears as an anchor.
+        inspiration_pairs: list[tuple[str, float]] = []
+        if cfg.paradigm_n_inspirations > 0:
+            anchor_ids = {id(p) for p in anchors}
+            wanted = cfg.paradigm_n_inspirations
+            # Ask for n_anchors + n_inspirations so we still have ``wanted``
+            # candidates after filtering out the anchors. ``representatives``
+            # clamps to the pool size, so on small pools we just get fewer.
+            fetch_n = len(anchors) + wanted
+            candidates = self.pool.representatives("early", n=fetch_n)  # type: ignore[arg-type]
+            for p in candidates:
+                if id(p) in anchor_ids:
+                    continue
+                inspiration_pairs.append((p.description, p.score))
+                if len(inspiration_pairs) >= wanted:
+                    break
 
         prev_best = self.monitor.best_score
         prompt = build_paradigm_prompt(
@@ -712,8 +743,9 @@ class BladeOrchestrator:
             problem_description=cfg.problem_description,
             function_signature=cfg.function_signature,
             n_evaluations=self.monitor.eval_count,
-            n_regions=self.pool.num_families(),
-            representatives=rep_pairs,
+            n_families=self.pool.num_families(),
+            anchors=anchor_triples,
+            inspirations=inspiration_pairs,
             recent_trials=list(self.recent_trials),
         )
 

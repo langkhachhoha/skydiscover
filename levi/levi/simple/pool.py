@@ -23,6 +23,7 @@ from typing import Iterable, Literal
 
 import numpy as np
 
+from .ast_signature import N_FEATURES, ast_cosine, compute_ast_signature
 from .embedder import cosine
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,11 @@ class Program:
     created_at_eval: int = 0
     uses_count: int = 0
     family_id: int = -1  # assigned by Pool._recompute_families
+    ast_signature: np.ndarray | None = None
+    """Structural fingerprint (filled lazily by Pool on first use). Used as
+    the second pass of the niche-dedup check: two candidates with very close
+    description embeddings but very different AST shapes are kept as
+    *structurally distinct* and both admitted."""
 
     def short_repr(self) -> str:
         desc = self.description.replace("\n", " ")
@@ -59,25 +65,47 @@ class Program:
 @dataclass
 class PoolConfig:
     K: int = 100
-    """Max programs retained. Excess dropped lowest-score-first."""
+    """Target population size. Until the pool reaches K, the niching rules
+    are relaxed so we *fill* the pool fast (drop only on exact-match
+    structural+semantic duplicates, ignore family cap). Once the pool hits
+    K, the niching and family cap kick in to maintain quality + diversity.
+    Excess admissions evict lowest-score-first (within the offending family
+    when family cap fires, else globally)."""
 
     niche_cosine_threshold: float = 0.92
-    """If a new program's nearest neighbor exceeds this cosine, treat as
-    near-duplicate: replace if higher-scoring, else drop.
-    Tuned from live runs on text-embedding-3-small: paradigm-tagged
-    descriptions of *different* algorithms sit in the 0.55-0.70 cosine
-    band, so 0.92 catches close paraphrases without merging real variants."""
+    """Description-embedding cosine above which two candidates are flagged
+    as *semantic* near-duplicates. Tuned on text-embedding-3-small live
+    runs: distinct paradigms sit at 0.55-0.70 cosine, paraphrases of the
+    same idea cluster above 0.92.
+
+    A flag from this layer alone is no longer enough to drop a candidate —
+    the second-pass AST check has to agree (see ``structural_cosine_threshold``)."""
+
+    structural_cosine_threshold: float = 0.97
+    """AST-signature cosine above which two candidates are flagged as
+    *structurally* near-identical. A candidate is treated as a true
+    near-duplicate (and either replaces the incumbent or is dropped)
+    only when BOTH description cosine ≥ ``niche_cosine_threshold`` AND
+    AST cosine ≥ ``structural_cosine_threshold``. The 0.97 default is
+    deliberately tight: small structural edits (an extra branch, a swapped
+    data structure) easily fall below 0.97 and earn a slot in the pool,
+    even when their description paraphrases an existing entry.
+
+    Set to a value > 1.0 to disable the AST layer (description-only dedup)."""
 
     family_cosine_threshold: float = 0.72
-    """Single-linkage merge threshold. Programs within this cosine of any
-    family member join that family. Tuned on live data: distinct paradigm
-    classes (DP vs BFS vs greedy) average ~0.62, while variants of the
-    same paradigm average ~0.75-0.85, so 0.72 separates them well."""
+    """Single-linkage merge threshold on description embeddings — defines
+    when two programs belong to the same *family*. Used only once the pool
+    has filled to K. Tuned on live data: distinct paradigm classes (DP vs
+    BFS vs greedy) average ~0.62, while variants of the same paradigm
+    average ~0.75-0.85, so 0.72 separates them well."""
 
-    max_per_family: int = 8
+    max_per_family: int = 10
     """Hard cap on how many programs from one family may co-exist in the
-    pool. Adding an (K+1)-th member evicts the *lowest-scoring* one of that
-    family instead of the global lowest. Prevents one family from squatting
+    pool, applied *only when len(pool) ≥ K*. While the pool is still
+    filling we want as many distinct candidates as possible, so the cap is
+    deferred. Once at capacity, exceeding the cap evicts the *lowest-scoring*
+    member of that family (not the global worst) so no single family squats
     the top-K."""
 
 
@@ -97,38 +125,83 @@ class Pool:
     def add(self, program: Program) -> tuple[bool, str]:
         """Try to admit *program*. Returns ``(accepted, reason)``.
 
-        Reasons: ``"added"``, ``"replaced_duplicate"``, ``"dropped_duplicate"``,
-        ``"replaced_family_weak"``, ``"dropped_full"``.
+        Two-phase semantics:
+
+        * **While the pool is filling (len < K)**: maximise raw diversity.
+          Only flag a candidate as a near-duplicate when BOTH the
+          description embedding AND the AST signature say so — that catches
+          identical re-emissions while letting genuine structural variants
+          through. Family cap is **not** enforced; we want the pool packed.
+
+        * **Once at capacity (len ≥ K)**: enforce niche + family cap + the
+          global K cap so quality stays high.
+
+        Reasons returned:
+
+        - ``"added"`` — appended cleanly.
+        - ``"replaced_duplicate"`` — semantic+structural duplicate that
+          out-scored the incumbent.
+        - ``"dropped_duplicate"`` — semantic+structural duplicate that did
+          not improve on the incumbent.
+        - ``"replaced_family_weak"`` — admitted but family cap evicted the
+          weakest of that family.
+        - ``"dropped_full"`` — pool at K and the newcomer was the global
+          worst.
+        - ``"no_embedding"`` — refused; needed an embedding to niche on.
         """
         with self._lock:
             if program.embedding is None or program.embedding.size == 0:
                 # Pool requires an embedding to dedup; reject silently.
                 return False, "no_embedding"
+            # Pre-compute the structural signature once so we can pass it
+            # into the same comparison the family cap will use later.
+            if program.ast_signature is None:
+                program.ast_signature = compute_ast_signature(program.code)
 
-            # 1) Semantic dedup
+            pool_filling = len(self._programs) < self.config.K
+
+            # 1) Niche dedup — embedding flags the candidate as semantically
+            #    near a neighbour. We then ask the AST whether they are
+            #    structurally close too. Only the "and" of both layers
+            #    counts as a true near-duplicate.
             nearest_idx, nearest_sim = self._nearest(program.embedding)
             if nearest_idx is not None and nearest_sim >= self.config.niche_cosine_threshold:
                 incumbent = self._programs[nearest_idx]
-                if program.score > incumbent.score:
-                    # Preserve uses_count on replacement so a duplicate idea
-                    # cannot dodge the novelty penalty by being re-emitted.
-                    program.uses_count = incumbent.uses_count
-                    self._programs[nearest_idx] = program
-                    self._families_dirty = True
-                    return True, "replaced_duplicate"
-                return False, "dropped_duplicate"
+                struct_sim = self._struct_cosine(program, incumbent)
+                structural_dup = struct_sim >= self.config.structural_cosine_threshold
+                if structural_dup:
+                    if program.score > incumbent.score:
+                        # Preserve uses_count on replacement so a duplicate
+                        # idea cannot dodge the novelty penalty by being
+                        # re-emitted.
+                        program.uses_count = incumbent.uses_count
+                        self._programs[nearest_idx] = program
+                        self._families_dirty = True
+                        return True, "replaced_duplicate"
+                    return False, "dropped_duplicate"
+                # Structurally distinct despite a near-identical
+                # description: keep the newcomer as a genuinely new variant.
 
-            # 2) Append
+            # 2) Append the candidate.
             self._programs.append(program)
             self._families_dirty = True
 
-            # 3) Enforce family cap
+            # 3) While the pool is still filling, skip family cap and the
+            #    global K cap entirely. The goal is to reach K as fast as
+            #    possible with as many distinct ideas as possible.
+            if pool_filling:
+                return True, "added"
+
+            # 4) Pool is at or past K: enforce family cap first (so a
+            #    crowded family evicts its own weakest), then the global
+            #    K cap.
             self._recompute_families_if_needed()
             evicted_for_family = self._enforce_family_cap(program)
             if evicted_for_family is not None:
+                if evicted_for_family is program:
+                    return False, "dropped_family_full"
                 return True, "replaced_family_weak"
 
-            # 4) Enforce global K cap
             if len(self._programs) > self.config.K:
                 # Drop the lowest-scoring program (could be the new one).
                 worst_idx = min(range(len(self._programs)), key=lambda i: self._programs[i].score)
@@ -137,6 +210,19 @@ class Pool:
                 if worst is program:
                     return False, "dropped_full"
             return True, "added"
+
+    @staticmethod
+    def _struct_cosine(a: Program, b: Program) -> float:
+        """Cosine over AST signatures; 0.0 if either is missing.
+
+        When the signature is missing on either side we cannot reason about
+        structural similarity, so we return 0.0. The Pool then needs the
+        description cosine alone to be above the niche threshold AND the
+        structural threshold — i.e. the AST layer effectively never fires,
+        and behavior falls back to description-only dedup."""
+        if a.ast_signature is None or b.ast_signature is None:
+            return 0.0
+        return ast_cosine(a.ast_signature, b.ast_signature)
 
     def __len__(self) -> int:
         with self._lock:
@@ -199,6 +285,11 @@ class Pool:
         with self._lock:
             if not self._programs:
                 return []
+            # Keep family_id current for callers that read it (e.g. log
+            # lines, the paradigm prompt builder). The family cap itself
+            # only fires once the pool is at K (see ``add``), but family_id
+            # is otherwise inspected even before the pool fills.
+            self._recompute_families_if_needed()
             n = min(n, len(self._programs))
             if phase == "late":
                 return sorted(self._programs, key=lambda p: -p.score)[:n]

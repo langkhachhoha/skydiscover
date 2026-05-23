@@ -57,9 +57,15 @@ Score: {parent_score:.4f}
 
 {meta_advice_block}\
 ## Your task
-Produce a **mutated variant** of the parent that is meaningfully different.
+Write an improved version of the parent.
 Treat the inspirations as ideas to draw from — do NOT copy their code (you
 do not have it). Keep what works in the parent, change what doesn't.
+
+### Critical requirements
+1  Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. The function signature must match exactly what is specified
+4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
 
 {format_instruction}
 """
@@ -96,6 +102,12 @@ Score: {parent_b_score:.4f}
 Produce a **hybrid solution** that combines the strongest mechanisms of
 both parents while fixing at least one weakness. Be structural, not
 stitched: do not paste A's branch into B's branch.
+
+### Critical requirements
+1  Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. The function signature must match exactly what is specified
+4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
 
 {format_instruction}
 """
@@ -240,17 +252,13 @@ INIT_VARIANT_PROMPT = """\
 {inspirations_block}
 
 ## Your task
-Produce a **variant** of one of the inspirations above. You may borrow
-mechanisms from across them, but keep the *core algorithmic paradigm* of
-your chosen base intact; just adjust constants, secondary heuristics,
-data structures, edge-case handling, or implementation details. Do NOT
-invent a wholly different paradigm — variant exploration only.
+Write an improved version of the function.
 
 ### Critical requirements
-- Function signature MUST match exactly: `{function_signature}`
-- Standard libraries only (numpy, collections, itertools, math, heapq,
-  functools, etc.); torch acceptable
-- Include all imports; no ellipses or placeholders
+1  Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. The function signature must match exactly what is specified
+4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
 
 {format_instruction}
 """
@@ -432,8 +440,135 @@ def build_paradigm_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Paradigm-shift prompt (3-phase LEVI port, descriptions-only representatives)
+# Paradigm-shift prompt (BLADE-native, code-aware representatives + inspirations)
 # ---------------------------------------------------------------------------
+#
+# Earlier BLADE wrapped LEVI's PARADIGM_SHIFT_PROMPTS verbatim and passed only
+# (description, score) tuples — the frontier model saw what each family
+# *claimed* to do, never the source. Live runs showed this hobbled the model
+# on synthesis/refinement stages: it could not point to concrete mechanisms.
+#
+# The new prompt is BLADE-native:
+#   * 3 *anchor representatives* are presented with their full code, score,
+#     and description so the frontier can read the actual mechanism.
+#   * Up to 5 *inspirations* are presented description-only (code withheld)
+#     to widen the model's picture of the archive without exploding token use.
+#   * The placeholder formerly called "n_regions" is now "n_families" — that
+#     is literally what ``Pool.num_families()`` returns, and the prompt text
+#     uses the correct label.
+#   * The three stages (early / mid / late) are spelled out inline rather than
+#     pulled from LEVI's template, so the variable substitutions and section
+#     order are guaranteed to line up.
+
+
+_PARADIGM_HEADER = """\
+# Algorithmic Paradigm Shift Challenge ({stage_label})
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Archive Snapshot
+The archive has evolved through {n_evaluations} evaluations and currently
+contains {n_families} distinct behavioural families. Below are the three
+strongest *anchor* solutions (full code) and up to five additional
+*inspiration* sketches (description + score; code intentionally withheld so
+you focus on their ideas, not their phrasing).
+
+### Anchor representatives (code + description + score)
+{anchor_block}
+
+### Additional inspirations (description + score only)
+{inspiration_block}
+{strategy_log_block}"""
+
+
+_STAGE_BODIES = {
+    "early": """\
+## Your Challenge: PARADIGM SHIFT (early-stage exploration)
+
+Search is still EARLY — the archive only knows a handful of paradigms.
+Engineer a **fundamentally different algorithmic approach** that explores
+untapped regions of the solution space.
+
+### Analysis Steps:
+1. **Identify current paradigms**: Which algorithmic family does each anchor belong to? (greedy, graph search, dynamic programming, simulated annealing, gradient methods, brute-force with pruning, …)
+2. **Find the gap**: Which paradigm classes are NOT represented in either the anchors or the inspirations?
+3. **Design a novel approach**: Pick ONE gap-paradigm and design a complete solution around it. The internal data structures, control flow, and termination condition must all reflect that paradigm — not a re-skin of an existing solution.
+
+### Instructions:
+1. Match the function signature exactly.
+2. AVOID the core logic, heuristics, and search structures used in the anchors.
+3. AVOID any approach whose summary already appears in the Strategy Log (especially ones with non-positive deltas).
+4. Pick a strategy that is structurally different, not just numerically retuned.
+""",
+    "mid": """\
+## Your Challenge: SYNTHESISE A STRONGER SOLUTION (mid-stage consolidation)
+
+Search has accumulated several decent approaches across distinct
+behavioural families. Pure exploration is no longer the best move — combine
+the best ideas from the anchor solutions into a stronger hybrid that beats
+each of them individually.
+
+### Analysis Steps:
+1. **Per-anchor strengths**: For each anchor, identify *one* concrete mechanism it does well (e.g. better initialization, a clever tie-breaking rule, an aggressive prune).
+2. **Per-anchor weaknesses**: For each anchor, identify *one* concrete failure mode (e.g. blows up at the boundary, ignores a constraint, gets stuck on adversarial inputs).
+3. **Synthesis blueprint**: Choose 2-3 mechanisms to KEEP from different anchors. Choose 1-2 weaknesses to FIX. Let the inspirations widen your menu of mechanisms even if their code is withheld.
+
+### Instructions:
+1. Match the function signature exactly.
+2. Borrow and adapt the strongest mechanisms from multiple anchors; do not just copy one of them.
+3. Where the Strategy Log shows a synthesis that already produced no improvement, choose a different mechanism mix.
+4. The result must be a structurally coherent program — not three solutions stitched together with `if/elif/else`.
+""",
+    "late": """\
+## Your Challenge: TARGETED IMPROVEMENT (late-stage exploitation)
+
+The archive is mature and stagnation is high. Radical rewrites at this stage
+usually under-perform the best incumbent. Your goal is a **focused,
+high-impact improvement** to the highest-scoring anchor above.
+
+### Analysis Steps:
+1. **Study the best anchor carefully**: Understand exactly what it does and crucially WHERE it loses points (which inputs / which constraints / which edge cases).
+2. **Find a single weak spot**: Pick ONE specific failure mode. Resist the urge to address several at once — those usually regress.
+3. **Make a surgical fix**: Add a targeted patch (extra branch, post-processing step, tighter constraint check, refined tie-breaking) that fixes that failure WITHOUT touching the parts that already work.
+
+### Instructions:
+1. Match the function signature exactly.
+2. Start from the logic of the highest-scoring anchor; keep its overall control flow and data structures intact.
+3. Do NOT rewrite the algorithm from scratch.
+4. If the Strategy Log already shows a late-stage attempt with delta ≤ 0 targeting the same weak spot, choose a different weak spot.
+""",
+}
+
+_STAGE_LABELS = {
+    "early": "early-stage exploration",
+    "mid": "mid-stage consolidation",
+    "late": "late-stage exploitation",
+}
+
+
+def _anchor_block(anchors: Sequence[tuple[str, str, float]]) -> str:
+    """Render anchor representatives with full code.
+
+    Each element is ``(code, description, score)``."""
+    if not anchors:
+        return "(archive too small — no anchors yet)"
+    parts: list[str] = []
+    for i, (code, desc, score) in enumerate(anchors, start=1):
+        d = (desc or "").strip().replace("\n", " ")
+        if len(d) > 400:
+            d = d[:400].rstrip() + "…"
+        parts.append(
+            f"#### Anchor {i} (score={score:.4f})\n"
+            f"_Description_: {d or '(no description)'}\n"
+            f"```python\n{code}\n```"
+        )
+    return "\n\n".join(parts)
 
 
 def build_paradigm_prompt(
@@ -442,21 +577,34 @@ def build_paradigm_prompt(
     problem_description: str,
     function_signature: str,
     n_evaluations: int,
-    n_regions: int,
-    representatives: Sequence[tuple[str, float]],
-    recent_trials: Sequence[str],
+    n_families: int,
+    anchors: Sequence[tuple[str, str, float]],
+    inspirations: Sequence[tuple[str, float]] = (),
+    recent_trials: Sequence[str] = (),
 ) -> str:
-    """Wrap LEVI's three-phase paradigm prompt.
+    """Build the BLADE paradigm-shift prompt.
 
-    Representatives are description+score pairs (no code) — this is the
-    key BLADE deviation from LEVI: the frontier sees ideas, not source.
+    Parameters
+    ----------
+    stage
+        One of ``"early"`` / ``"mid"`` / ``"late"``. Falls back to ``"early"``
+        for unknown values.
+    n_evaluations, n_families
+        Diagnostic numbers shown in the prompt header. ``n_families`` is the
+        live ``Pool.num_families()``; the prompt text refers to families,
+        not LEVI's CVT-MAP-Elites regions, so the wording matches.
+    anchors
+        Up to 3 ``(code, description, score)`` triples. Full code is shown
+        so the frontier can reason about the actual mechanism.
+    inspirations
+        Up to 5 ``(description, score)`` pairs. Code is intentionally
+        withheld so the model treats them as idea sources, not copy targets.
+    recent_trials
+        Strings rendered into the Strategy Log block. Empty → block omitted.
     """
-    template = PARADIGM_SHIFT_PROMPTS.get(stage, PARADIGM_SHIFT_PROMPTS["early"])
-    rep_block = _inspiration_block(representatives)
-    representative_solutions = (
-        "### Behavioural sketches (description + score; code intentionally withheld)\n"
-        f"{rep_block}\n"
-    )
+    body = _STAGE_BODIES.get(stage, _STAGE_BODIES["early"])
+    stage_label = _STAGE_LABELS.get(stage, "early-stage exploration")
+
     if recent_trials:
         strategy_log_block = (
             "\n## Strategy Log (recent paradigm attempts)\n"
@@ -465,12 +613,16 @@ def build_paradigm_prompt(
         )
     else:
         strategy_log_block = ""
-    rendered = template.format(
+
+    header = _PARADIGM_HEADER.format(
+        stage_label=stage_label,
         problem_description=problem_description,
         function_signature=function_signature,
         n_evaluations=n_evaluations,
-        n_regions=n_regions,
-        representative_solutions=representative_solutions,
+        n_families=n_families,
+        anchor_block=_anchor_block(anchors),
+        inspiration_block=_inspiration_block(inspirations),
         strategy_log_block=strategy_log_block,
     )
-    return rendered + "\n\n" + OUTPUT_FORMAT_INSTRUCTION
+
+    return f"{header}\n{body}\n{OUTPUT_FORMAT_INSTRUCTION}"

@@ -46,27 +46,41 @@ def test_near_duplicate_drops_when_worse() -> None:
     assert not accepted and reason == "dropped_duplicate"
 
 
-def test_family_cap_evicts_weakest_in_family() -> None:
-    # All four vectors are within the family threshold (jitter small enough
-    # that all pairwise cosines exceed 0.7) but below the dedup threshold
-    # (no pair > 0.999). The family cap should evict the weakest member each
-    # time a new program joins the (already-full) family.
+def test_family_cap_deferred_until_pool_full() -> None:
+    # While the pool is still filling (len < K) the family cap must NOT
+    # fire — we want to admit as much raw diversity as possible. K=3 so
+    # we can verify the deferred behaviour in a single test.
     pool = Pool(
         PoolConfig(
-            K=10,
+            K=3,
             niche_cosine_threshold=0.999,
+            structural_cosine_threshold=1.5,  # disable AST layer for this test
             family_cosine_threshold=0.85,
             max_per_family=2,
         )
     )
-    fam0 = family(seed=0, jitter=0.10, n=4)
-    for i, e in enumerate(fam0):
-        pool.add(_mk(0.1 + 0.1 * i, e, desc=f"f0-{i}", ts=i))
-    fams = pool.families()
-    sizes = {fid: len(members) for fid, members in fams.items()}
-    assert max(sizes.values()) <= 2, sizes
+    fam0 = family(seed=0, jitter=0.10, n=3)
+    pool.add(_mk(0.1, fam0[0], desc="f0-0"))
+    pool.add(_mk(0.2, fam0[1], desc="f0-1"))
+    # Two members of one family, max_per_family=2, but pool not at K yet →
+    # cap deferred, both still present.
+    assert len(pool) == 2
+    assert max(len(m) for m in pool.families().values()) == 2
+
+    # Third add fills the pool to K=3 — still under the pool-filling rule
+    # at the moment of the call, so the cap is deferred for this one too.
+    pool.add(_mk(0.3, fam0[2], desc="f0-2"))
+    assert len(pool) == 3
+    assert max(len(m) for m in pool.families().values()) == 3
+
+    # Now pool is at K. The 4th add triggers the family cap path: the
+    # weakest of the over-sized family is evicted to keep size ≤ K.
+    fam0_more = family(seed=0, jitter=0.10, n=5)
+    pool.add(_mk(0.9, fam0_more[3], desc="f0-3"))
+    assert len(pool) == 3
     scores = sorted(p.score for p in pool.programs())
-    assert scores == pytest.approx([0.3, 0.4])
+    assert pytest.approx(0.1) not in scores  # weakest of the family was evicted
+    assert pytest.approx(0.9) in scores
 
 
 def test_top_k_eviction_when_full() -> None:
@@ -144,6 +158,59 @@ def test_recent_diversity_low_when_diverse() -> None:
     assert len(pool) == 6
     div = pool.recent_diversity(last=6)
     assert div < 0.3, f"expected low cosine, got {div}"
+
+
+def test_ast_layer_keeps_structurally_distinct_variants() -> None:
+    # Two candidates with near-identical descriptions (high embedding
+    # cosine) but very different code shapes should BOTH be admitted —
+    # this is the whole point of the AST second pass.
+    pool = Pool(
+        PoolConfig(
+            K=10,
+            niche_cosine_threshold=0.9,  # both candidates trip this
+            structural_cosine_threshold=0.97,  # AST must agree to drop
+        )
+    )
+    emb = vec(1, 0, 0)
+    # First candidate: a tight loop with a single branch.
+    code_a = (
+        "def f(x):\n"
+        "    total = 0\n"
+        "    for i in range(len(x)):\n"
+        "        if x[i] > 0:\n"
+        "            total += x[i]\n"
+        "    return total\n"
+    )
+    # Second candidate: same description but a comprehension-based body
+    # — fundamentally different AST shape (no for+if, has GeneratorExp).
+    code_b = "def f(x):\n    return sum(v for v in x if v > 0)\n"
+
+    p_a = Program(code=code_a, description="positive-sum", score=0.5, embedding=emb)
+    p_b = Program(code=code_b, description="positive-sum", score=0.4, embedding=vec(1, 0.01, 0))
+    accepted_a, _ = pool.add(p_a)
+    accepted_b, reason_b = pool.add(p_b)
+    assert accepted_a
+    assert accepted_b, f"AST layer should have kept structurally distinct variant, got {reason_b}"
+    assert len(pool) == 2
+
+
+def test_ast_layer_drops_true_duplicate() -> None:
+    # Same code (or near-identical code) + near-identical embedding → the
+    # second pass agrees and the lower-scoring one is dropped.
+    pool = Pool(
+        PoolConfig(
+            K=10,
+            niche_cosine_threshold=0.9,
+            structural_cosine_threshold=0.97,
+        )
+    )
+    code = "def f(x):\n    return sum(x)\n"
+    p_a = Program(code=code, description="sum", score=0.7, embedding=vec(1, 0, 0))
+    p_b = Program(code=code, description="sum", score=0.4, embedding=vec(1, 0.01, 0))
+    pool.add(p_a)
+    accepted, reason = pool.add(p_b)
+    assert not accepted
+    assert reason == "dropped_duplicate"
 
 
 def test_reset_uses_after_paradigm() -> None:

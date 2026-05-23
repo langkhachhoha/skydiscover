@@ -125,6 +125,22 @@ def _parse_args() -> argparse.Namespace:
         help="Paradigm-shift fanout: K mutation-model variants of each accepted paradigm seed (default: 4).",
     )
     p.add_argument(
+        "--paradigm-n-anchors",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Number of full-code anchor representatives shown to the frontier "
+        "during a paradigm shift (default: 3).",
+    )
+    p.add_argument(
+        "--paradigm-n-inspirations",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Number of description-only inspiration sketches shown alongside the "
+        "anchors during a paradigm shift (default: 5; set 0 to disable).",
+    )
+    p.add_argument(
         "--pool-k",
         type=int,
         default=None,
@@ -136,7 +152,16 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         metavar="F",
-        help="Description-embedding cosine threshold for near-duplicate dedup (default: 0.92).",
+        help="Description-embedding cosine threshold for near-duplicate flagging (default: 0.92).",
+    )
+    p.add_argument(
+        "--structural-threshold",
+        type=float,
+        default=None,
+        metavar="F",
+        help="AST-signature cosine threshold for the second-pass near-duplicate "
+        "filter. Two candidates are dropped only when BOTH the description AND "
+        "the AST agree (default: 0.97). Pass >1.0 to disable the AST layer.",
     )
     p.add_argument(
         "--family-threshold",
@@ -150,7 +175,8 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         metavar="N",
-        help="Maximum programs per family before weakest-in-family eviction (default: 8).",
+        help="Maximum programs per family before weakest-in-family eviction "
+        "(default: 10; family cap only fires once the pool reaches K).",
     )
     p.add_argument(
         "--no-repair",
@@ -260,6 +286,8 @@ def main() -> int:
         pool_kwargs["K"] = args.pool_k
     if args.niche_threshold is not None:
         pool_kwargs["niche_cosine_threshold"] = args.niche_threshold
+    if args.structural_threshold is not None:
+        pool_kwargs["structural_cosine_threshold"] = args.structural_threshold
     if args.family_threshold is not None:
         pool_kwargs["family_cosine_threshold"] = args.family_threshold
     if args.max_per_family is not None:
@@ -269,6 +297,10 @@ def main() -> int:
 
     if args.no_repair:
         overrides["enable_repair"] = False
+    if args.paradigm_n_anchors is not None:
+        overrides["paradigm_n_anchors"] = args.paradigm_n_anchors
+    if args.paradigm_n_inspirations is not None:
+        overrides["paradigm_n_inspirations"] = args.paradigm_n_inspirations
 
     import levi  # imported lazily so import errors surface clearly above
 

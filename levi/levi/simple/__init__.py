@@ -8,6 +8,7 @@ bandit with two operators plus UCB-style selection.
 See docs/SIMPLE_EVO.md for the full design.
 """
 
+from .ast_signature import N_FEATURES, ast_cosine, compute_ast_signature
 from .embedder import DescriptionEmbedder, EmbedderConfig
 from .monitor import Monitor, MonitorConfig
 from .parser import LLMOutput, OutputParser, ParserConfig
@@ -20,6 +21,7 @@ __all__ = [
     "LLMOutput",
     "Monitor",
     "MonitorConfig",
+    "N_FEATURES",
     "OutputParser",
     "ParserConfig",
     "Pool",
@@ -27,4 +29,6 @@ __all__ = [
     "Program",
     "Selector",
     "SelectorConfig",
+    "ast_cosine",
+    "compute_ast_signature",
 ]

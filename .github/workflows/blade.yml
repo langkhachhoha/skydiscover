@@ -93,10 +93,11 @@ on:
         description: >-
           Advanced BLADE knobs as a JSON object. Recognised keys:
           problem_module, target_score, embedding_model, eval_processes,
-          n_paradigm_variants, pool_k, niche_threshold, family_threshold,
+          n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
+          pool_k, niche_threshold, structural_threshold, family_threshold,
           max_per_family, repair_disabled, meta_advice_disabled,
           meta_advice_interval. Example:
-          '{"target_score":0.95,"n_paradigm_variants":6,"meta_advice_interval":25}'
+          '{"target_score":0.95,"n_paradigm_variants":6,"paradigm_n_inspirations":5}'
         required: false
         type: string
         default: ""
@@ -221,9 +222,12 @@ jobs:
           [ -n "$ADV_TARGET_SCORE" ]    && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
           [ -n "$ADV_POOL_K" ]          && EXTRA_OPTS="$EXTRA_OPTS --pool-k $ADV_POOL_K"
           [ -n "$ADV_NICHE_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --niche-threshold $ADV_NICHE_THRESHOLD"
+          [ -n "$ADV_STRUCTURAL_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --structural-threshold $ADV_STRUCTURAL_THRESHOLD"
           [ -n "$ADV_FAMILY_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --family-threshold $ADV_FAMILY_THRESHOLD"
           [ -n "$ADV_MAX_PER_FAMILY" ]  && EXTRA_OPTS="$EXTRA_OPTS --max-per-family $ADV_MAX_PER_FAMILY"
           [ -n "$ADV_N_PARADIGM_VARIANTS" ] && EXTRA_OPTS="$EXTRA_OPTS --n-paradigm-variants $ADV_N_PARADIGM_VARIANTS"
+          [ -n "$ADV_PARADIGM_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-anchors $ADV_PARADIGM_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-inspirations $ADV_PARADIGM_N_INSPIRATIONS"
           [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
           [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"

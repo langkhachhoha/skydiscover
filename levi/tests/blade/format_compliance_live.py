@@ -224,22 +224,69 @@ def build_cases() -> list[dict]:
             problem_description=PROBLEM,
             function_signature=SIGNATURE,
             n_evaluations=42,
-            n_regions=3,
-            representatives=[
+            n_families=3,
+            anchors=[
                 (
+                    "def make_change(amount, coins):\n"
+                    "    INF = float('inf')\n"
+                    "    dp = [0] + [INF] * amount\n"
+                    "    for a in range(1, amount + 1):\n"
+                    "        for c in coins:\n"
+                    "            if c <= a and dp[a - c] + 1 < dp[a]:\n"
+                    "                dp[a] = dp[a - c] + 1\n"
+                    "    return -1 if dp[amount] == INF else dp[amount]\n",
                     "Bottom-up dynamic programming over remaining-target dp array, "
                     "initialised to infinity; minimum-over-coins relaxation.",
                     0.95,
                 ),
                 (
+                    "from collections import deque\n"
+                    "def make_change(amount, coins):\n"
+                    "    seen = {0}\n"
+                    "    frontier = deque([(0, 0)])\n"
+                    "    while frontier:\n"
+                    "        total, depth = frontier.popleft()\n"
+                    "        if total == amount:\n"
+                    "            return depth\n"
+                    "        for c in coins:\n"
+                    "            nxt = total + c\n"
+                    "            if nxt <= amount and nxt not in seen:\n"
+                    "                seen.add(nxt)\n"
+                    "                frontier.append((nxt, depth + 1))\n"
+                    "    return -1\n",
                     "Breadth-first search over partial sums; visited set keyed on "
                     "running total, depth tracked alongside.",
                     0.82,
                 ),
                 (
+                    "def make_change(amount, coins):\n"
+                    "    coins = sorted(coins, reverse=True)\n"
+                    "    def go(rem, i):\n"
+                    "        if rem == 0:\n"
+                    "            return 0\n"
+                    "        if i == len(coins):\n"
+                    "            return -1\n"
+                    "        best = -1\n"
+                    "        for k in range(rem // coins[i], -1, -1):\n"
+                    "            sub = go(rem - k * coins[i], i + 1)\n"
+                    "            if sub >= 0:\n"
+                    "                best = sub + k if best < 0 else min(best, sub + k)\n"
+                    "        return best\n"
+                    "    return go(amount, 0)\n",
                     "Greedy descent sorting coins descending, backtracking when a "
                     "cell becomes infeasible.",
                     0.55,
+                ),
+            ],
+            inspirations=[
+                (
+                    "Meet-in-the-middle: enumerate combinations of the first half "
+                    "of coin types into a hash, then look up complements.",
+                    0.71,
+                ),
+                (
+                    "Integer linear programming relaxation followed by rounding.",
+                    0.40,
                 ),
             ],
             recent_trials=RECENT_TRIALS_FIXTURE,
