@@ -27,7 +27,15 @@ from .embedder import cosine
 
 logger = logging.getLogger(__name__)
 
-Source = Literal["init", "mutate", "crossover", "repair", "paradigm", "variant"]
+Source = Literal[
+    "init",
+    "mutate",
+    "crossover",
+    "repair",
+    "paradigm",
+    "paradigm_variant",
+    "variant",
+]
 
 
 @dataclass

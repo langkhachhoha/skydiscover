@@ -104,6 +104,27 @@ def _parse_args() -> argparse.Namespace:
         help="Frontier paradigm-shift fires every N evaluations (default: 50; '' to disable).",
     )
     p.add_argument(
+        "--n-diverse-seeds",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Phase-0 diverse seeds generated sequentially by the frontier model (default: 5, LEVI parity).",
+    )
+    p.add_argument(
+        "--n-variants-per-seed",
+        type=int,
+        default=20,
+        metavar="N",
+        help="Phase-0 mutation-model variants spun off per diverse seed in parallel (default: 20).",
+    )
+    p.add_argument(
+        "--n-paradigm-variants",
+        type=int,
+        default=4,
+        metavar="K",
+        help="Paradigm-shift fanout: K mutation-model variants of each accepted paradigm seed (default: 4).",
+    )
+    p.add_argument(
         "--pool-k",
         type=int,
         default=None,
@@ -135,6 +156,18 @@ def _parse_args() -> argparse.Namespace:
         "--no-repair",
         action="store_true",
         help="Disable the one-shot self-repair branch.",
+    )
+    p.add_argument(
+        "--no-meta-advice",
+        action="store_true",
+        help="Disable the LEVI-style lessons-learnt advisor.",
+    )
+    p.add_argument(
+        "--meta-advice-interval",
+        type=int,
+        default=50,
+        metavar="N",
+        help="Refresh meta-advice every N evaluations (default: 50).",
     )
 
     p.add_argument(
@@ -247,6 +280,9 @@ def main() -> int:
     print(f"[blade] budget dollars    = {dollars}")
     print(f"[blade] budget seconds    = {seconds}")
     print(f"[blade] pe_cron_interval  = {pe_interval}")
+    print(f"[blade] n_diverse_seeds   = {args.n_diverse_seeds}")
+    print(f"[blade] n_variants/seed   = {args.n_variants_per_seed}")
+    print(f"[blade] n_paradigm_var    = {args.n_paradigm_variants}")
     print(f"[blade] workers           = {workers}")
     print(f"[blade] output_dir        = {output_dir}")
 
@@ -267,6 +303,11 @@ def main() -> int:
         n_eval_processes=eval_processes,
         eval_timeout=eval_timeout,
         pe_cron_interval=pe_interval,
+        n_diverse_seeds=args.n_diverse_seeds,
+        n_variants_per_seed=args.n_variants_per_seed,
+        n_paradigm_variants=args.n_paradigm_variants,
+        enable_meta_advice=not args.no_meta_advice,
+        meta_advice_interval=args.meta_advice_interval,
         output_dir=output_dir,
         **overrides,
     )

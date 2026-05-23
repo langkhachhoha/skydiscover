@@ -79,13 +79,24 @@ on:
         required: false
         type: string
         default: "600"
+      n_diverse_seeds:
+        description: "Phase-0 diverse seeds from the frontier model (sequential)"
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        description: "Phase-0 mutation-model variants per seed (parallel)"
+        required: false
+        type: string
+        default: "20"
       advanced_options:
         description: >-
           Advanced BLADE knobs as a JSON object. Recognised keys:
           problem_module, target_score, embedding_model, eval_processes,
-          pool_k, niche_threshold, family_threshold, max_per_family,
-          repair_disabled. Example:
-          '{"target_score":0.95,"family_threshold":0.70,"repair_disabled":false}'
+          n_paradigm_variants, pool_k, niche_threshold, family_threshold,
+          max_per_family, repair_disabled, meta_advice_disabled,
+          meta_advice_interval. Example:
+          '{"target_score":0.95,"n_paradigm_variants":6,"meta_advice_interval":25}'
         required: false
         type: string
         default: ""
@@ -128,6 +139,14 @@ on:
         required: false
         type: string
         default: "600"
+      n_diverse_seeds:
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        required: false
+        type: string
+        default: "20"
       advanced_options:
         required: false
         type: string
@@ -204,7 +223,10 @@ jobs:
           [ -n "$ADV_NICHE_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --niche-threshold $ADV_NICHE_THRESHOLD"
           [ -n "$ADV_FAMILY_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --family-threshold $ADV_FAMILY_THRESHOLD"
           [ -n "$ADV_MAX_PER_FAMILY" ]  && EXTRA_OPTS="$EXTRA_OPTS --max-per-family $ADV_MAX_PER_FAMILY"
+          [ -n "$ADV_N_PARADIGM_VARIANTS" ] && EXTRA_OPTS="$EXTRA_OPTS --n-paradigm-variants $ADV_N_PARADIGM_VARIANTS"
+          [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
+          [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"
 
           uv run --active python ../scripts/run_blade.py \
             --example-dir "levi/examples/${{ inputs.benchmark }}" \
@@ -219,6 +241,8 @@ jobs:
             --eval-processes "$EVAL_PROCESSES" \
             --eval-timeout "${{ inputs.eval_timeout }}" \
             --pe-interval "${{ inputs.pe_interval }}" \
+            --n-diverse-seeds "${{ inputs.n_diverse_seeds }}" \
+            --n-variants-per-seed "${{ inputs.n_variants_per_seed }}" \
             --output-dir "${{ env.OUTPUT_DIR }}" \
             $EXTRA_OPTS
 

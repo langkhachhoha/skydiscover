@@ -485,38 +485,41 @@ jobs:
     secrets: inherit
 ```
 
-**First-class inputs (10 total — well under GitHub's 21-input limit).**
+**First-class inputs (12 total — well under GitHub's 21-input limit).**
 All values are strings; for budget fields (`evaluations`, `dollars`,
 `seconds`) blank means "no cap", and for everything else blank falls
 back to the listed default.
 
-| Input             | Default                                            | Notes                                                                  |
-| ----------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
-| `benchmark`       | `circle_packing` (dispatch only)                   | Dropdown over `levi/examples/<name>/`. Workflow builds the full path.  |
-| `evaluations`     | `""` (unset)                                       | Max evaluations. Blank = no cap.                                       |
-| `dollars`         | `""` (unset)                                       | Max USD spend. Blank disables.                                         |
-| `seconds`         | `""` (unset)                                       | Wall-clock cap in seconds. Blank disables.                             |
-| `mutation_model`  | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small / high-frequency mutation model.                                 |
-| `paradigm_model`  | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                |
-| `workers`         | `4`                                                | Concurrent LLM workers.                                                |
-| `pe_interval`     | `50`                                               | Paradigm-shift cadence (every N evaluations).                          |
-| `eval_timeout`    | `600`                                              | Per-candidate evaluation timeout in seconds.                           |
-| `advanced_options`| `""`                                               | JSON object for the rarely-used knobs (see next table).                |
+| Input                  | Default                                            | Notes                                                                  |
+| ---------------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `benchmark`            | `circle_packing` (dispatch only)                   | Dropdown over `levi/examples/<name>/`. Workflow builds the full path.  |
+| `evaluations`          | `""` (unset)                                       | Max evaluations. Blank = no cap.                                       |
+| `dollars`              | `""` (unset)                                       | Max USD spend. Blank disables.                                         |
+| `seconds`              | `""` (unset)                                       | Wall-clock cap in seconds. Blank disables.                             |
+| `mutation_model`       | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small / high-frequency mutation model.                                 |
+| `paradigm_model`       | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                |
+| `workers`              | `4`                                                | Concurrent LLM workers.                                                |
+| `pe_interval`          | `50`                                               | Paradigm-shift cadence (every N evaluations).                          |
+| `eval_timeout`         | `600`                                              | Per-candidate evaluation timeout in seconds.                           |
+| `n_diverse_seeds`      | `5`                                                | Phase-0 sequential frontier-model diverse seeds.                       |
+| `n_variants_per_seed`  | `20`                                               | Phase-0 parallel mutation-model variants per seed.                     |
+| `advanced_options`     | `""`                                               | JSON object for the rarely-used knobs (see next table).                |
 
 **`advanced_options` JSON keys.** All are optional; omit any you don't
 want to override.
 
-| Key                  | Default                                          | Effect                                                       |
-| -------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
-| `problem_module`     | `problem`                                        | Python module name imported from the benchmark dir.          |
-| `target_score`       | unset                                            | Stop early once a candidate reaches this score.              |
-| `embedding_model`    | `openrouter/openai/text-embedding-3-small`       | Description-embedding model used by the pool.                |
-| `eval_processes`     | `4`                                              | Concurrent evaluator subprocesses.                           |
-| `pool_k`             | `100`                                            | Maximum programs retained in the pool.                       |
-| `niche_threshold`    | `0.92`                                           | Cosine threshold for near-duplicate dedup.                   |
-| `family_threshold`   | `0.72`                                           | Single-linkage cosine threshold for family clustering.       |
-| `max_per_family`     | `8`                                              | Max programs co-existing per family.                         |
-| `repair_disabled`    | `false`                                          | Set `true` to skip the one-shot self-repair branch.          |
+| Key                     | Default                                          | Effect                                                       |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `problem_module`        | `problem`                                        | Python module name imported from the benchmark dir.          |
+| `target_score`          | unset                                            | Stop early once a candidate reaches this score.              |
+| `embedding_model`       | `openrouter/openai/text-embedding-3-small`       | Description-embedding model used by the pool.                |
+| `eval_processes`        | `4`                                              | Concurrent evaluator subprocesses.                           |
+| `n_paradigm_variants`   | `4`                                              | K mutation-model variants spawned after each paradigm seed.  |
+| `pool_k`                | `100`                                            | Maximum programs retained in the pool.                       |
+| `niche_threshold`       | `0.92`                                           | Cosine threshold for near-duplicate dedup.                   |
+| `family_threshold`      | `0.72`                                           | Single-linkage cosine threshold for family clustering.       |
+| `max_per_family`        | `8`                                              | Max programs co-existing per family.                         |
+| `repair_disabled`       | `false`                                          | Set `true` to skip the one-shot self-repair branch.          |
 
 Each run uploads its `outputs/github-actions/blade_<run_id>` directory
 as the artifact `blade-<benchmark>-<run_id>` for 14 days.
@@ -557,28 +560,39 @@ Source of truth: [`levi/levi/blade/orchestrator.py`](../levi/levi/blade/orchestr
 
 ### 9.1 `BladeConfig` — orchestrator-level
 
-| Knob                       | Default                                            | What it does                                                                                         |
-| -------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `mutation_model`           | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small model for the high-frequency mutation / crossover / repair calls.                              |
-| `paradigm_model`           | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                                              |
-| `embedding_model`          | `openrouter/openai/text-embedding-3-small`         | Description-embedding model used by the pool.                                                        |
-| `budget_evals`             | `None`                                             | Stop after N evaluations. `None` = no cap.                                                           |
-| `budget_dollars`           | `None`                                             | Stop after $N spent. `None` = no cap.                                                                |
-| `budget_seconds`           | `None`                                             | Stop after N wall-clock seconds. `None` = no cap.                                                    |
-| `target_score`             | `None`                                             | Stop early once any candidate reaches this score.                                                    |
-| `n_workers`                | `4`                                                | Concurrent LLM workers (mutation pipeline).                                                          |
-| `n_eval_processes`         | `4`                                                | Concurrent evaluator subprocesses.                                                                   |
-| `eval_timeout`             | `120.0`                                            | Per-candidate evaluation timeout, seconds. Workflow defaults override to `600`.                      |
-| `llm_temperature`          | `0.8`                                              | Mutation temperature when the monitor is healthy.                                                    |
-| `llm_temperature_stuck`    | `1.1`                                              | Mutation temperature when `is_stuck()` fires.                                                        |
-| `llm_max_tokens`           | `1200`                                             | Token cap for mutation / crossover / repair calls.                                                   |
-| `paradigm_max_tokens`      | `None`                                             | **Leave at None.** Capping the GPT-5 paradigm call empties its content (reasoning burns the budget). |
-| `pe_cron_interval`         | `50`                                               | Frontier paradigm shift fires every N completed evaluations.                                         |
-| `paradigm_min_pool_size`   | `5`                                                | Skip paradigm shift if the pool has fewer programs (not enough representatives).                     |
-| `p_crossover_healthy`      | `0.30`                                             | Probability of a crossover (vs single-parent mutation) when healthy.                                 |
-| `p_crossover_stuck`        | `0.70`                                             | Probability of a crossover when `is_stuck()` fires.                                                  |
-| `enable_repair`            | `True`                                             | Toggle the one-shot self-repair branch on errored candidates.                                        |
-| `output_dir`               | `"runs/blade"`                                     | Where `snapshot.json` / `best.py` / `summary.json` are written.                                      |
+| Knob                            | Default                                            | What it does                                                                                         |
+| ------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `mutation_model`                | `openrouter/qwen/qwen3-30b-a3b-instruct-2507`      | Small model for the high-frequency mutation / crossover / repair calls.                              |
+| `paradigm_model`                | `openrouter/openai/gpt-5`                          | Frontier reasoning model used only for paradigm shifts.                                              |
+| `embedding_model`               | `openrouter/openai/text-embedding-3-small`         | Description-embedding model used by the pool.                                                        |
+| `budget_evals`                  | `None`                                             | Stop after N evaluations. `None` = no cap.                                                           |
+| `budget_dollars`                | `None`                                             | Stop after $N spent. `None` = no cap.                                                                |
+| `budget_seconds`                | `None`                                             | Stop after N wall-clock seconds. `None` = no cap.                                                    |
+| `target_score`                  | `None`                                             | Stop early once any candidate reaches this score.                                                    |
+| `n_workers`                     | `4`                                                | Concurrent LLM workers (mutation pipeline).                                                          |
+| `n_eval_processes`              | `4`                                                | Concurrent evaluator subprocesses.                                                                   |
+| `eval_timeout`                  | `120.0`                                            | Per-candidate evaluation timeout, seconds. Workflow defaults override to `600`.                      |
+| `llm_temperature`               | `0.8`                                              | Mutation temperature when the monitor is healthy.                                                    |
+| `llm_temperature_stuck`         | `1.1`                                              | Mutation temperature when `is_stuck()` fires.                                                        |
+| `llm_max_tokens`                | `1200`                                             | Token cap for mutation / crossover / repair calls.                                                   |
+| `paradigm_max_tokens`           | `None`                                             | **Leave at None.** Capping the GPT-5 paradigm call empties its content (reasoning burns the budget). |
+| `pe_cron_interval`              | `50`                                               | Frontier paradigm shift fires every N completed evaluations.                                         |
+| `paradigm_min_pool_size`        | `5`                                                | Skip paradigm shift if the pool has fewer programs (not enough representatives).                     |
+| `n_diverse_seeds`               | `5`                                                | Phase-0 sequential frontier-model diverse seeds (LEVI parity).                                       |
+| `n_variants_per_seed`           | `20`                                               | Phase-0 parallel mutation-model variants per accepted seed.                                          |
+| `init_diversity_temperature`    | `0.8`                                              | Temperature for the frontier-model diverse-seed calls.                                               |
+| `init_variant_temperature`      | `0.9`                                              | Temperature for the mutation-model init-variant calls.                                               |
+| `n_paradigm_variants`           | `4`                                                | K mutation-model variants spawned in parallel after each paradigm seed (LEVI parity).                |
+| `paradigm_variant_temperature`  | `0.8`                                              | Temperature for the mutation-model paradigm-variant calls.                                           |
+| `p_crossover_healthy`           | `0.30`                                             | Probability of a crossover (vs single-parent mutation) when healthy.                                 |
+| `p_crossover_stuck`             | `0.70`                                             | Probability of a crossover when `is_stuck()` fires.                                                  |
+| `enable_repair`                 | `True`                                             | Toggle the one-shot self-repair branch on errored candidates.                                        |
+| `enable_meta_advice`            | `True`                                             | LEVI-style lessons-learnt advisor: prose injected into subsequent mutate/crossover prompts.          |
+| `meta_advice_interval`          | `50`                                               | Refresh meta-advice every N completed evaluations.                                                   |
+| `meta_advice_inject_p`          | `0.8`                                              | Probability of injecting the current advice into any given mutate/crossover prompt.                  |
+| `meta_advice_temperature`       | `0.4`                                              | Temperature for the mutation-model advisor calls (low — we want a crisp summary).                    |
+| `meta_advice_max_tokens`        | `400`                                              | Token cap for the advisor's output.                                                                  |
+| `output_dir`                    | `"runs/blade"`                                     | Where `snapshot.json` / `best.py` / `summary.json` are written.                                      |
 
 ### 9.2 `PoolConfig` — top-K + family caps
 

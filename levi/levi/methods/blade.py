@@ -32,6 +32,11 @@ def evolve_code_blade(
     n_eval_processes: int = 4,
     eval_timeout: float = 120.0,
     pe_cron_interval: int = 50,
+    n_diverse_seeds: int = 5,
+    n_variants_per_seed: int = 20,
+    n_paradigm_variants: int = 4,
+    enable_meta_advice: bool = True,
+    meta_advice_interval: int = 50,
     output_dir: str | Path | None = None,
     **overrides: Any,
 ) -> BladeResult:
@@ -54,6 +59,20 @@ def evolve_code_blade(
         Concurrency knobs.
     pe_cron_interval
         Fire the frontier (paradigm-shift) model every N evaluations.
+    n_diverse_seeds, n_variants_per_seed
+        Phase-0 (bootstrap) shape. The frontier model generates
+        ``n_diverse_seeds`` diverse seeds sequentially; the mutation model
+        spins off ``n_variants_per_seed`` parallel variants per seed.
+        LEVI parity defaults: 5 × 20 = up to 100 candidates before the
+        evolutionary loop starts.
+    n_paradigm_variants
+        How many parallel variants the mutation model produces after each
+        paradigm shift completes. LEVI parity default: 4.
+    enable_meta_advice, meta_advice_interval
+        LEVI-style lessons-learnt advisor. When on, the mutation model
+        writes a short prescriptive note every ``meta_advice_interval``
+        evaluations (default 50). The note is then injected (at 80%
+        probability) into subsequent mutate / crossover prompts.
     output_dir
         Where to write ``snapshot.json`` + ``best.py``. Defaults to
         ``runs/blade-<timestamp>``.
@@ -82,6 +101,11 @@ def evolve_code_blade(
         n_eval_processes=n_eval_processes,
         eval_timeout=eval_timeout,
         pe_cron_interval=pe_cron_interval,
+        n_diverse_seeds=n_diverse_seeds,
+        n_variants_per_seed=n_variants_per_seed,
+        n_paradigm_variants=n_paradigm_variants,
+        enable_meta_advice=enable_meta_advice,
+        meta_advice_interval=meta_advice_interval,
         output_dir=output_dir,
     )
     if mutation_model is not None:

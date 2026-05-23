@@ -49,8 +49,11 @@ if key.startswith("sk-or-") and not os.environ.get("OPENROUTER_API_KEY"):
 
 from levi.blade.prompts import (  # noqa: E402
     build_crossover_prompt,
+    build_diverse_seed_prompt,
+    build_init_variant_prompt,
     build_mutate_prompt,
     build_paradigm_prompt,
+    build_paradigm_variant_prompt,
     build_repair_prompt,
 )
 from levi.simple.parser import OutputParser  # noqa: E402
@@ -253,6 +256,61 @@ def build_cases() -> list[dict]:
                 "max_tokens": None,
             }
         )
+
+    # 5) Bootstrap phase 1 — frontier "diverse seed" prompt. We exercise
+    #    two sub-shapes: cold-start (no existing seeds) and warm
+    #    (with one seed already in the context).
+    diverse_cold = build_diverse_seed_prompt(
+        problem_description=PROBLEM,
+        function_signature=SIGNATURE,
+        existing_seeds=[],
+    )
+    cases.append({
+        "shape": "diverse-seed-cold",
+        "temperature": 0.8,
+        "model": PARADIGM_MODEL,
+        "prompt": diverse_cold,
+        "max_tokens": None,
+    })
+    diverse_warm = build_diverse_seed_prompt(
+        problem_description=PROBLEM,
+        function_signature=SIGNATURE,
+        existing_seeds=[(PARENT_DP, 0.95)],
+    )
+    cases.append({
+        "shape": "diverse-seed-warm",
+        "temperature": 0.8,
+        "model": PARADIGM_MODEL,
+        "prompt": diverse_warm,
+        "max_tokens": None,
+    })
+
+    # 6) Bootstrap phase 2 — mutation "init variant" prompt.
+    init_var_prompt = build_init_variant_prompt(
+        problem_description=PROBLEM,
+        function_signature=SIGNATURE,
+        inspirations=[(PARENT_DP, 0.95), (PARENT_BFS, 0.82)],
+    )
+    cases.append({
+        "shape": "init-variant",
+        "temperature": 0.9,
+        "model": MUTATION_MODEL,
+        "prompt": init_var_prompt,
+    })
+
+    # 7) Paradigm fanout — mutation "paradigm variant" prompt.
+    pv_prompt = build_paradigm_variant_prompt(
+        problem_description=PROBLEM,
+        function_signature=SIGNATURE,
+        base_code=PARENT_DP,
+        base_score=0.95,
+    )
+    cases.append({
+        "shape": "paradigm-variant",
+        "temperature": 0.8,
+        "model": MUTATION_MODEL,
+        "prompt": pv_prompt,
+    })
 
     return cases
 

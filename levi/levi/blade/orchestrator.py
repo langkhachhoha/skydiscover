@@ -51,8 +51,12 @@ from ..utils.evaluation import evaluate_code
 from ..utils.resilient_pool import ResilientProcessPool
 from .prompts import (
     build_crossover_prompt,
+    build_diverse_seed_prompt,
+    build_init_variant_prompt,
+    build_meta_advice_prompt,
     build_mutate_prompt,
     build_paradigm_prompt,
+    build_paradigm_variant_prompt,
     build_repair_prompt,
     get_budget_stage,
 )
@@ -108,10 +112,44 @@ class BladeConfig:
 
     # Loop schedule
     pe_cron_interval: int = 50
-    """Frontier paradigm-shift fires every N completed evaluations."""
+    """Frontier paradigm-shift fires every N completed evaluations.
+
+    Trigger semantics: a background monitor task (``_pe_monitor``) wakes
+    every ~2 s and fires PE when
+    ``eval_count >= last_pe_eval_count + pe_cron_interval``. After the
+    shift finishes, ``last_pe_eval_count`` is snapped to the current
+    ``eval_count`` so the K+1 evals it spent don't immediately re-trigger.
+
+    This is a boundary-crossing gate (not exact modulo) because BLADE's
+    ``asyncio.gather`` in bootstrap phase 2 and paradigm fanout makes
+    ``eval_count`` jump in bursts — an exact-modulo gate would silently
+    skip boundaries the bursts jump over.
+    """
     paradigm_min_pool_size: int = 5
     """Skip paradigm shift if the pool has fewer than this many programs
     (not enough representatives to make the prompt useful)."""
+
+    # Initial population (LEVI-style 2-phase bootstrap)
+    n_diverse_seeds: int = 5
+    """Number of diverse seeds the frontier model generates SEQUENTIALLY
+    in phase 0. Each prompt sees the previously accepted seeds and is
+    pushed to design a fundamentally different paradigm. Mirrors LEVI's
+    ``init.n_diverse_seeds``."""
+    n_variants_per_seed: int = 20
+    """How many variants the mutation model spins off PER accepted seed
+    in phase 0 (parallel asyncio.gather). Total init candidates ≈
+    n_diverse_seeds × n_variants_per_seed."""
+    init_diversity_temperature: float = 0.8
+    """Temperature for the frontier-model diverse-seed calls."""
+    init_variant_temperature: float = 0.9
+    """Temperature for the mutation-model init-variant calls."""
+
+    # Paradigm shift fanout
+    n_paradigm_variants: int = 4
+    """K variants the mutation model spins off after each accepted
+    paradigm-shift solution (parallel asyncio.gather). LEVI default."""
+    paradigm_variant_temperature: float = 0.8
+    """Temperature for the mutation-model paradigm-variant calls."""
 
     # Operator mix
     p_crossover_healthy: float = 0.30
@@ -119,6 +157,25 @@ class BladeConfig:
 
     # Repair (one-shot per error candidate, mutation model only)
     enable_repair: bool = True
+
+    # Meta-advisor (cron-fired post-mortem summary, injected into prompts)
+    enable_meta_advice: bool = True
+    """Toggle the LEVI-style meta-advisor. When on, a short lessons-learnt
+    paragraph is generated every ``meta_advice_interval`` evaluations and
+    injected (at probability ``meta_advice_inject_p``) into subsequent
+    mutate / crossover prompts."""
+    meta_advice_interval: int = 50
+    """Generate fresh meta-advice every N completed evaluations. Mirrors
+    LEVI's ``config.meta_advice.interval``."""
+    meta_advice_inject_p: float = 0.8
+    """Probability of injecting the current advice into any given mutate
+    or crossover prompt (LEVI default)."""
+    meta_advice_temperature: float = 0.4
+    """Temperature for the mutation-model advisor calls (low — we want a
+    crisp, factual summary)."""
+    meta_advice_max_tokens: int = 400
+    """Token cap for the advisor's output. The injected block is short by
+    design; capping prevents the small model from running off."""
 
     # Output
     output_dir: str | Path = "runs/blade"
@@ -212,6 +269,22 @@ class BladeOrchestrator:
 
         self.start_time: float = 0.0
         self.stop_event = asyncio.Event()
+
+        # PE trigger gate — LEVI-style: modulo + freshness so the K+1 evals
+        # spent inside a paradigm shift don't immediately re-trigger it on
+        # another interval boundary.
+        self.last_pe_eval_count: int = 0
+        self.pe_trigger_count: int = 0
+        # At most one paradigm shift in flight at any time.
+        self._pe_lock = asyncio.Lock()
+
+        # Meta-advisor state. ``current_meta_advice`` is the active block
+        # injected into mutate/crossover prompts; ``last_meta_advice_eval_count``
+        # gates the cron so we fire once per interval boundary.
+        self.current_meta_advice: str | None = None
+        self.last_meta_advice_eval_count: int = 0
+        self.meta_advice_trigger_count: int = 0
+        self._meta_advice_lock = asyncio.Lock()
 
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -381,8 +454,15 @@ class BladeOrchestrator:
                 return
             programs = self.pool.programs()
             if not programs:
-                # Cold start: just sample raw from seed prompt — handled by
-                # _bootstrap_seed before workers start.
+                # Cold start: bootstrap should have populated the pool. If it
+                # didn't (seed failed + draft LLM call failed), re-run it from
+                # the worker so we don't loop forever returning empty-handed.
+                logger.warning("[BLADE] empty pool inside worker; re-bootstrapping")
+                await self._bootstrap_population()
+                if not self.pool.programs():
+                    # Still empty — count this as a reject so eval_count
+                    # advances and the budget eventually triggers a clean exit.
+                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
                 return
 
             stuck = self.monitor.is_stuck()
@@ -406,6 +486,7 @@ class BladeOrchestrator:
                         parent_b_code=p_b.code,
                         parent_b_score=p_b.score,
                         inspirations=insps,
+                        meta_advice=self._pick_meta_advice(),
                     )
                     parent_score = max(p_a.score, p_b.score)
                 else:
@@ -421,13 +502,18 @@ class BladeOrchestrator:
                         parent_code=parent.code,
                         parent_score=parent.score,
                         inspirations=insps,
+                        meta_advice=self._pick_meta_advice(),
                     )
                     parent_score = parent.score
 
                 raw = await self._call(self.mutation_lm, prompt, temperature=temp)
                 parsed = self.parser.parse(raw)
                 if not parsed.has_code:
-                    logger.debug("[BLADE] no code in mutation output; skipping")
+                    # Still count the attempt — otherwise a chronically
+                    # malformed-output provider produces no eval progress and
+                    # the loop appears to hang.
+                    logger.debug("[BLADE] no code in mutation output; counting as reject")
+                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
                     return
                 score, _scores_dict, err = await self._evaluate_code(parsed.code)
                 if err is not None:
@@ -446,7 +532,11 @@ class BladeOrchestrator:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("[BLADE] worker step failed")
+                # Count the failed worker as a reject so eval_count advances
+                # and the main loop doesn't appear stuck. Common causes:
+                # provider 5xx, rate-limit, transient network errors.
+                logger.exception("[BLADE] worker step failed; counting as reject")
+                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
 
     async def _repair_one(self) -> None:
         """One-shot self-repair on the freshest error in the buffer."""
@@ -463,10 +553,12 @@ class BladeOrchestrator:
         try:
             raw = await self._call(self.mutation_lm, prompt, temperature=0.4)
         except Exception:
-            logger.exception("[BLADE] repair LLM call failed")
+            logger.exception("[BLADE] repair LLM call failed; counting as reject")
+            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
             return
         parsed = self.parser.parse(raw)
         if not parsed.has_code:
+            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
             return
         score, _scores, err = await self._evaluate_code(parsed.code)
         if err is not None:
@@ -482,13 +574,44 @@ class BladeOrchestrator:
             parent_score=parent_score,
         )
 
+    def _budget_progress(self) -> float:
+        """Fraction of the tightest budget consumed so far, in ``[0, 1]``.
+
+        Used to route paradigm-shift stage (early/mid/late). Mirrors LEVI's
+        ``state.budget_progress`` (min across the three caps; 0.0 when
+        none configured)."""
+        cfg = self.config
+        progress = 0.0
+        if cfg.budget_evals is not None and cfg.budget_evals > 0:
+            progress = max(progress, min(1.0, self.monitor.eval_count / cfg.budget_evals))
+        if cfg.budget_dollars is not None and cfg.budget_dollars > 0:
+            progress = max(progress, min(1.0, self.cost.cost / cfg.budget_dollars))
+        if cfg.budget_seconds is not None and cfg.budget_seconds > 0:
+            elapsed = time.time() - self.start_time
+            progress = max(progress, min(1.0, elapsed / cfg.budget_seconds))
+        return progress
+
     async def _paradigm_shift(self) -> None:
-        """Frontier (paradigm-shift) LLM call. Picks 3 representatives by phase,
-        feeds them as descriptions only, and records a ParadigmTrial."""
-        if len(self.pool) < self.config.paradigm_min_pool_size:
+        """Frontier paradigm shift, LEVI-style two-step:
+
+        1. Frontier (paradigm) model generates ONE paradigm-shift solution
+           via the three-stage prompt (early / mid / late). Evaluated and
+           admitted as ``source="paradigm"``.
+        2. Mutation (small) model fans out :attr:`config.n_paradigm_variants`
+           variants of the accepted paradigm code in PARALLEL via
+           :func:`asyncio.gather`. Each variant is admitted as
+           ``source="paradigm_variant"``.
+
+        If step 1 fails (LLM error, parse miss, eval error), step 2 is
+        skipped — there's no fresh base code to fan out from.
+
+        Total evals per call ≈ 1 + n_paradigm_variants (LEVI parity).
+        """
+        cfg = self.config
+        if len(self.pool) < cfg.paradigm_min_pool_size:
             return
         stage = get_budget_stage(
-            budget_progress=0.0,
+            budget_progress=self._budget_progress(),
             stagnation=self.monitor.stagnation_level(),
         )
         reps = self.pool.representatives(stage, n=3)  # type: ignore[arg-type]
@@ -499,27 +622,27 @@ class BladeOrchestrator:
         prev_best = self.monitor.best_score
         prompt = build_paradigm_prompt(
             stage=stage,
-            problem_description=self.config.problem_description,
-            function_signature=self.config.function_signature,
+            problem_description=cfg.problem_description,
+            function_signature=cfg.function_signature,
             n_evaluations=self.monitor.eval_count,
             n_regions=self.pool.num_families(),
             representatives=rep_pairs,
             recent_trials=list(self.recent_trials),
         )
+
+        # ----- step 1: frontier paradigm seed -----
         try:
-            # Frontier call: never cap tokens — reasoning-heavy models
-            # need their full provider-side budget to produce any visible
-            # output. ``max_tokens=None`` makes the LM client drop the
-            # field entirely. See BladeConfig.paradigm_max_tokens.
             raw = await self._call(
                 self.paradigm_lm,
                 prompt,
                 temperature=0.7,
-                max_tokens=self.config.paradigm_max_tokens,  # = None by default
+                max_tokens=cfg.paradigm_max_tokens,  # None — never cap frontier
             )
         except Exception:
-            logger.exception("[BLADE] paradigm-shift LLM call failed")
+            logger.exception("[BLADE PE] frontier call failed; counting as reject")
+            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
             return
+
         parsed = self.parser.parse(raw)
         if not parsed.has_code:
             trial = ParadigmTrial(
@@ -532,6 +655,7 @@ class BladeOrchestrator:
             )
             self.paradigm_trials.append(trial)
             self.recent_trials.append(trial.render())
+            self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
             return
 
         score, _scores, err = await self._evaluate_code(parsed.code)
@@ -554,7 +678,6 @@ class BladeOrchestrator:
             delta = score - prev_best
         elif accepted:
             delta = 0.0
-
         trial = ParadigmTrial(
             trial_idx=len(self.paradigm_trials) + 1,
             stage=stage,
@@ -570,57 +693,237 @@ class BladeOrchestrator:
             # immediately inherit a stale novelty penalty.
             self.pool.reset_uses_after_paradigm()
 
+        # ----- step 2: mutation fanout (parallel) -----
+        if err is not None or not parsed.has_code:
+            logger.info(
+                "[BLADE PE] frontier candidate unusable (err=%s) — skipping fanout",
+                err if err else "parse_miss",
+            )
+            return
+        if cfg.n_paradigm_variants <= 0:
+            return
+        if self._budget_exhausted():
+            return
+
+        base_code = parsed.code
+        base_score = score
+        logger.info(
+            "[BLADE PE] fanout: %d variants from paradigm seed (score=%.4f)",
+            cfg.n_paradigm_variants,
+            base_score,
+        )
+
+        async def _one_paradigm_variant() -> None:
+            if self._budget_exhausted():
+                return
+            v_prompt = build_paradigm_variant_prompt(
+                problem_description=cfg.problem_description,
+                function_signature=cfg.function_signature,
+                base_code=base_code,
+                base_score=base_score,
+            )
+            try:
+                raw_v = await self._call(
+                    self.mutation_lm,
+                    v_prompt,
+                    temperature=cfg.paradigm_variant_temperature,
+                )
+            except Exception:
+                logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
+                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                return
+            parsed_v = self.parser.parse(raw_v)
+            if not parsed_v.has_code:
+                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                return
+            v_score, _vscores, v_err = await self._evaluate_code(parsed_v.code)
+            if v_err is not None:
+                self.error_buffer.append((parsed_v.code, base_score, v_err))
+                self.monitor.record_eval(score=v_score, accepted=False, embedding=None)
+                return
+            v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
+            await self._admit(
+                code=parsed_v.code,
+                description=v_description,
+                score=v_score,
+                source="paradigm_variant",
+                parent_score=base_score,
+            )
+
+        await asyncio.gather(*(_one_paradigm_variant() for _ in range(cfg.n_paradigm_variants)))
+
     # ------------------------------------------------------------------
     # Bootstrap
     # ------------------------------------------------------------------
 
-    async def _bootstrap_seed(self) -> None:
-        """Push the seed program (if any) into the pool. Otherwise ask the
-        mutation model to draft an initial paradigm from the signature alone."""
-        seed = self.config.seed_program
-        if seed:
-            score, _scores, err = await self._evaluate_code(seed)
-            description = await self._summarize_if_needed(seed, "")
+    async def _bootstrap_population(self) -> None:
+        """LEVI-style two-phase initial population.
+
+        Phase 1 — Diverse seeds (SEQUENTIAL, frontier model). Each call
+        sees all previously accepted seeds, so the model is pushed toward
+        algorithmic diversity. If the user supplied ``seed_program``, it
+        is admitted first and counts as one of the seeds.
+
+        Phase 2 — Variants (PARALLEL, mutation model). For each accepted
+        seed, fan out ``n_variants_per_seed`` variants whose prompts each
+        sample two seeds as inspirations. All variants are evaluated and
+        admitted concurrently via :func:`asyncio.gather`.
+
+        Mirrors :class:`levi.init.diversifier.Diversifier` and uses LEVI's
+        DIVERSITY_SEED_PROMPT + VARIANT_GENERATION_PROMPT verbatim
+        (wrapped to comply with BLADE's description-required parser).
+        """
+        cfg = self.config
+
+        # ----- phase 1: diverse seeds (sequential) -----
+        diverse_seeds: list[tuple[str, float, str]] = []  # (code, score, description)
+
+        # If the user provided a seed_program, evaluate it first and treat it
+        # as the first diverse seed.
+        if cfg.seed_program:
+            score, _scores, err = await self._evaluate_code(cfg.seed_program)
             if err is None:
+                description = await self._summarize_if_needed(cfg.seed_program, "")
                 await self._admit(
-                    code=seed,
+                    code=cfg.seed_program,
                     description=description,
                     score=score,
                     source="init",
                     parent_score=None,
                 )
+                diverse_seeds.append((cfg.seed_program, score, description))
+                logger.info("[BLADE init] seed_program admitted (score=%.4f)", score)
+            else:
+                logger.warning("[BLADE init] seed_program failed to evaluate: %s", err)
+                self.monitor.record_eval(score=score, accepted=False, embedding=None)
+
+        # Generate the remaining diverse seeds sequentially. If there's no
+        # user seed, generate one extra to compensate (LEVI parity).
+        n_seeds = cfg.n_diverse_seeds + (0 if cfg.seed_program else 1)
+        max_retries = 3
+        for i in range(n_seeds):
+            if self._budget_exhausted():
+                logger.info("[BLADE init] phase 1 stop (budget exhausted)")
+                break
+
+            success = False
+            for attempt in range(max_retries):
+                if self._budget_exhausted():
+                    break
+                tag = f"[seed {i + 1}]" if attempt == 0 else f"[seed {i + 1} retry {attempt}]"
+                prompt = build_diverse_seed_prompt(
+                    problem_description=cfg.problem_description,
+                    function_signature=cfg.function_signature,
+                    existing_seeds=[(c, s) for c, s, _ in diverse_seeds],
+                )
+                try:
+                    raw = await self._call(
+                        self.paradigm_lm,
+                        prompt,
+                        temperature=cfg.init_diversity_temperature,
+                        max_tokens=cfg.paradigm_max_tokens,  # None — never cap frontier
+                    )
+                except Exception:
+                    logger.exception("[BLADE init] %s frontier call failed", tag)
+                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    continue
+
+                parsed = self.parser.parse(raw)
+                if not parsed.has_code:
+                    logger.info("[BLADE init] %s no code in frontier output", tag)
+                    self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                    continue
+
+                score, _scores, err = await self._evaluate_code(parsed.code)
+                if err is not None:
+                    logger.info("[BLADE init] %s eval failed: %s", tag, str(err)[:80])
+                    self.error_buffer.append((parsed.code, float("-inf"), err))
+                    self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                    continue
+
+                description = await self._summarize_if_needed(parsed.code, parsed.description)
+                await self._admit(
+                    code=parsed.code,
+                    description=description,
+                    score=score,
+                    source="init",
+                    parent_score=None,
+                )
+                diverse_seeds.append((parsed.code, score, description))
+                logger.info("[BLADE init] %s OK (score=%.4f)", tag, score)
+                success = True
+                break
+
+            if not success:
+                logger.warning("[BLADE init] seed %d gave up after %d retries", i + 1, max_retries)
+
+        logger.info("[BLADE init] phase 1 done: %d seeds admitted", len(diverse_seeds))
+
+        if not diverse_seeds:
+            logger.error("[BLADE init] phase 1 produced no usable seeds — skipping phase 2")
+            return
+
+        # ----- phase 2: variants (parallel) -----
+        if cfg.n_variants_per_seed <= 0:
+            return
+
+        n_variants = cfg.n_variants_per_seed * len(diverse_seeds)
+        logger.info(
+            "[BLADE init] phase 2 generating %d variants (%d × %d) in parallel",
+            n_variants,
+            cfg.n_variants_per_seed,
+            len(diverse_seeds),
+        )
+
+        # Build the prompts up front, sampling 2 seeds per variant as
+        # inspirations (LEVI parity). When fewer than 2 seeds exist we
+        # take what we have.
+        n_inspirations = min(2, len(diverse_seeds))
+        prompts: list[str] = []
+        for _seed_code, _seed_score, _ in diverse_seeds:
+            for _ in range(cfg.n_variants_per_seed):
+                insps = random.sample(diverse_seeds, n_inspirations)
+                prompts.append(
+                    build_init_variant_prompt(
+                        problem_description=cfg.problem_description,
+                        function_signature=cfg.function_signature,
+                        inspirations=[(c, s) for c, s, _ in insps],
+                    )
+                )
+
+        async def _one_variant(prompt: str) -> None:
+            if self._budget_exhausted():
                 return
-            logger.warning("[BLADE] seed program failed to evaluate: %s", err)
+            try:
+                raw = await self._call(
+                    self.mutation_lm,
+                    prompt,
+                    temperature=cfg.init_variant_temperature,
+                )
+            except Exception:
+                logger.exception("[BLADE init] variant LLM call failed; counting as reject")
+                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                return
+            parsed = self.parser.parse(raw)
+            if not parsed.has_code:
+                self.monitor.record_eval(score=float("-inf"), accepted=False, embedding=None)
+                return
+            score, _scores, err = await self._evaluate_code(parsed.code)
+            if err is not None:
+                self.error_buffer.append((parsed.code, float("-inf"), err))
+                self.monitor.record_eval(score=score, accepted=False, embedding=None)
+                return
+            description = await self._summarize_if_needed(parsed.code, parsed.description)
+            await self._admit(
+                code=parsed.code,
+                description=description,
+                score=score,
+                source="init",
+                parent_score=None,
+            )
 
-        # No usable seed — ask the mutation model for an initial draft.
-        prompt = (
-            f"# Problem\n{self.config.problem_description}\n\n"
-            f"# Signature\n```python\n{self.config.function_signature}\n```\n\n"
-            "Write a baseline solution. Pick any reasonable paradigm — we "
-            "will diversify from here.\n\n"
-        )
-        from ..simple.parser import OUTPUT_FORMAT_INSTRUCTION
-
-        prompt = prompt + OUTPUT_FORMAT_INSTRUCTION
-        try:
-            raw = await self._call(self.mutation_lm, prompt, temperature=0.6)
-        except Exception:
-            logger.exception("[BLADE] seed bootstrap LLM call failed")
-            return
-        parsed = self.parser.parse(raw)
-        if not parsed.has_code:
-            return
-        score, _scores, err = await self._evaluate_code(parsed.code)
-        if err is not None:
-            return
-        description = await self._summarize_if_needed(parsed.code, parsed.description)
-        await self._admit(
-            code=parsed.code,
-            description=description,
-            score=score,
-            source="init",
-            parent_score=None,
-        )
+        await asyncio.gather(*(_one_variant(p) for p in prompts))
+        logger.info("[BLADE init] phase 2 done — pool size now %d", len(self.pool))
 
     # ------------------------------------------------------------------
     # Top-level run loop
@@ -631,8 +934,21 @@ class BladeOrchestrator:
         # Spin up evaluator subprocess pool.
         self._eval_processes = ResilientProcessPool(max_workers=self.config.n_eval_processes)
         try:
-            await self._bootstrap_seed()
-            await self._main_loop()
+            await self._bootstrap_population()
+            # Background coroutines that run alongside the main loop:
+            #   * _pe_monitor       fires paradigm shifts on cron boundaries
+            #   * _meta_advice_monitor refreshes the lessons-learnt block
+            pe_monitor_task = asyncio.create_task(self._pe_monitor())
+            advisor_task = asyncio.create_task(self._meta_advice_monitor())
+            try:
+                await self._main_loop()
+            finally:
+                for t in (pe_monitor_task, advisor_task):
+                    t.cancel()
+                    try:
+                        await t
+                    except (asyncio.CancelledError, Exception):
+                        pass
         finally:
             try:
                 self._eval_processes.shutdown()
@@ -655,46 +971,34 @@ class BladeOrchestrator:
         return result
 
     async def _main_loop(self) -> None:
-        """Run mutation workers in waves; fire paradigm shifts on the cron.
+        """Run mutation workers and opportunistic repair until budget exhausts.
 
-        Frontier paradigm calls and self-repair are dispatched as background
-        tasks (one of each at most) so they cannot block the mutation
-        producers — a slow frontier model would otherwise stall the worker
-        pool for tens of seconds.
+        Paradigm shifts are scheduled by the parallel ``_pe_monitor`` task
+        (LEVI-style cron-modulo + freshness gate), NOT inline here — that
+        keeps the trigger logic in one place and avoids the back-to-back
+        firing problem the inline cron had at small ``pe_cron_interval``.
+        Self-repair stays inline because it's cheap and event-driven (only
+        fires when the error_buffer has fresh entries).
         """
         cfg = self.config
 
         in_flight: set[asyncio.Task] = set()
-        paradigm_task: asyncio.Task | None = None
         repair_task: asyncio.Task | None = None
-        next_pe_at = cfg.pe_cron_interval
-        last_eval_count = -1
-        stall_ticks = 0
 
         while not self.stop_event.is_set() and not self._budget_exhausted():
             # Launch up to n_workers concurrent mutation generations.
             while len(in_flight) < cfg.n_workers and not self._budget_exhausted():
                 in_flight.add(asyncio.create_task(self._generate_one()))
 
-            # Trigger cron paradigm shift (non-blocking — single task at a time).
-            if (
-                paradigm_task is None or paradigm_task.done()
-            ) and self.monitor.eval_count >= next_pe_at:
-                next_pe_at = self.monitor.eval_count + cfg.pe_cron_interval
-                paradigm_task = asyncio.create_task(self._paradigm_shift())
-
             # Opportunistic repair (non-blocking; one in flight at a time).
             if (repair_task is None or repair_task.done()) and self.error_buffer:
                 repair_task = asyncio.create_task(self._repair_one())
 
-            # Wait for any of the worker / background tasks to finish.
+            # Wait for any of the worker / repair tasks to finish.
             wait_set = set(in_flight)
-            if paradigm_task is not None and not paradigm_task.done():
-                wait_set.add(paradigm_task)
             if repair_task is not None and not repair_task.done():
                 wait_set.add(repair_task)
             if not wait_set:
-                # Nothing scheduled — guard against busy-spin on edge cases.
                 await asyncio.sleep(0.05)
                 continue
 
@@ -705,31 +1009,191 @@ class BladeOrchestrator:
                 exc = t.exception()
                 if exc is not None:
                     logger.error("[BLADE] background task error: %s", exc)
-            # Only worker tasks live in `in_flight`; paradigm/repair tasks
-            # are tracked separately so we don't accidentally drop them.
             in_flight = {t for t in in_flight if not t.done()}
 
-            # Stall detection: if eval_count hasn't moved for ~40 wait-cycles,
-            # something is wrong (provider down, all workers failing). Bail.
-            if self.monitor.eval_count == last_eval_count:
-                stall_ticks += 1
-                if stall_ticks >= 40:
-                    logger.warning("[BLADE] stall detected; stopping early")
-                    break
-            else:
-                stall_ticks = 0
-                last_eval_count = self.monitor.eval_count
-
-        # Drain remaining tasks.
+        # Drain remaining tasks (workers + repair). PE monitor / paradigm
+        # shifts are owned by run() and are cancelled there.
         leftovers: list[asyncio.Task] = list(in_flight)
-        if paradigm_task is not None and not paradigm_task.done():
-            leftovers.append(paradigm_task)
         if repair_task is not None and not repair_task.done():
             leftovers.append(repair_task)
         for t in leftovers:
             t.cancel()
         if leftovers:
             await asyncio.gather(*leftovers, return_exceptions=True)
+
+    # ------------------------------------------------------------------
+    # PE monitor (LEVI-style cron-modulo + freshness)
+    # ------------------------------------------------------------------
+
+    async def _pe_monitor(self) -> None:
+        """Wake every ~2 s; fire paradigm shifts on cron boundary crossings.
+
+        Adapted from :meth:`levi.pipeline.runner.PipelineRunner._pe_monitor`.
+
+        BLADE differs from LEVI in one important respect: bootstrap phase 2
+        and paradigm fanout submit many evaluations through
+        :func:`asyncio.gather`, so ``monitor.eval_count`` jumps in bursts
+        (e.g. 12 → 17 between two wake-ups). An exact-modulo gate
+        (``ec % interval == 0``) silently skips boundaries that the bursts
+        jump over. We use a **boundary-crossing** gate instead:
+
+        * fire whenever
+          ``eval_count >= last_pe_eval_count + pe_cron_interval``,
+          regardless of whether the count landed exactly on a multiple of
+          the interval.
+        * after the shift completes, snap ``last_pe_eval_count`` forward
+          to the current ``eval_count`` so the K+1 variants we just ran
+          don't immediately re-trigger.
+        * hold ``_pe_lock`` for the duration of the shift, so at most one
+          paradigm task ever runs at a time.
+
+        With ``pe_cron_interval=N`` you should see approximately
+        ``(eval_count - phase0_evals) / N`` triggers per run.
+        """
+        cfg = self.config
+        if cfg.pe_cron_interval <= 0:
+            logger.info("[BLADE PE] disabled (pe_cron_interval <= 0)")
+            return
+        try:
+            while not self.stop_event.is_set() and not self._budget_exhausted():
+                await asyncio.sleep(2.0)
+                if self.stop_event.is_set() or self._budget_exhausted():
+                    break
+
+                ec = self.monitor.eval_count
+                if ec > 0 and ec >= self.last_pe_eval_count + cfg.pe_cron_interval:
+                    self.last_pe_eval_count = ec
+                    async with self._pe_lock:
+                        self.pe_trigger_count += 1
+                        logger.info(
+                            "[BLADE PE] trigger #%d at eval=%d (stage routing inline)",
+                            self.pe_trigger_count,
+                            ec,
+                        )
+                        try:
+                            await self._paradigm_shift()
+                        except Exception:
+                            logger.exception("[BLADE PE] paradigm shift errored")
+                        # Snap forward so the variants we just ran don't
+                        # immediately retrigger on another boundary.
+                        self.last_pe_eval_count = max(
+                            self.last_pe_eval_count, self.monitor.eval_count
+                        )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[BLADE PE] monitor crashed")
+
+    # ------------------------------------------------------------------
+    # Meta-advisor (LEVI port — cron-fired summary injected into prompts)
+    # ------------------------------------------------------------------
+
+    def _pick_meta_advice(self) -> str | None:
+        """Return the current meta-advice with probability
+        :attr:`BladeConfig.meta_advice_inject_p`, else ``None``.
+
+        Random gating mirrors LEVI so the prompts retain some variance
+        across calls even while the advice is fresh."""
+        if not self.config.enable_meta_advice:
+            return None
+        if not self.current_meta_advice:
+            return None
+        if random.random() >= self.config.meta_advice_inject_p:
+            return None
+        return self.current_meta_advice
+
+    def _recent_error_messages(self, n: int = 5) -> list[str]:
+        """Tail of the error buffer for the meta-advisor prompt.
+
+        Returns at most ``n`` strings; oldest first. Each element is the
+        error message portion of an ``error_buffer`` entry."""
+        if not self.error_buffer:
+            return []
+        items = list(self.error_buffer)[-n:]
+        return [msg for (_code, _parent_score, msg) in items]
+
+    async def _generate_meta_advice(self) -> None:
+        """Ask the mutation model to write the next lessons-learnt block.
+
+        Inputs are the current period's stats (best score, accept rate,
+        stagnation, top recent errors) plus the previous advice (so the
+        model can refine rather than restart). Output replaces
+        ``self.current_meta_advice`` verbatim. Failures are non-fatal —
+        we just keep the previous advice."""
+        cfg = self.config
+        prompt = build_meta_advice_prompt(
+            problem_description=cfg.problem_description,
+            function_signature=cfg.function_signature,
+            best_score=self.monitor.best_score,
+            n_evaluations=self.monitor.eval_count,
+            accept_rate=self.monitor.acceptance_rate(),
+            stagnation_level=self.monitor.stagnation_level(),
+            recent_errors=self._recent_error_messages(5),
+            previous_advice=self.current_meta_advice,
+        )
+        try:
+            raw = await self._call(
+                self.mutation_lm,
+                prompt,
+                temperature=cfg.meta_advice_temperature,
+                max_tokens=cfg.meta_advice_max_tokens,
+            )
+        except Exception:
+            logger.exception("[BLADE advisor] LLM call failed; keeping previous advice")
+            return
+        # The advisor output is prose; we don't run it through OutputParser
+        # because there is no code to extract. Trim and keep.
+        text = (raw or "").strip()
+        if not text:
+            logger.info("[BLADE advisor] empty response; keeping previous advice")
+            return
+        # Defensive cap so a runaway response can't bloat downstream prompts.
+        if len(text) > 1200:
+            text = text[:1200].rstrip() + "…"
+        self.current_meta_advice = text
+        logger.info(
+            "[BLADE advisor] new advice (%d chars) at eval=%d",
+            len(text),
+            self.monitor.eval_count,
+        )
+
+    async def _meta_advice_monitor(self) -> None:
+        """Wake every ~2 s; refresh meta-advice on boundary crossings.
+
+        Same boundary-crossing semantics as ``_pe_monitor`` (see its
+        docstring) — required because BLADE's ``asyncio.gather`` makes
+        ``eval_count`` jump in bursts, which would slip past an exact-
+        modulo gate. Holds ``_meta_advice_lock`` so at most one advisor
+        call ever runs at a time."""
+        cfg = self.config
+        if not cfg.enable_meta_advice or cfg.meta_advice_interval <= 0:
+            logger.info(
+                "[BLADE advisor] disabled (enable_meta_advice=%s, interval=%d)",
+                cfg.enable_meta_advice,
+                cfg.meta_advice_interval,
+            )
+            return
+        try:
+            while not self.stop_event.is_set() and not self._budget_exhausted():
+                await asyncio.sleep(2.0)
+                if self.stop_event.is_set() or self._budget_exhausted():
+                    break
+
+                ec = self.monitor.eval_count
+                if ec > 0 and ec >= self.last_meta_advice_eval_count + cfg.meta_advice_interval:
+                    self.last_meta_advice_eval_count = ec
+                    async with self._meta_advice_lock:
+                        self.meta_advice_trigger_count += 1
+                        logger.info(
+                            "[BLADE advisor] trigger #%d at eval=%d",
+                            self.meta_advice_trigger_count,
+                            ec,
+                        )
+                        await self._generate_meta_advice()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[BLADE advisor] monitor crashed")
 
     # ------------------------------------------------------------------
     # Output
@@ -744,6 +1208,12 @@ class BladeOrchestrator:
             "pool_size": result.pool_size,
             "runtime_seconds": result.runtime_seconds,
             "monitor": self.monitor.snapshot(),
+            "meta_advice": {
+                "enabled": self.config.enable_meta_advice,
+                "interval": self.config.meta_advice_interval,
+                "trigger_count": self.meta_advice_trigger_count,
+                "current": self.current_meta_advice,
+            },
             "paradigm_trials": [
                 {
                     "idx": t.trial_idx,
