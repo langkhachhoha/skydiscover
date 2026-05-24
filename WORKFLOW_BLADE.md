@@ -403,6 +403,45 @@ Các thay đổi đã làm:
 4. **`structural_cosine_threshold=0.97`** (mới) — lộ ra qua flag
    `--structural-threshold`; đặt > 1.0 để tắt lớp AST nếu muốn so sánh.
 5. Surface thêm `--paradigm-n-anchors`, `--paradigm-n-inspirations` để tune.
+6. **Bug fix: `parse_miss` storm ở mutation model** — xem mục 9.1.
+
+### 9.1 Bug fix: `parse_miss (no code in output)` chiếm gần toàn bộ Phase 2
+
+Trong run sau khi đã áp dụng các thay đổi trên, log Phase 2 cho thấy **30/32
+variants liên tiếp bị reject** với lý do `parse_miss (no code in output)` —
+nghĩa là output của Qwen mutation không chứa fenced code block nào.
+
+**Giả thuyết đầu tiên** (sai): đổ lỗi cho format prompt — nghĩ rằng
+`OUTPUT_FORMAT_INSTRUCTION` 2-section (`## Description` + `## Code`) quá khó
+cho Qwen3-30B-A3B. Đã thử tạo `MUTATION_OUTPUT_FORMAT` mới gọn hơn.
+
+**A/B test trên Qwen thật** (16 calls mỗi cấu hình, `scripts/test_mutation_format.py`):
+
+| Cấu hình | has_code |
+| --- | --- |
+| OLD strict format, `max_tokens=1200` | 15/16 (93.8%) — **1 truncated** |
+| OLD strict format, `max_tokens=4096` | 16/16 (100%) |
+| OLD strict format, `max_tokens=None` | 16/16 (100%) |
+| NEW gọn format, `max_tokens=1200` | 15/16 (93.8%) — vẫn truncated |
+| NEW gọn format, `max_tokens=4096` | 16/16 (100%) |
+
+Format prompt **không phải nguyên nhân** — cả hai format đều bị miss như
+nhau ở mức `max_tokens=1200`. Thủ phạm thật là **`llm_max_tokens=1200`** —
+prompt phase-2 chứa 2 seed program full (đến hàng ngàn token mỗi cái) cộng
+với `## Description` prose mà model viết trước → response bị truncate
+TRƯỚC khi kịp mở fence ` ```python `.
+
+**Fix thật sự**: đổi default `BladeConfig.llm_max_tokens` từ `1200` → `None`
+([levi/levi/blade/orchestrator.py:104](levi/levi/blade/orchestrator.py#L104)).
+Khi `None`, `LM.acompletion` strip key `max_tokens` trước khi gọi litellm
+([levi/levi/clients/lm.py:153](levi/levi/clients/lm.py#L153)) — provider
+(OpenRouter / Qwen) tự dùng ceiling mặc định ≥ 4096, đủ rộng để Qwen luôn
+hoàn thành cả description + code fence.
+
+Prompt giữ nguyên `OUTPUT_FORMAT_INSTRUCTION` 2-section cho tất cả prompts.
+Description luôn có sẵn → không cần `_summarize_if_needed` cho mutation
+output → tiết kiệm 1 LLM call cho mỗi candidate, đồng thời pool description-
+embedding niching nhận được mô tả "do model viết" thay vì "summary từ code".
 
 `pe_interval=10` và `n_diverse_seeds=4` trong workflow đều là *LEVI parity*
 chứ không phải bug:

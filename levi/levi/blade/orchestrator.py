@@ -101,8 +101,16 @@ class BladeConfig:
     eval_timeout: float = 120.0
     llm_temperature: float = 0.8
     llm_temperature_stuck: float = 1.1
-    llm_max_tokens: int = 1200
-    """Token cap for mutation / crossover / repair calls."""
+    llm_max_tokens: int | None = None
+    """Token cap for mutation / crossover / repair calls.
+
+    Default ``None`` = let the provider use its own default. Capping at a
+    small number (e.g. 1200) caused parse_miss storms on the Qwen mutation
+    model in production: a long seed-program prompt + 800-char strict
+    OUTPUT_FORMAT_INSTRUCTION would push the model to spend most of its
+    budget on description prose, leaving the response truncated *before*
+    the opening ```python fence — so the parser saw no code block at all.
+    Letting the provider pick the ceiling avoids that whole class of bug."""
     paradigm_max_tokens: int | None = None
     """Token cap for the frontier (paradigm-shift) call. **Leave at None.**
     Reasoning-heavy models (GPT-5, o1, …) consume most of a fixed budget

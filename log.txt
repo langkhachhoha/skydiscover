@@ -1,0 +1,115 @@
+Installed 82 packages in 121ms
+[blade] example_dir       = /home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing
+[blade] mutation_model    = openrouter/qwen/qwen3-30b-a3b-instruct-2507
+[blade] paradigm_model    = openrouter/openai/gpt-5
+[blade] embedding_model   = openrouter/openai/text-embedding-3-small
+[blade] budget evals      = None
+[blade] budget dollars    = None
+[blade] budget seconds    = 10800.0
+[blade] pe_cron_interval  = 10
+[blade] n_diverse_seeds   = 4
+[blade] n_variants/seed   = 20
+[blade] n_paradigm_var    = 4
+[blade] workers           = 4
+[blade] output_dir        = /home/runner/work/skydiscover/skydiscover/outputs/github-actions/blade_26338941819
+17:23:53 [INFO] [BLADE] starting — budget: $None evals=None seconds=10800.0 target=None
+17:23:53 [INFO] [BLADE] models: mutation=openrouter/qwen/qwen3-30b-a3b-instruct-2507 | paradigm=openrouter/openai/gpt-5 | embedding=openrouter/openai/text-embedding-3-small
+17:23:53 [INFO] [BLADE] knobs: workers=4 | pe_interval=10 | n_diverse_seeds=4 | n_variants/seed=20 | n_paradigm_var=4
+17:23:53 [INFO] [BLADE init] phase 1 starting — 4 diverse seeds (sequential, frontier model)
+17:23:53 [INFO] [BLADE init] [seed 1] requesting diverse seed from gpt-5
+17:24:23 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 30s
+17:24:53 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 60s
+17:25:23 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 90s
+17:25:34 [INFO] [Eval #1] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.438940 | best: 2.438940 | $0.086
+17:25:34 [INFO] [BLADE init] [seed 1] OK (score=2.4389)
+17:25:34 [INFO] [BLADE init] [seed 2] requesting diverse seed from gpt-5
+17:25:53 [INFO] [Status] Cost: $0.086 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.438940 | Elapsed: 120s
+17:26:23 [INFO] [Status] Cost: $0.086 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.438940 | Elapsed: 150s
+17:26:39 [INFO] [BLADE init] [seed 2] eval failed: Syntax error: invalid syntax (<string>, line 2)
+17:26:39 [INFO] [Eval #2] qwen3-30b-a3b-instruct-2507 ERROR (init): Syntax error: invalid syntax (<string>, line 2)
+17:26:39 [INFO] [BLADE init] [seed 2 retry 1] requesting diverse seed from gpt-5
+17:26:53 [INFO] [Status] Cost: $0.153 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.438940 | Elapsed: 180s
+17:27:23 [INFO] [Status] Cost: $0.153 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.438940 | Elapsed: 210s
+17:27:53 [INFO] [Status] Cost: $0.227 | Evals: 2 | Clients in-flight: 0 | Eval in-flight: 0 | Pool: 1 | Best: 2.438940 | Elapsed: 240s
+17:27:53 [INFO] [Eval #3] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.190385 | best: 2.438940 | $0.227
+17:27:53 [INFO] [BLADE init] [seed 2 retry 1] OK (score=2.1904)
+17:27:53 [INFO] [BLADE init] [seed 3] requesting diverse seed from gpt-5
+17:28:23 [INFO] [Status] Cost: $0.227 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 270s
+17:28:53 [INFO] [Status] Cost: $0.227 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 300s
+17:29:23 [INFO] [Status] Cost: $0.319 | Evals: 3 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 2 | Best: 2.438940 | Elapsed: 330s
+17:29:53 [INFO] [Status] Cost: $0.319 | Evals: 3 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 2 | Best: 2.438940 | Elapsed: 360s
+17:30:19 [INFO] [BLADE init] [seed 3] eval failed: Negative radius
+17:30:19 [INFO] [Eval #4] qwen3-30b-a3b-instruct-2507 ERROR (init): Negative radius
+17:30:19 [INFO] [BLADE init] [seed 3 retry 1] requesting diverse seed from gpt-5
+17:30:23 [INFO] [Status] Cost: $0.319 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 390s
+17:30:53 [INFO] [Status] Cost: $0.319 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 420s
+17:31:23 [INFO] [Status] Cost: $0.319 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 450s
+17:31:53 [INFO] [Status] Cost: $0.319 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 480s
+17:32:03 [INFO] [BLADE init] [seed 3 retry 1] eval failed: index 132 is out of bounds for axis 0 with size 26
+17:32:03 [INFO] [Eval #5] qwen3-30b-a3b-instruct-2507 ERROR (init): index 132 is out of bounds for axis 0 with size 26
+17:32:03 [INFO] [BLADE init] [seed 3 retry 2] requesting diverse seed from gpt-5
+17:32:23 [INFO] [Status] Cost: $0.420 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 510s
+17:32:53 [INFO] [Status] Cost: $0.420 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 540s
+17:33:23 [INFO] [Status] Cost: $0.420 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 570s
+17:33:53 [INFO] [Status] Cost: $0.420 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.438940 | Elapsed: 600s
+17:34:13 [INFO] [Eval #6] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.572987 | best: 2.572987 | $0.570
+17:34:13 [INFO] [BLADE init] [seed 3 retry 2] OK (score=2.5730)
+17:34:13 [INFO] [BLADE init] [seed 4] requesting diverse seed from gpt-5
+17:34:23 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 630s
+17:34:53 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 660s
+17:35:23 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 690s
+17:35:53 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 720s
+17:36:23 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 750s
+17:36:53 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 780s
+17:37:23 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 810s
+17:37:53 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 840s
+17:38:23 [INFO] [Status] Cost: $0.570 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.572987 | Elapsed: 870s
+17:38:35 [INFO] [Eval #7] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.361812 | best: 2.572987 | $0.712
+17:38:35 [INFO] [BLADE init] [seed 4] OK (score=2.3618)
+17:38:35 [INFO] [BLADE init] [seed 5] requesting diverse seed from gpt-5
+17:38:53 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 900s
+17:39:23 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 930s
+17:39:53 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 960s
+17:40:23 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 990s
+17:40:53 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 1020s
+17:41:23 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 1050s
+17:41:53 [INFO] [Status] Cost: $0.712 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 1080s
+17:42:23 [INFO] [Status] Cost: $0.868 | Evals: 7 | Clients in-flight: 0 | Eval in-flight: 0 | Pool: 4 | Best: 2.572987 | Elapsed: 1110s
+17:42:24 [INFO] [Eval #8] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476859 | best: 2.572987 | $0.868
+17:42:24 [INFO] [BLADE init] [seed 5] OK (score=1.4769)
+17:42:24 [INFO] [BLADE init] phase 1 done: 5 seeds admitted
+17:42:24 [INFO] [BLADE init] phase 2 generating 100 variants (20 × 5) in parallel
+17:42:34 [INFO] [Eval #9] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #10] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #11] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #12] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #13] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #14] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:34 [INFO] [Eval #15] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:35 [INFO] [Eval #16] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:36 [INFO] [Eval #17] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:37 [INFO] [Eval #18] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:37 [INFO] [Eval #19] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.820479 | best: 2.572987 | $0.879
+17:42:38 [INFO] [Eval #20] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:38 [INFO] [Eval #21] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:39 [INFO] [Eval #22] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:39 [INFO] [Eval #23] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:39 [INFO] [Eval #24] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:39 [INFO] [Eval #25] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:40 [INFO] [Eval #26] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:40 [INFO] [Eval #27] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:40 [INFO] [Eval #28] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:42 [INFO] [Eval #29] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:42 [INFO] [Eval #30] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:42 [INFO] [Eval #31] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:44 [INFO] [Eval #32] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:44 [INFO] [Eval #33] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:44 [INFO] [Eval #34] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #35] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #36] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #37] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #38] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #39] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #40] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #41] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
+17:42:45 [INFO] [Eval #42] qwen3-30b-a3b-instruct-2507 ERROR (init): parse_miss (no code in output)
