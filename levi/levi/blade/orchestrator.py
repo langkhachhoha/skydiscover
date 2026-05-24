@@ -199,6 +199,23 @@ class BladeConfig:
     # Output
     output_dir: str | Path = "runs/blade"
 
+    # Safety: hard client-side timeout for every LLM call (mutation + frontier).
+    # Belt-and-suspenders cap on top of the litellm-side ``timeout`` argument —
+    # OpenRouter has been observed to send whitespace keep-alive bytes
+    # indefinitely when the upstream provider (e.g. GPT-5) stalls, so the
+    # built-in timeout never fires and the call hangs forever. When the cap
+    # trips we raise :class:`asyncio.TimeoutError`, which the worker treats
+    # as a normal LLM error and the budget check can finally exit.
+    llm_call_timeout: float = 600.0
+    """Hard ceiling per LLM call. Set to 0 / None to disable (not recommended)."""
+
+    # Safety: maximum time to spend draining in-flight worker / monitor
+    # tasks once the budget exhausts. If cancellation doesn't propagate
+    # (e.g. an httpx call ignoring CancelledError), we give up and let
+    # the process exit anyway — better a noisy daemon-thread warning than
+    # a CI job that hangs for hours after producing its summary.
+    shutdown_grace_seconds: float = 15.0
+
     # Subsystem overrides (advanced)
     pool_config: PoolConfig = field(default_factory=PoolConfig)
     monitor_config: MonitorConfig = field(default_factory=MonitorConfig)
@@ -363,11 +380,20 @@ class BladeOrchestrator:
             effective_max_tokens = max_tokens  # type: ignore[assignment]
         self._client_in_flight += 1
         try:
-            result = await client.acompletion(
+            call_coro = client.acompletion(
                 prompt,
                 temperature=temperature,
                 max_tokens=effective_max_tokens,
             )
+            timeout = self.config.llm_call_timeout
+            if timeout and timeout > 0:
+                # Hard cap on top of litellm's own timeout — necessary
+                # because OpenRouter's whitespace keep-alives can hide a
+                # stalled upstream indefinitely (observed: 4 calls stuck
+                # >10000s past budget exhaustion, blocking shutdown).
+                result = await asyncio.wait_for(call_coro, timeout=timeout)
+            else:
+                result = await call_coro
         finally:
             self._client_in_flight -= 1
         self.cost.record(result.cost)
@@ -1106,18 +1132,14 @@ class BladeOrchestrator:
                 logger.info("[BLADE] entering evolutionary main loop (n_workers=%d)", cfg.n_workers)
                 await self._main_loop()
             finally:
-                for t in (pe_monitor_task, advisor_task):
-                    t.cancel()
-                    try:
-                        await t
-                    except (asyncio.CancelledError, Exception):
-                        pass
+                self.stop_event.set()
+                await self._cancel_with_grace(
+                    [pe_monitor_task, advisor_task],
+                    label="pe/advisor",
+                )
         finally:
-            status_task.cancel()
-            try:
-                await status_task
-            except (asyncio.CancelledError, Exception):
-                pass
+            self.stop_event.set()
+            await self._cancel_with_grace([status_task], label="status")
             try:
                 self._eval_processes.shutdown()
             except Exception:  # pragma: no cover — defensive
@@ -1137,6 +1159,35 @@ class BladeOrchestrator:
         )
         self._save_snapshot(result)
         return result
+
+    async def _cancel_with_grace(
+        self, tasks: list[asyncio.Task], *, label: str
+    ) -> None:
+        """Cancel ``tasks`` and await them with a bounded grace period.
+
+        Background tasks may be parked in code that swallows ``CancelledError``
+        (e.g. the inside of a third-party HTTP call). Without a timeout the
+        whole shutdown stalls. The grace comes from
+        :attr:`BladeConfig.shutdown_grace_seconds`."""
+        live = [t for t in tasks if t is not None and not t.done()]
+        for t in live:
+            t.cancel()
+        if not live:
+            return
+        grace = self.config.shutdown_grace_seconds
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*live, return_exceptions=True),
+                timeout=grace,
+            )
+        except (TimeoutError, asyncio.TimeoutError):
+            stuck = [t for t in live if not t.done()]
+            logger.warning(
+                "[BLADE] %s task(s) did not honor cancel within %.1fs (%d stuck); abandoning",
+                label,
+                grace,
+                len(stuck),
+            )
 
     async def _main_loop(self) -> None:
         """Run mutation workers and opportunistic repair until budget exhausts.
@@ -1170,8 +1221,15 @@ class BladeOrchestrator:
                 await asyncio.sleep(0.05)
                 continue
 
+            # Budget-aware wait: bound on time so the while-condition
+            # re-evaluates even when every in-flight task is stuck (observed
+            # in CI: 4 LLM calls hanging past budget_seconds with no result
+            # for hours). Without the timeout, asyncio.wait blocked forever
+            # and the workflow only ended when GitHub Actions hard-killed it.
             done, _pending = await asyncio.wait(
-                wait_set, return_when=asyncio.FIRST_COMPLETED
+                wait_set,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=2.0,
             )
             for t in done:
                 exc = t.exception()
@@ -1187,7 +1245,22 @@ class BladeOrchestrator:
         for t in leftovers:
             t.cancel()
         if leftovers:
-            await asyncio.gather(*leftovers, return_exceptions=True)
+            grace = self.config.shutdown_grace_seconds
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*leftovers, return_exceptions=True),
+                    timeout=grace,
+                )
+            except (TimeoutError, asyncio.TimeoutError):
+                # Some task is ignoring CancelledError (typically an httpx
+                # call stuck on a socket read). Log and let run()'s finally
+                # block proceed — we'd rather exit dirty than not at all.
+                stuck = [t for t in leftovers if not t.done()]
+                logger.warning(
+                    "[BLADE] %d worker task(s) did not honor cancel within %.1fs; abandoning",
+                    len(stuck),
+                    grace,
+                )
 
     # ------------------------------------------------------------------
     # Status monitor (LEVI-parity heartbeat)

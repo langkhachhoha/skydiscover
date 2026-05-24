@@ -1,406 +1,1093 @@
-warning: `VIRTUAL_ENV=/home/runner/work/skydiscover/skydiscover/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
-[levi] example       = /home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing
-[levi] small model   = openrouter/qwen/qwen3-30b-a3b-instruct-2507
-[levi] large model   = openrouter/openai/gpt-5
-[levi] budget evals  = None
-[levi] budget $      = 3.0
-[levi] budget secs   = 10800.0
-[levi] target_score  = None
-[levi] output_dir    = /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409
-[levi] SAL/PPS = on
-[levi] Punctuated Equilibrium = on
-[levi] Strategy log = on
-[levi] Code repair  = on
-[levi] Adaptive Island = on
-[levi] prompt_bank     = enabled
-[levi]   prompts_file        = /home/runner/work/skydiscover/skydiscover/levi/examples/mutation_prompts.json
-[levi]   temperatures_file   = /home/runner/work/skydiscover/skydiscover/levi/examples/mutation_temperatures.json
-15:01:48 [INFO] [Levi] Starting evolutionary optimization
-15:01:48 [INFO] [Levi] Budget: dollars=3.0 evaluations=None seconds=10800.0 target_score=None
-15:01:48 [INFO] [Levi] Sampler-model pairs: 15
-15:01:48 [INFO] [Levi] Running init phase
-15:01:48 [INFO] [Init Phase 1] Generating 5 diverse seeds with openrouter/openai/gpt-5
-15:04:13 [INFO]   [Seed 1] OK - score: 1.4084507042225347
-15:13:26 [INFO]   [Seed 2] OK - score: 2.041448474021561
-15:16:14 [INFO]   [Seed 3] OK - score: 2.6001901944668613
-15:19:04 [INFO]   [Seed 4] OK - score: 1.8769892850292216
-15:20:55 [INFO]   [Seed 5] OK - score: 1.4590569599547376
-15:20:55 [INFO] [Init Phase 1] Generated 5 seeds
-15:20:55 [INFO] [Init Phase 2] Generating 100 variants with ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']
-15:39:10 [INFO] [Init Phase 2] Evaluating 100 candidates
-16:54:46 [INFO] [Init Phase 2] Finished evaluating 100 candidates
-16:54:47 [INFO] [Init Phase 2] Valid programs: 89
-16:54:47 [INFO] [Init Phase 2] Sample failures (5 unique errors shown):
-16:54:47 [INFO]   - Boundary violation on x
-16:54:47 [INFO]     Content: import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
- ...
-16:54:47 [INFO]   - Overlap between circles 12 and 25
-16:54:47 [INFO]     Content: import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
- ...
-16:54:47 [INFO]   - run_packing() must return (centers, radii, sum_radii)
-16:54:47 [INFO]     Content: import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
- ...
-16:54:47 [INFO]   - index 25 is out of bounds for axis 0 with size 25
-16:54:47 [INFO]     Content: import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
- ...
-16:54:47 [INFO]   - name 'eps_shrink' is not defined
-16:54:47 [INFO]     Content: import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
- ...
-16:54:47 [INFO] [Init Phase 3] Built 50 centroids
-16:54:47 [INFO] [Init Phase 3] Done: 50 cells filled, archive size: 50, best: 2.6007581023722715, cost: $0.709
-16:54:47 [INFO] [Levi] Init phase complete, cost: $0.709
-16:54:47 [INFO] [Levi] Starting evolution pipeline
-16:54:47 [INFO] [Pipeline] Starting with 4 generation workers, 4 eval workers
-16:54:47 [INFO] [Pipeline] Punctuated equilibrium enabled (interval=10)
-16:55:17 [INFO] [Status] Cost: $0.711 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 | Best: 2.6007581023722715
-16:55:47 [INFO] [Status] Cost: $0.715 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 50 | Best: 2.6007581023722715
-16:56:17 [INFO] [Status] Cost: $0.717 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:56:47 [INFO] [Status] Cost: $0.723 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:57:17 [INFO] [Status] Cost: $0.727 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:57:47 [INFO] [Status] Cost: $0.732 | Evals: 105 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:58:17 [INFO] [Status] Cost: $0.740 | Evals: 105 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:58:47 [INFO] [Status] Cost: $0.742 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:59:11 [INFO] [Eval #106] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.742
-16:59:17 [INFO] [Status] Cost: $0.742 | Evals: 106 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-16:59:47 [INFO] [Status] Cost: $0.742 | Evals: 106 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:00:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:00:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:01:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:01:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:02:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:02:47 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:03:17 [INFO] [Status] Cost: $0.744 | Evals: 106 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:03:17 [INFO] [Eval #107] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.744
-17:03:47 [INFO] [Status] Cost: $0.744 | Evals: 107 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:04:17 [INFO] [Status] Cost: $0.744 | Evals: 107 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:04:47 [INFO] [Status] Cost: $0.746 | Evals: 107 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:05:04 [INFO] [Eval #108] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0396049037907473 | best: 2.6007581023722715 | $0.746
-17:05:17 [INFO] [Status] Cost: $0.746 | Evals: 108 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:05:18 [INFO] [Eval #109] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0389290300725542 | best: 2.6007581023722715 | $0.746
-17:05:22 [INFO] [Eval #110] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
-17:05:23 [INFO] [PE] Triggering punctuated equilibrium #1 at eval 110
-17:05:23 [INFO] [PE] Clustered 50 elites into 3 clusters
-17:05:23 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
-17:05:23 [INFO] [PE] Cluster 2 rep: score=2.6001901944668613
-17:05:23 [INFO] [PE] Cluster 1 rep: score=2.0958337189091334
-17:05:47 [INFO] [Status] Cost: $0.750 | Evals: 110 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:05:54 [INFO] [Eval #111] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.039007421593158 | best: 2.6007581023722715 | $0.750
-<string>:266: RuntimeWarning: divide by zero encountered in log
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:277: RuntimeWarning: divide by zero encountered in divide
-17:06:17 [INFO] [Status] Cost: $0.750 | Evals: 111 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:06:45 [INFO] [Eval #112] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5648660635756659 | best: 2.6007581023722715 | $0.830
-17:06:47 [INFO] [Status] Cost: $0.830 | Evals: 112 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:06:51 [INFO] [Eval #113] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.832
-17:07:17 [INFO] [Status] Cost: $0.832 | Evals: 113 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:07:47 [INFO] [Status] Cost: $0.835 | Evals: 113 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:08:17 [INFO] [Status] Cost: $0.837 | Evals: 113 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581023722715
-17:08:18 [INFO] [PE] Paradigm shift: score=2.6007581026297464, accepted=True, cell=14
-17:08:18 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
-17:08:23 [INFO] [Eval #114] qwen3-30b-a3b-instruct-2507    ERROR: Overlap between 0 and 25
-17:08:47 [INFO] [Status] Cost: $0.837 | Evals: 114 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:09:11 [INFO] [Eval #115] qwen3-30b-a3b-instruct-2507    accepted     | score: 1.5499999999984488 | best: 2.6007581023722715 | $0.838
-17:09:17 [INFO] [Status] Cost: $0.838 | Evals: 115 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:09:47 [INFO] [Status] Cost: $0.843 | Evals: 115 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:09:52 [INFO] [Eval #116] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.843
-17:10:17 [INFO] [Status] Cost: $0.843 | Evals: 116 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:10:47 [INFO] [Status] Cost: $0.846 | Evals: 116 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:10:49 [INFO] [Eval #117] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.846
-17:10:54 [INFO] [Eval #118] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
-17:11:17 [INFO] [Status] Cost: $0.848 | Evals: 118 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:11:47 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:12:17 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:12:47 [INFO] [Status] Cost: $0.851 | Evals: 118 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:12:54 [INFO] [Eval #119] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.851
-17:12:58 [INFO] [Eval #120] qwen3-30b-a3b-instruct-2507    ERROR: index 5 is out of bounds for axis 0 with size 5
-17:13:11 [INFO] [Eval #121] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0385265376767108 | best: 2.6007581023722715 | $0.851
-17:13:16 [INFO] [Eval #122] qwen3-30b-a3b-instruct-2507    ERROR: Cannot take a larger sample than population when r
-17:13:17 [INFO] [Status] Cost: $0.851 | Evals: 122 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 50 | Best: 2.6007581026297464
-17:13:20 [INFO] [PE] Adaptive Island expansion: opened cell 50 (score=2.592277044503631, s=0.84, expansions_used=1/16, n_centroids=51)
-17:13:20 [INFO] [PE] Variant 0: score=2.5922770445036312, accepted=True, new island
-17:13:47 [INFO] [Status] Cost: $0.851 | Evals: 122 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:14:17 [INFO] [Status] Cost: $0.852 | Evals: 122 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:14:47 [INFO] [Status] Cost: $0.859 | Evals: 122 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:14:48 [INFO] [Eval #123] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581023722715 | $0.859
-17:15:00 [INFO] [Eval #124] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.859
-17:15:05 [INFO] [Eval #125] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
-17:15:09 [INFO] [Eval #126] qwen3-30b-a3b-instruct-2507    ERROR: Overlap between circles 0 and 5
-17:15:17 [INFO] [Status] Cost: $0.859 | Evals: 126 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:15:47 [INFO] [Status] Cost: $0.860 | Evals: 126 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:16:17 [INFO] [Status] Cost: $0.866 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:16:47 [INFO] [Status] Cost: $0.866 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:17:00 [INFO] [Eval #127] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.866
-17:17:17 [INFO] [Status] Cost: $0.866 | Evals: 127 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:17:44 [INFO] [Eval #128] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007580192629862 | best: 2.6007581023722715 | $0.866
-17:17:47 [INFO] [Status] Cost: $0.866 | Evals: 128 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:18:17 [INFO] [Status] Cost: $0.868 | Evals: 128 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 51 | Best: 2.6007581026297464
-17:18:32 [INFO] [PE] Adaptive Island expansion: opened cell 51 (score=2.5238818867943733, s=0.84, expansions_used=2/16, n_centroids=52)
-17:18:32 [INFO] [PE] Variant 1: score=2.5238818867943733, accepted=True, new island
-17:18:47 [INFO] [Status] Cost: $0.868 | Evals: 128 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-<string>:286: RuntimeWarning: invalid value encountered in log
-17:19:17 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:19:47 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:20:17 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:20:47 [INFO] [Status] Cost: $0.870 | Evals: 128 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:20:55 [INFO] [Eval #129] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4175824175795819 | best: 2.6007581023722715 | $0.870
-17:21:03 [INFO] [Eval #130] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.1699999999988302 | best: 2.6007581023722715 | $0.870
-17:21:08 [INFO] [Eval #131] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.9997999999999998 | best: 2.6007581023722715 | $0.870
-17:21:17 [INFO] [Status] Cost: $0.870 | Evals: 131 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:21:24 [INFO] [Eval #132] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.8769892850292216 | best: 2.6007581023722715 | $0.870
-17:21:47 [INFO] [Status] Cost: $0.870 | Evals: 132 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 52 | Best: 2.6007581026297464
-17:21:53 [INFO] [Eval #133] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.4593679908596116 | best: 2.6007581023722715 | $0.872
-17:22:13 [INFO] [PE] Adaptive Island expansion: opened cell 52 (score=2.558483950547613, s=0.85, expansions_used=3/16, n_centroids=53)
-17:22:13 [INFO] [PE] Variant 2: score=2.5584839505476129, accepted=True, new island
-17:22:15 [INFO] [PE] Complete: paradigm_accepted=True, variants=3/3, cost=$0.084
-17:22:15 [INFO] [Eval #134] PE/gpt-5                       NEW BEST ★   | score: 2.6007581026297464 | best: 2.6007581026297464 | $0.874
-17:22:15 [INFO] [Eval #135] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5922770445036312 | best: 2.6007581026297464 | $0.874
-17:22:15 [INFO] [Eval #136] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5238818867943733 | best: 2.6007581026297464 | $0.874
-17:22:15 [INFO] [Eval #137] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.5584839505476129 | best: 2.6007581026297464 | $0.874
-17:22:17 [INFO] [Status] Cost: $0.874 | Evals: 137 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-<string>:265: RuntimeWarning: divide by zero encountered in log
-<string>:273: RuntimeWarning: divide by zero encountered in divide
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:276: RuntimeWarning: divide by zero encountered in divide
-17:22:47 [INFO] [Status] Cost: $0.876 | Evals: 137 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:23:10 [INFO] [Eval #138] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.9838238902621206 | best: 2.6007581026297464 | $0.882
-<string>:266: RuntimeWarning: divide by zero encountered in log
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:277: RuntimeWarning: divide by zero encountered in divide
-17:23:17 [INFO] [Status] Cost: $0.882 | Evals: 138 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:23:47 [INFO] [Status] Cost: $0.882 | Evals: 138 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:24:17 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:24:47 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:25:17 [INFO] [Status] Cost: $0.883 | Evals: 138 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:25:17 [INFO] [Eval #139] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $0.883
-17:25:43 [INFO] [Eval #140] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.392156862742314 | best: 2.6007581026297464 | $0.883
-17:25:45 [INFO] [PE] Triggering punctuated equilibrium #2 at eval 140
-17:25:45 [INFO] [PE] Clustered 53 elites into 3 clusters
-17:25:45 [INFO] [PE] Cluster 2 rep: score=2.6007581023722715
-17:25:45 [INFO] [PE] Cluster 0 rep: score=2.6007581026297464
-17:25:45 [INFO] [PE] Cluster 1 rep: score=2.0958337189091334
-17:25:47 [INFO] [Status] Cost: $0.883 | Evals: 140 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:26:15 [INFO] [Eval #141] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $0.886
-17:26:17 [INFO] [Status] Cost: $0.886 | Evals: 141 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-<string>:266: RuntimeWarning: divide by zero encountered in log
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:277: RuntimeWarning: divide by zero encountered in divide
-17:26:47 [INFO] [Status] Cost: $0.886 | Evals: 141 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:27:17 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:27:47 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:28:17 [INFO] [Status] Cost: $0.888 | Evals: 141 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:28:26 [INFO] [Eval #142] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.8911194387895975 | best: 2.6007581026297464 | $0.888
-17:28:47 [INFO] [Status] Cost: $1.046 | Evals: 142 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:29:17 [INFO] [Status] Cost: $1.046 | Evals: 142 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:29:20 [INFO] [Eval #143] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $1.046
-17:29:26 [INFO] [PE] Paradigm shift: score=1.3918897271912924, accepted=False, cell=5
-17:29:26 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
-17:29:47 [INFO] [Status] Cost: $1.048 | Evals: 143 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:29:49 [INFO] [Eval #144] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6007581026297464 | $1.048
-<string>:266: RuntimeWarning: divide by zero encountered in log
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:277: RuntimeWarning: divide by zero encountered in divide
-17:29:55 [INFO] [Eval #145] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5571795701980591 | best: 2.6007581026297464 | $1.048
-17:30:17 [INFO] [Status] Cost: $1.053 | Evals: 145 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:30:47 [INFO] [Status] Cost: $1.055 | Evals: 145 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:31:00 [INFO] [Eval #146] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026297464 | best: 2.6007581026297464 | $1.056
-17:31:17 [INFO] [Status] Cost: $1.058 | Evals: 146 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:31:47 [INFO] [Status] Cost: $1.059 | Evals: 146 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:31:47 [INFO] [Eval #147] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0383454140975035 | best: 2.6007581026297464 | $1.059
-17:31:50 [INFO] [Eval #148] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5929827359041404 | best: 2.6007581026297464 | $1.061
-<string>:267: RuntimeWarning: divide by zero encountered in log
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:276: RuntimeWarning: divide by zero encountered in divide
-<string>:278: RuntimeWarning: divide by zero encountered in divide
-17:31:57 [INFO] [PE] Variant 0: score=1.4016685063213612, accepted=False
-<string>:266: RuntimeWarning: divide by zero encountered in log
-<string>:274: RuntimeWarning: divide by zero encountered in divide
-<string>:275: RuntimeWarning: divide by zero encountered in divide
-<string>:277: RuntimeWarning: divide by zero encountered in divide
-17:32:17 [INFO] [Status] Cost: $1.061 | Evals: 148 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:32:47 [INFO] [Status] Cost: $1.061 | Evals: 148 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:33:03 [INFO] [Eval #149] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6007581026297464 | $1.062
-17:33:11 [INFO] [PE] Variant 1: score=1.3971486890175391, accepted=False
-17:33:17 [INFO] [Status] Cost: $1.064 | Evals: 149 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:33:47 [INFO] [Status] Cost: $1.064 | Evals: 149 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:34:17 [INFO] [Status] Cost: $1.066 | Evals: 149 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:34:47 [INFO] [Status] Cost: $1.066 | Evals: 149 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6007581026297464
-17:34:52 [INFO] [Eval #150] qwen3-30b-a3b-instruct-2507    NEW BEST ★   | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.066
-17:34:58 [INFO] [Eval #151] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999874485 | best: 2.6027338770617208 | $1.066
-17:34:59 [INFO] [PE] Variant 2: score=1.3881728706460885, accepted=False
-17:35:00 [INFO] [Meta-Advice] Generated new advice ($0.0002)
-17:35:01 [INFO] [PE] Complete: paradigm_accepted=False, variants=0/3, cost=$0.166
-17:35:01 [INFO] [Eval #152] PE/gpt-5                       rejected     | score: 1.3918897271912924 | best: 2.6027338770617208 | $1.067
-17:35:01 [INFO] [Eval #153] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.4016685063213612 | best: 2.6027338770617208 | $1.067
-17:35:01 [INFO] [Eval #154] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.3971486890175391 | best: 2.6027338770617208 | $1.067
-17:35:01 [INFO] [Eval #155] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.3881728706460885 | best: 2.6027338770617208 | $1.067
-17:35:03 [INFO] [Eval #156] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
-17:35:17 [INFO] [Status] Cost: $1.067 | Evals: 156 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:35:19 [INFO] [Eval #157] qwen3-30b-a3b-instruct-2507    rejected     | score: 1.5499999999984488 | best: 2.6027338770617208 | $1.067
-17:35:47 [INFO] [Status] Cost: $1.068 | Evals: 157 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:36:17 [INFO] [Status] Cost: $1.071 | Evals: 157 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:36:24 [INFO] [Eval #158] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5804701782710269 | best: 2.6027338770617208 | $1.071
-17:36:40 [INFO] [Eval #159] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581023722715 | best: 2.6027338770617208 | $1.071
-17:36:47 [INFO] [Status] Cost: $1.074 | Evals: 159 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:37:17 [INFO] [Status] Cost: $1.075 | Evals: 159 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:37:47 [INFO] [Status] Cost: $1.078 | Evals: 159 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:38:03 [INFO] [Eval #160] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5799026508179961 | best: 2.6027338770617208 | $1.078
-17:38:03 [INFO] [PE] Triggering punctuated equilibrium #3 at eval 160
-17:38:03 [INFO] [PE] Clustered 53 elites into 3 clusters
-17:38:03 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
-17:38:03 [INFO] [PE] Cluster 2 rep: score=2.6007581026297464
-17:38:03 [INFO] [PE] Cluster 1 rep: score=2.6027338770617208
-17:38:17 [INFO] [Status] Cost: $1.078 | Evals: 160 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:38:45 [INFO] [Eval #161] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001898200068423 | best: 2.6027338770617208 | $1.078
-17:38:47 [INFO] [Status] Cost: $1.078 | Evals: 161 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:39:17 [INFO] [Status] Cost: $1.167 | Evals: 161 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:39:36 [INFO] [Eval #162] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.170
-17:39:47 [INFO] [Status] Cost: $1.172 | Evals: 162 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:40:17 [INFO] [Status] Cost: $1.172 | Evals: 162 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:40:42 [INFO] [Eval #163] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.174
-17:40:46 [INFO] [Eval #164] qwen3-30b-a3b-instruct-2507    ERROR: The truth value of an array with more than one ele
-17:40:47 [INFO] [Status] Cost: $1.174 | Evals: 164 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:40:54 [INFO] [Eval #165] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0383722214368074 | best: 2.6027338770617208 | $1.174
-17:41:10 [INFO] [PE] Paradigm shift: score=2.1281330650488215, accepted=True, cell=9
-17:41:10 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
-17:41:17 [INFO] [Status] Cost: $1.176 | Evals: 165 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:41:47 [INFO] [Status] Cost: $1.178 | Evals: 165 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:42:13 [INFO] [Eval #166] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.180
-17:42:17 [INFO] [Status] Cost: $1.180 | Evals: 166 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:42:17 [INFO] [Eval #167] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:42:37 [INFO] [Eval #168] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.182
-17:42:47 [INFO] [Status] Cost: $1.182 | Evals: 168 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:43:13 [INFO] [PE] Variant 0: score=1.8746623111628189, accepted=False
-17:43:17 [INFO] [Status] Cost: $1.183 | Evals: 168 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:43:17 [INFO] [Eval #169] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:43:47 [INFO] [Status] Cost: $1.183 | Evals: 169 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:43:52 [INFO] [Eval #170] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.6007581026323479 | best: 2.6027338770617208 | $1.186
-17:44:17 [INFO] [Status] Cost: $1.186 | Evals: 170 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:44:47 [INFO] [Status] Cost: $1.190 | Evals: 170 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:44:53 [INFO] [Eval #171] qwen3-30b-a3b-instruct-2507    accepted     | score: 2.0385909893685321 | best: 2.6027338770617208 | $1.190
-17:44:58 [INFO] [Eval #172] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4905307446328702 | best: 2.6027338770617208 | $1.190
-17:44:58 [INFO] [Eval #173] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:45:02 [INFO] [Eval #174] qwen3-30b-a3b-instruct-2507    ERROR: Syntax error: cannot assign to expression (<string
-17:45:17 [INFO] [Status] Cost: $1.193 | Evals: 174 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:45:29 [INFO] [PE] Variant 1: score=2.1451111245857848, accepted=True
-17:45:47 [INFO] [Status] Cost: $1.195 | Evals: 174 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:46:12 [INFO] [Eval #175] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4808269481758534 | best: 2.6027338770617208 | $1.195
-17:46:17 [INFO] [Status] Cost: $1.200 | Evals: 175 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:46:47 [INFO] [Status] Cost: $1.203 | Evals: 175 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:46:54 [INFO] [Eval #176] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6001901944668613 | best: 2.6027338770617208 | $1.203
-17:46:58 [INFO] [Eval #177] qwen3-30b-a3b-instruct-2507    ERROR: The truth value of an array with more than one ele
-17:47:17 [INFO] [Status] Cost: $1.203 | Evals: 177 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:47:47 [INFO] [Status] Cost: $1.205 | Evals: 177 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:48:17 [INFO] [Status] Cost: $1.208 | Evals: 177 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:48:43 [INFO] [Eval #178] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5828806162700935 | best: 2.6027338770617208 | $1.208
-17:48:47 [INFO] [Status] Cost: $1.208 | Evals: 178 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:49:17 [INFO] [Status] Cost: $1.208 | Evals: 178 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:49:47 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:50:17 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:50:47 [INFO] [Status] Cost: $1.210 | Evals: 178 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:50:49 [INFO] [Eval #179] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.0958337189091334 | best: 2.6027338770617208 | $1.210
-17:51:00 [INFO] [Eval #180] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5867311886911359 | best: 2.6027338770617208 | $1.210
-17:51:17 [INFO] [Status] Cost: $1.210 | Evals: 180 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:51:47 [INFO] [Status] Cost: $1.210 | Evals: 180 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:52:17 [INFO] [Status] Cost: $1.212 | Evals: 180 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:52:18 [INFO] [Eval #181] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5713125709258051 | best: 2.6027338770617208 | $1.212
-17:52:23 [INFO] [Eval #182] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:52:47 [INFO] [Status] Cost: $1.213 | Evals: 182 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:53:17 [INFO] [Status] Cost: $1.213 | Evals: 182 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:53:23 [INFO] [Eval #183] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.217
-17:53:47 [INFO] [Status] Cost: $1.217 | Evals: 183 | Clients in-flight: 1 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:54:00 [INFO] [Eval #184] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.217
-17:54:05 [INFO] [Eval #185] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:54:17 [INFO] [Status] Cost: $1.217 | Evals: 185 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-Warning: [WARNING] [PE] Variant 2 eval error: 'NoneType' object has no attribute 'astype'
-17:54:34 [INFO] [PE] Complete: paradigm_accepted=True, variants=1/3, cost=$0.093
-17:54:34 [INFO] [Eval #186] PE/gpt-5                       accepted     | score: 2.1281330650488215 | best: 2.6027338770617208 | $1.218
-17:54:34 [INFO] [Eval #187] PE/qwen3-30b-a3b-instruct-2507 rejected     | score: 1.8746623111628189 | best: 2.6027338770617208 | $1.218
-17:54:34 [INFO] [Eval #188] PE/qwen3-30b-a3b-instruct-2507 accepted     | score: 2.1451111245857848 | best: 2.6027338770617208 | $1.218
-17:54:34 [INFO] [Eval #189] PE/qwen3-30b-a3b-instruct-2507 ERROR (variant): 'NoneType' object has no attribute 'astype'
-17:54:47 [INFO] [Status] Cost: $1.218 | Evals: 189 | Clients in-flight: 3 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:54:58 [INFO] [Eval #190] qwen3-30b-a3b-instruct-2507    ERROR: Timeout
-17:55:00 [INFO] [PE] Triggering punctuated equilibrium #4 at eval 190
-17:55:00 [INFO] [PE] Clustered 53 elites into 3 clusters
-17:55:00 [INFO] [PE] Cluster 0 rep: score=2.6007581023722715
-17:55:00 [INFO] [PE] Cluster 2 rep: score=2.6007581026323479
-17:55:00 [INFO] [PE] Cluster 1 rep: score=2.6027338770617208
-17:55:05 [INFO] [Eval #191] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.220
-17:55:17 [INFO] [Status] Cost: $1.220 | Evals: 191 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:55:27 [INFO] [Eval #192] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:55:27 [INFO] [Eval #193] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4908015728636741 | best: 2.6027338770617208 | $1.220
-17:55:47 [INFO] [Status] Cost: $1.220 | Evals: 193 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:56:17 [INFO] [Status] Cost: $1.220 | Evals: 193 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:56:17 [INFO] [Eval #194] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.4859646077169257 | best: 2.6027338770617208 | $1.220
-17:56:35 [INFO] [Eval #195] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.222
-17:56:47 [INFO] [Status] Cost: $1.222 | Evals: 195 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:56:58 [INFO] [Eval #196] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6027338770617208 | best: 2.6027338770617208 | $1.222
-17:57:03 [INFO] [Eval #197] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-17:57:17 [INFO] [Status] Cost: $1.336 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:57:41 [INFO] [PE] Paradigm shift: score=2.4867189086265391, accepted=False, cell=10
-17:57:41 [INFO] [PE] Generating 3 variants using models: ['openrouter/qwen/qwen3-30b-a3b-instruct-2507']...
-17:57:47 [INFO] [Status] Cost: $1.336 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:58:17 [INFO] [Status] Cost: $1.339 | Evals: 197 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:58:46 [INFO] [Eval #198] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5994578926891876 | best: 2.6027338770617208 | $1.341
-17:58:47 [INFO] [Status] Cost: $1.341 | Evals: 198 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:59:05 [INFO] [Eval #199] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.341
-17:59:17 [INFO] [Status] Cost: $1.341 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-17:59:47 [INFO] [Status] Cost: $1.341 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-18:00:17 [INFO] [Status] Cost: $1.343 | Evals: 199 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-18:00:23 [INFO] [Eval #200] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.6007581026297464 | best: 2.6027338770617208 | $1.343
-18:00:27 [INFO] [Eval #201] qwen3-30b-a3b-instruct-2507    ERROR: Syntax error: cannot assign to expression (<string
-18:00:47 [INFO] [Status] Cost: $1.343 | Evals: 201 | Clients in-flight: 4 | Eval in-flight: 4 | Archive: 53 | Best: 2.6027338770617208
-18:00:49 [INFO] [Eval #202] qwen3-30b-a3b-instruct-2507    rejected     | score: 2.5584357406874751 | best: 2.6027338770617208 | $1.343
-18:00:53 [INFO] [Eval #203] qwen3-30b-a3b-instruct-2507    ERROR: operands could not be broadcast together with shap
-18:00:57 [INFO] [Eval #204] qwen3-30b-a3b-instruct-2507    ERROR: list index out of range
-18:01:17 [INFO] [Status] Cost: $1.348 | Evals: 204 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 53 | Best: 2.6027338770617208
-18:01:44 [INFO] [PE] Variant 0: score=2.485409276118248, accepted=False
-18:01:45 [INFO] [Eval #205] qwen3-30b-a3b-instruct-2507    ERROR: Boundary violation on x
-18:01:47 [INFO] [Status] Cost: $1.348 | Evals: 205 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 53 | Best: 2.6027338770617208
-18:01:48 [INFO] [Snapshot] Saved final snapshot to /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409/snapshot.json
-18:01:48 [INFO] [Levi] Complete - best score: 2.6027338770617208, evals: 205, cost: $1.350
-18:01:48 [INFO] [Levi] Snapshot: /home/runner/work/skydiscover/skydiscover/outputs/github-actions/levi_25994319409/snapshot.json
-18:01:48 [INFO] [Levi] Best code:
-import numpy as np
-import time
-
-def run_packing() -> tuple[np.ndarray, np.ndarray, float]:
-    '''
-    Construct a packing of 26 circles in the unit square.
-
-    Algorithm: Hybrid approach combining geometric construction with barrier optimization.
-    - Start with a geometric initial configuration using circle triple tangency
-    - Refine using interior-point barrier optimization with Adam
-    - Use selective feasibility repair to ensure robustness
-
-    Returns:
-        centers: numpy array of ...
-
-Best score        : 2.602734
-Evaluations used  : 205
-Total cost        : $1.3503
-Archive size      : 53
-Runtime           : 10800.1s
+Installed 82 packages in 67ms
+[blade] example_dir       = /home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing
+[blade] mutation_model    = openrouter/qwen/qwen3-30b-a3b-instruct-2507
+[blade] paradigm_model    = openrouter/openai/gpt-5
+[blade] embedding_model   = openrouter/openai/text-embedding-3-small
+[blade] budget evals      = None
+[blade] budget dollars    = None
+[blade] budget seconds    = 10800.0
+[blade] pe_cron_interval  = 10
+[blade] n_diverse_seeds   = 4
+[blade] n_variants/seed   = 20
+[blade] n_paradigm_var    = 4
+[blade] workers           = 4
+[blade] output_dir        = /home/runner/work/skydiscover/skydiscover/outputs/github-actions/blade_26348794337
+01:41:30 [INFO] [BLADE] starting — budget: $None evals=None seconds=10800.0 target=None
+01:41:30 [INFO] [BLADE] models: mutation=openrouter/qwen/qwen3-30b-a3b-instruct-2507 | paradigm=openrouter/openai/gpt-5 | embedding=openrouter/openai/text-embedding-3-small
+01:41:30 [INFO] [BLADE] knobs: workers=4 | pe_interval=10 | n_diverse_seeds=4 | n_variants/seed=20 | n_paradigm_var=4
+01:41:30 [INFO] [BLADE init] phase 1 starting — 4 diverse seeds (sequential, frontier model)
+01:41:30 [INFO] [BLADE init] [seed 1] requesting diverse seed from gpt-5
+01:42:00 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 30s
+01:42:30 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 60s
+01:43:00 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 90s
+01:43:30 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 120s
+01:44:00 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 150s
+01:44:30 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 180s
+01:45:00 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 210s
+01:45:30 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 240s
+01:46:00 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 0 | Best: n/a | Elapsed: 270s
+01:46:07 [INFO] [Eval #1] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.372111 | best: 2.372111 | $0.080
+01:46:07 [INFO] [BLADE init] [seed 1] OK (score=2.3721)
+01:46:07 [INFO] [BLADE init] [seed 2] requesting diverse seed from gpt-5
+01:46:30 [INFO] [Status] Cost: $0.080 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.372111 | Elapsed: 300s
+01:47:00 [INFO] [Status] Cost: $0.080 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.372111 | Elapsed: 330s
+01:47:30 [INFO] [Status] Cost: $0.080 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.372111 | Elapsed: 360s
+01:48:00 [INFO] [Status] Cost: $0.080 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.372111 | Elapsed: 390s
+01:48:30 [INFO] [Status] Cost: $0.080 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 1 | Best: 2.372111 | Elapsed: 420s
+01:49:00 [INFO] [Status] Cost: $0.182 | Evals: 1 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 1 | Best: 2.372111 | Elapsed: 450s
+01:49:10 [INFO] [Eval #2] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.616965 | best: 2.616965 | $0.182
+01:49:10 [INFO] [BLADE init] [seed 2] OK (score=2.6170)
+01:49:10 [INFO] [BLADE init] [seed 3] requesting diverse seed from gpt-5
+01:49:30 [INFO] [Status] Cost: $0.182 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.616965 | Elapsed: 480s
+01:50:00 [INFO] [Status] Cost: $0.182 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.616965 | Elapsed: 510s
+01:50:30 [INFO] [Status] Cost: $0.182 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.616965 | Elapsed: 540s
+01:51:00 [INFO] [Status] Cost: $0.182 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.616965 | Elapsed: 570s
+01:51:30 [INFO] [Status] Cost: $0.182 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 2 | Best: 2.616965 | Elapsed: 600s
+01:51:44 [INFO] [Eval #3] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.616965 | $0.264
+01:51:44 [INFO] [BLADE init] [seed 3] OK (score=1.4765)
+01:51:44 [INFO] [BLADE init] [seed 4] requesting diverse seed from gpt-5
+01:52:00 [INFO] [Status] Cost: $0.264 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 630s
+01:52:30 [INFO] [Status] Cost: $0.264 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 660s
+01:53:00 [INFO] [Status] Cost: $0.264 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 690s
+01:53:30 [INFO] [Status] Cost: $0.264 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 720s
+01:54:00 [INFO] [Status] Cost: $0.264 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 750s
+01:54:12 [INFO] [BLADE init] [seed 4] eval failed: Syntax error: invalid syntax (<string>, line 2)
+01:54:12 [INFO] [Eval #4] qwen3-30b-a3b-instruct-2507 ERROR (init): Syntax error: invalid syntax (<string>, line 2)
+01:54:12 [INFO] [BLADE init] [seed 4 retry 1] requesting diverse seed from gpt-5
+01:54:30 [INFO] [Status] Cost: $0.360 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 780s
+01:55:00 [INFO] [Status] Cost: $0.360 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 810s
+01:55:30 [INFO] [Status] Cost: $0.360 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 3 | Best: 2.616965 | Elapsed: 840s
+01:56:00 [INFO] [Status] Cost: $0.429 | Evals: 4 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 3 | Best: 2.616965 | Elapsed: 870s
+01:56:12 [INFO] [Eval #5] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.225866 | best: 2.616965 | $0.429
+01:56:12 [INFO] [BLADE init] [seed 4 retry 1] OK (score=0.2259)
+01:56:12 [INFO] [BLADE init] [seed 5] requesting diverse seed from gpt-5
+01:56:30 [INFO] [Status] Cost: $0.429 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.616965 | Elapsed: 900s
+01:57:00 [INFO] [Status] Cost: $0.429 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.616965 | Elapsed: 930s
+01:57:30 [INFO] [Status] Cost: $0.429 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.616965 | Elapsed: 960s
+01:58:00 [INFO] [Status] Cost: $0.429 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.616965 | Elapsed: 990s
+01:58:30 [INFO] [Status] Cost: $0.429 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Pool: 4 | Best: 2.616965 | Elapsed: 1020s
+01:58:43 [INFO] [Eval #6] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.616965 | $0.529
+01:58:43 [INFO] [BLADE init] [seed 5] OK (score=1.4768)
+01:58:43 [INFO] [BLADE init] phase 1 done: 5 seeds admitted
+01:58:43 [INFO] [BLADE init] phase 2 generating 100 variants (20 × 5) in parallel
+01:58:56 [INFO] [Eval #7] qwen3-30b-a3b-instruct-2507 ERROR (init): setting an array element with a sequence. The requested array has an inhomogeneo
+01:59:00 [INFO] [Status] Cost: $0.534 | Evals: 7 | Clients in-flight: 97 | Eval in-flight: 2 | Pool: 5 | Best: 2.616965 | Elapsed: 1050s
+01:59:00 [INFO] [Eval #8] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+01:59:01 [INFO] [Eval #9] qwen3-30b-a3b-instruct-2507 ERROR (init): operands could not be broadcast together with shapes (26,2) (26,) 
+01:59:05 [INFO] [Eval #10] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 4 and 24
+01:59:06 [INFO] [Eval #11] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.366372 | best: 2.616965 | $0.546
+01:59:08 [INFO] [Eval #12] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.616965 | $0.546
+01:59:10 [INFO] [Eval #13] qwen3-30b-a3b-instruct-2507 ERROR (init): name 'bnb_max_clearance' is not defined
+01:59:11 [INFO] [Eval #14] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.598882 | best: 2.616965 | $0.548
+01:59:18 [INFO] [Eval #15] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.616965 | $0.574
+01:59:20 [INFO] [Eval #16] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476506 | best: 2.616965 | $0.580
+01:59:21 [INFO] [Eval #17] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476493 | best: 2.616965 | $0.580
+01:59:23 [INFO] [Eval #18] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+01:59:29 [INFO] [Eval #19] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.616965 | $0.587
+01:59:30 [INFO] [Status] Cost: $0.588 | Evals: 19 | Clients in-flight: 61 | Eval in-flight: 25 | Pool: 12 | Best: 2.616965 | Elapsed: 1080s
+01:59:30 [INFO] [Eval #20] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.464118 | best: 2.616965 | $0.588
+01:59:35 [INFO] [Eval #21] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.448970 | best: 2.616965 | $0.597
+01:59:40 [INFO] [Eval #22] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476484 | best: 2.616965 | $0.606
+01:59:43 [INFO] [Eval #23] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476506 | best: 2.616965 | $0.606
+01:59:46 [INFO] [Eval #24] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.616965 | $0.619
+01:59:46 [INFO] [Eval #25] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476404 | best: 2.616965 | $0.619
+01:59:53 [INFO] [Eval #26] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.616965 | $0.624
+01:59:55 [INFO] [Eval #27] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.616965 | $0.624
+01:59:56 [INFO] [Eval #28] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.616965 | $0.624
+02:00:00 [INFO] [Status] Cost: $0.629 | Evals: 28 | Clients in-flight: 31 | Eval in-flight: 47 | Pool: 20 | Best: 2.616965 | Elapsed: 1110s
+02:00:01 [INFO] [Eval #29] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.616965 | $0.629
+02:00:05 [INFO] [Eval #30] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.616965 | $0.633
+02:00:11 [INFO] [Eval #31] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476452 | best: 2.616965 | $0.640
+02:00:18 [INFO] [Eval #32] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476402 | best: 2.616965 | $0.647
+02:00:26 [INFO] [Eval #33] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476588 | best: 2.616965 | $0.655
+02:00:27 [INFO] [Eval #34] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.616965 | $0.656
+02:00:28 [INFO] [Eval #35] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.625669 | best: 2.625669 | $0.656
+02:00:30 [INFO] [Status] Cost: $0.656 | Evals: 35 | Clients in-flight: 11 | Eval in-flight: 60 | Pool: 27 | Best: 2.625669 | Elapsed: 1140s
+02:00:35 [INFO] [Eval #36] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476390 | best: 2.625669 | $0.657
+02:00:40 [INFO] [Eval #37] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476537 | best: 2.625669 | $0.661
+02:00:41 [INFO] [Eval #38] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476402 | best: 2.625669 | $0.661
+02:00:46 [INFO] [Eval #39] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.662
+02:00:46 [INFO] [Eval #40] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.372111 | best: 2.625669 | $0.662
+02:00:49 [INFO] [Eval #41] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:00:50 [INFO] [Eval #42] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.189382 | best: 2.625669 | $0.664
+02:00:51 [INFO] [Eval #43] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.664
+02:00:53 [INFO] [Eval #44] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:00:55 [INFO] [Eval #45] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:00:59 [INFO] [Eval #46] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.625669 | $0.668
+02:01:00 [INFO] [Eval #47] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.372111 | best: 2.625669 | $0.668
+02:01:00 [INFO] [Status] Cost: $0.669 | Evals: 47 | Clients in-flight: 1 | Eval in-flight: 58 | Pool: 34 | Best: 2.625669 | Elapsed: 1170s
+02:01:03 [INFO] [Eval #48] qwen3-30b-a3b-instruct-2507 ERROR (init): operands could not be broadcast together with shapes (325,) (26,26) 
+02:01:07 [INFO] [Eval #49] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.124000 | best: 2.625669 | $0.669
+02:01:11 [INFO] [Eval #50] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 3
+02:01:15 [INFO] [Eval #51] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.252779 | best: 2.625669 | $0.669
+02:01:15 [INFO] [Eval #52] qwen3-30b-a3b-instruct-2507 ERROR (init): too many indices for array: array is 1-dimensional, but 2 were indexed
+02:01:18 [INFO] [Eval #53] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.052871 | best: 2.625669 | $0.669
+02:01:19 [INFO] [Eval #54] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 2.372111 | best: 2.625669 | $0.669
+02:01:24 [INFO] [Eval #55] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.796897 | best: 2.625669 | $0.669
+02:01:26 [INFO] [Eval #56] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.669
+02:01:27 [INFO] [Eval #57] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.472818 | best: 2.625669 | $0.669
+02:01:28 [INFO] [Eval #58] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.372111 | best: 2.625669 | $0.669
+02:01:29 [INFO] [Eval #59] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:01:30 [INFO] [Status] Cost: $0.670 | Evals: 59 | Clients in-flight: 0 | Eval in-flight: 47 | Pool: 41 | Best: 2.625669 | Elapsed: 1200s
+02:01:33 [INFO] [Eval #60] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476799 | best: 2.625669 | $0.670
+02:01:38 [INFO] [Eval #61] qwen3-30b-a3b-instruct-2507 ERROR (init): boolean index did not match indexed array along axis 0; size of axis is 26 but s
+02:01:39 [INFO] [Eval #62] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:01:42 [INFO] [Eval #63] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:01:43 [INFO] [Eval #64] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:01:44 [INFO] [Eval #65] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476836 | best: 2.625669 | $0.670
+02:01:46 [INFO] [Eval #66] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:01:48 [INFO] [Eval #67] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:01:56 [INFO] [Eval #68] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.574918 | best: 2.625669 | $0.670
+02:01:57 [INFO] [Eval #69] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476467 | best: 2.625669 | $0.670
+02:01:58 [INFO] [Eval #70] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.625669 | $0.670
+02:02:00 [INFO] [Status] Cost: $0.670 | Evals: 70 | Clients in-flight: 0 | Eval in-flight: 36 | Pool: 46 | Best: 2.625669 | Elapsed: 1230s
+02:02:01 [INFO] [Eval #71] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:02:02 [INFO] [Eval #72] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:02:09 [INFO] [Eval #73] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476447 | best: 2.625669 | $0.670
+02:02:12 [INFO] [Eval #74] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476492 | best: 2.625669 | $0.670
+02:02:12 [INFO] [Eval #75] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.619032 | best: 2.625669 | $0.670
+02:02:16 [INFO] [Eval #76] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:02:17 [INFO] [Eval #77] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476836 | best: 2.625669 | $0.670
+02:02:26 [INFO] [Eval #78] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.625669 | $0.670
+02:02:27 [INFO] [Eval #79] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:02:30 [INFO] [Status] Cost: $0.670 | Evals: 79 | Clients in-flight: 0 | Eval in-flight: 27 | Pool: 51 | Best: 2.625669 | Elapsed: 1260s
+02:02:33 [INFO] [Eval #80] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476809 | best: 2.625669 | $0.670
+02:02:36 [INFO] [Eval #81] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.436878 | best: 2.625669 | $0.670
+02:02:36 [INFO] [Eval #82] qwen3-30b-a3b-instruct-2507 ERROR (init): operands could not be broadcast together with shapes (27,) (2,) 
+02:02:38 [INFO] [Eval #83] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.619029 | best: 2.625669 | $0.670
+02:02:41 [INFO] [Eval #84] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.837024 | best: 2.625669 | $0.670
+02:02:42 [INFO] [Eval #85] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:02:45 [INFO] [Eval #86] qwen3-30b-a3b-instruct-2507 ERROR (init): object of type 'NoneType' has no len()
+02:02:46 [INFO] [Eval #87] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:02:47 [INFO] [Eval #88] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.335360 | best: 2.625669 | $0.670
+02:02:50 [INFO] [Eval #89] qwen3-30b-a3b-instruct-2507 ERROR (init): index 25 is out of bounds for axis 0 with size 25
+02:02:50 [INFO] [Eval #90] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.580287 | best: 2.625669 | $0.670
+02:02:56 [INFO] [Eval #91] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476809 | best: 2.625669 | $0.670
+02:02:58 [INFO] [Eval #92] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:03:00 [INFO] [Eval #93] qwen3-30b-a3b-instruct-2507 ERROR (init): The truth value of an array with more than one element is ambiguous. Use a.any()
+02:03:00 [INFO] [Status] Cost: $0.670 | Evals: 93 | Clients in-flight: 0 | Eval in-flight: 13 | Pool: 58 | Best: 2.625669 | Elapsed: 1290s
+02:03:03 [INFO] [Eval #94] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476836 | best: 2.625669 | $0.670
+02:03:10 [INFO] [Eval #95] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.625669 | $0.670
+02:03:12 [INFO] [Eval #96] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.260260 | best: 2.625669 | $0.670
+02:03:20 [INFO] [Eval #97] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.616965 | best: 2.625669 | $0.670
+02:03:21 [INFO] [Eval #98] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476390 | best: 2.625669 | $0.670
+02:03:25 [INFO] [Eval #99] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.372111 | best: 2.625669 | $0.670
+02:03:29 [INFO] [Eval #100] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476390 | best: 2.625669 | $0.670
+02:03:30 [INFO] [Status] Cost: $0.670 | Evals: 100 | Clients in-flight: 0 | Eval in-flight: 6 | Pool: 65 | Best: 2.625669 | Elapsed: 1320s
+02:03:35 [INFO] [Eval #101] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.476421 | best: 2.625669 | $0.670
+02:03:38 [INFO] [Eval #102] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476452 | best: 2.625669 | $0.670
+02:03:45 [INFO] [Eval #103] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476484 | best: 2.625669 | $0.670
+02:03:53 [INFO] [Eval #104] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.476560 | best: 2.625669 | $0.670
+02:04:00 [INFO] [Status] Cost: $0.670 | Evals: 104 | Clients in-flight: 0 | Eval in-flight: 2 | Pool: 68 | Best: 2.625669 | Elapsed: 1350s
+02:04:30 [INFO] [Status] Cost: $0.670 | Evals: 104 | Clients in-flight: 0 | Eval in-flight: 2 | Pool: 68 | Best: 2.625669 | Elapsed: 1380s
+02:04:54 [INFO] [Eval #105] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.604125 | best: 2.625669 | $0.670
+02:05:00 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1410s
+02:05:30 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1440s
+02:06:00 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1470s
+02:06:30 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1500s
+02:07:00 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1530s
+02:07:30 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1560s
+02:08:00 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1590s
+02:08:30 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1620s
+02:09:00 [INFO] [Status] Cost: $0.670 | Evals: 105 | Clients in-flight: 0 | Eval in-flight: 1 | Pool: 69 | Best: 2.625669 | Elapsed: 1650s
+02:09:10 [INFO] [Eval #106] qwen3-30b-a3b-instruct-2507 ERROR (init): executor error: Process exceeded 600.0s timeout
+02:09:10 [INFO] [BLADE init] phase 2 done — pool size now 69
+02:09:10 [INFO] [BLADE] bootstrap complete — pool=69 best=2.625669 cost=$0.670 evals=106
+02:09:10 [INFO] [BLADE] entering evolutionary main loop (n_workers=4)
+02:09:12 [INFO] [BLADE PE] trigger #1 at eval=106 | stage=late | best=2.625669 | pool=69 | families=2
+02:09:12 [INFO] [BLADE advisor] trigger #1 at eval=106
+02:09:17 [INFO] [BLADE advisor] new advice (567 chars) at eval=106
+02:09:30 [INFO] [Status] Cost: $0.671 | Evals: 106 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 69 | Best: 2.625669 | Elapsed: 1680s
+02:10:00 [INFO] [Status] Cost: $0.671 | Evals: 106 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 69 | Best: 2.625669 | Elapsed: 1710s
+02:10:18 [INFO] [Eval #107] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.573654 | best: 2.625669 | $0.672
+02:10:30 [INFO] [Status] Cost: $0.672 | Evals: 107 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 70 | Best: 2.625669 | Elapsed: 1740s
+02:10:48 [INFO] [Eval #108] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.619032 | best: 2.625669 | $0.674
+02:10:50 [INFO] [Eval #109] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.054511 | best: 2.625669 | $0.675
+02:10:51 [INFO] [Eval #110] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 1.670658 | best: 2.625669 | $0.676
+02:10:55 [INFO] [Eval #111] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.722350 | best: 2.625669 | $0.676
+02:11:00 [INFO] [Status] Cost: $0.676 | Evals: 111 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 74 | Best: 2.625669 | Elapsed: 1770s
+02:11:10 [INFO] [Eval #112] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 0.236219 | best: 2.625669 | $0.678
+02:11:17 [INFO] [Eval #113] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.619032 | best: 2.625669 | $0.678
+02:11:30 [INFO] [Status] Cost: $0.746 | Evals: 113 | Clients in-flight: 4 | Eval in-flight: 2 | Pool: 76 | Best: 2.625669 | Elapsed: 1800s
+02:11:32 [INFO] [Eval #114] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.372111 | best: 2.625669 | $0.747
+02:11:37 [INFO] [Eval #115] qwen3-30b-a3b-instruct-2507 ERROR (mutate): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:11:40 [INFO] [Eval #116] gpt-5                       NEW BEST ★   | source: paradigm           | score: 2.626133 | best: 2.626133 | $0.749
+02:11:40 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.6261)
+02:11:41 [INFO] [Eval #117] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 0.597991 | best: 2.626133 | $0.749
+02:11:50 [INFO] [Eval #118] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 1.473956 | best: 2.626133 | $0.749
+02:12:00 [INFO] [Status] Cost: $0.750 | Evals: 118 | Clients in-flight: 8 | Eval in-flight: 1 | Pool: 80 | Best: 2.626133 | Elapsed: 1830s
+02:12:20 [INFO] [Eval #119] qwen3-30b-a3b-instruct-2507 ERROR (crossover): Overlap between circles 0 and 25
+02:12:20 [INFO] [Eval #120] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 0.065013 | best: 2.626133 | $0.753
+02:12:23 [INFO] [Eval #121] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.615772 | best: 2.626133 | $0.753
+02:12:27 [INFO] [Eval #122] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.461092 | best: 2.626133 | $0.753
+02:12:30 [INFO] [Status] Cost: $0.753 | Evals: 122 | Clients in-flight: 7 | Eval in-flight: 0 | Pool: 83 | Best: 2.626133 | Elapsed: 1860s
+02:12:40 [INFO] [Eval #123] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.003584 | best: 2.626133 | $0.754
+02:12:54 [INFO] [Eval #124] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 0.484499 | best: 2.626133 | $0.755
+02:13:00 [INFO] [Status] Cost: $0.755 | Evals: 124 | Clients in-flight: 7 | Eval in-flight: 0 | Pool: 84 | Best: 2.626133 | Elapsed: 1890s
+02:13:25 [INFO] [Eval #125] qwen3-30b-a3b-instruct-2507 ERROR (repair): Overlap between circles 0 and 1
+02:13:29 [INFO] [Eval #126] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.624774 | best: 2.626133 | $0.758
+02:13:30 [INFO] [Status] Cost: $0.758 | Evals: 126 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 85 | Best: 2.626133 | Elapsed: 1920s
+02:13:48 [INFO] [Eval #127] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.626133 | best: 2.626133 | $0.760
+02:13:53 [INFO] [Eval #128] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.760
+02:14:00 [INFO] [Status] Cost: $0.760 | Evals: 128 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 87 | Best: 2.626133 | Elapsed: 1950s
+02:14:06 [INFO] [Eval #129] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.619582 | best: 2.626133 | $0.760
+02:14:30 [INFO] [Status] Cost: $0.760 | Evals: 129 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 88 | Best: 2.626133 | Elapsed: 1980s
+02:14:41 [INFO] [Eval #130] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.616965 | best: 2.626133 | $0.762
+02:14:52 [INFO] [Eval #131] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.372111 | best: 2.626133 | $0.763
+02:15:00 [INFO] [Status] Cost: $0.763 | Evals: 131 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 90 | Best: 2.626133 | Elapsed: 2010s
+02:15:04 [INFO] [Eval #132] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 1.450256 | best: 2.626133 | $0.764
+02:15:12 [INFO] [Eval #133] qwen3-30b-a3b-instruct-2507 ERROR (repair): Overlap between circles 4 and 24
+02:15:14 [INFO] [Eval #134] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.765
+02:15:30 [INFO] [Status] Cost: $0.765 | Evals: 134 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 91 | Best: 2.626133 | Elapsed: 2040s
+<string>:99: RuntimeWarning: invalid value encountered in log
+<string>:100: RuntimeWarning: invalid value encountered in log
+02:16:00 [INFO] [Status] Cost: $0.766 | Evals: 134 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 91 | Best: 2.626133 | Elapsed: 2070s
+02:16:01 [INFO] [Eval #135] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.052636 | best: 2.626133 | $0.766
+02:16:30 [INFO] [Status] Cost: $0.767 | Evals: 135 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 91 | Best: 2.626133 | Elapsed: 2100s
+02:16:32 [INFO] [Eval #136] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.372111 | best: 2.626133 | $0.767
+02:17:00 [INFO] [Status] Cost: $0.767 | Evals: 136 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 92 | Best: 2.626133 | Elapsed: 2130s
+02:17:30 [INFO] [Status] Cost: $0.767 | Evals: 136 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 92 | Best: 2.626133 | Elapsed: 2160s
+02:17:44 [INFO] [Eval #137] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.616965 | best: 2.626133 | $0.768
+02:17:54 [INFO] [Eval #138] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 1.769334 | best: 2.626133 | $0.771
+02:17:55 [INFO] [Eval #139] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 0.250000 | best: 2.626133 | $0.771
+02:17:56 [INFO] [BLADE PE] trigger #2 at eval=139 | stage=early | best=2.626133 | pool=95 | families=3
+02:18:00 [INFO] [Status] Cost: $0.771 | Evals: 139 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 95 | Best: 2.626133 | Elapsed: 2190s
+02:18:04 [INFO] [Eval #140] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.545393 | best: 2.626133 | $0.773
+02:18:14 [INFO] [Eval #141] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.476836 | best: 2.626133 | $0.775
+02:18:21 [INFO] [Eval #142] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.625726 | best: 2.626133 | $0.775
+02:18:30 [INFO] [Status] Cost: $0.775 | Evals: 142 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 98 | Best: 2.626133 | Elapsed: 2220s
+02:18:37 [INFO] [Eval #143] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 0.617067 | best: 2.626133 | $0.776
+02:19:00 [INFO] [Status] Cost: $0.777 | Evals: 143 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 99 | Best: 2.626133 | Elapsed: 2250s
+02:19:01 [INFO] [Eval #144] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.619888 | best: 2.626133 | $0.777
+02:19:24 [INFO] [Eval #145] gpt-5                       accepted     | source: paradigm           | score: 2.088671 | best: 2.626133 | $0.852
+02:19:24 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.0887)
+02:19:26 [INFO] [Eval #146] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.545393 | best: 2.626133 | $0.852
+02:19:30 [INFO] [Status] Cost: $0.852 | Evals: 146 | Clients in-flight: 9 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2280s
+02:19:50 [INFO] [Eval #147] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.979852 | best: 2.626133 | $0.858
+02:19:50 [INFO] [Eval #148] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 1.712314 | best: 2.626133 | $0.858
+02:19:51 [INFO] [Eval #149] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.288068 | best: 2.626133 | $0.858
+02:20:00 [INFO] [Status] Cost: $0.858 | Evals: 149 | Clients in-flight: 7 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2310s
+02:20:19 [INFO] [Eval #150] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 1.649523 | best: 2.626133 | $0.859
+02:20:30 [INFO] [Status] Cost: $0.864 | Evals: 150 | Clients in-flight: 2 | Eval in-flight: 6 | Pool: 100 | Best: 2.626133 | Elapsed: 2340s
+02:20:40 [INFO] [Eval #151] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.140207 | best: 2.626133 | $0.864
+02:20:52 [INFO] [Eval #152] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.476328 | best: 2.626133 | $0.865
+02:20:53 [INFO] [Eval #153] qwen3-30b-a3b-instruct-2507 ERROR (mutate): Boundary violation on x
+02:20:56 [INFO] [Eval #154] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 1.727374 | best: 2.626133 | $0.865
+02:21:00 [INFO] [Status] Cost: $0.865 | Evals: 154 | Clients in-flight: 4 | Eval in-flight: 3 | Pool: 100 | Best: 2.626133 | Elapsed: 2370s
+02:21:15 [INFO] [Eval #155] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.619608 | best: 2.626133 | $0.865
+02:21:30 [INFO] [Status] Cost: $0.865 | Evals: 155 | Clients in-flight: 5 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 2400s
+02:22:00 [INFO] [Status] Cost: $0.866 | Evals: 155 | Clients in-flight: 4 | Eval in-flight: 3 | Pool: 100 | Best: 2.626133 | Elapsed: 2430s
+02:22:07 [INFO] [Eval #156] qwen3-30b-a3b-instruct-2507 rejected     | source: repair             | score: 0.009988 | best: 2.626133 | $0.866
+02:22:07 [INFO] [BLADE advisor] trigger #2 at eval=156
+02:22:08 [INFO] [BLADE advisor] new advice (515 chars) at eval=156
+02:22:15 [INFO] [Eval #157] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 1.418878 | best: 2.626133 | $0.868
+02:22:19 [INFO] [Eval #158] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.868
+02:22:29 [INFO] [Eval #159] qwen3-30b-a3b-instruct-2507 ERROR (mutate): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:22:30 [INFO] [Status] Cost: $0.871 | Evals: 159 | Clients in-flight: 3 | Eval in-flight: 4 | Pool: 100 | Best: 2.626133 | Elapsed: 2460s
+02:22:34 [INFO] [Eval #160] qwen3-30b-a3b-instruct-2507 ERROR (repair): operands could not be broadcast together with shapes (325,) (26,26) 
+02:22:36 [INFO] [Eval #161] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.706033 | best: 2.626133 | $0.872
+02:22:43 [INFO] [Eval #162] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.612431 | best: 2.626133 | $0.872
+02:22:48 [INFO] [Eval #163] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.476173 | best: 2.626133 | $0.872
+02:23:00 [INFO] [Status] Cost: $0.872 | Evals: 163 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2490s
+02:23:23 [INFO] [Eval #164] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.480752 | best: 2.626133 | $0.872
+02:23:30 [INFO] [Status] Cost: $0.872 | Evals: 164 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2520s
+02:23:37 [INFO] [Eval #165] qwen3-30b-a3b-instruct-2507 ERROR (repair): Overlap between circles 0 and 5
+02:23:46 [INFO] [Eval #166] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.874
+02:24:00 [INFO] [Status] Cost: $0.874 | Evals: 166 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2550s
+02:24:17 [INFO] [Eval #167] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.604158 | best: 2.626133 | $0.875
+02:24:23 [INFO] [Eval #168] qwen3-30b-a3b-instruct-2507 ERROR (crossover): too many indices for array: array is 1-dimensional, but 2 were indexed
+02:24:30 [INFO] [Status] Cost: $0.876 | Evals: 168 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2580s
+02:24:41 [INFO] [Eval #169] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.504516 | best: 2.626133 | $0.878
+02:24:46 [INFO] [Eval #170] qwen3-30b-a3b-instruct-2507 rejected     | source: repair             | score: 0.953493 | best: 2.626133 | $0.878
+02:25:00 [INFO] [Status] Cost: $0.878 | Evals: 170 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2610s
+02:25:30 [INFO] [Status] Cost: $0.878 | Evals: 170 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2640s
+02:25:38 [INFO] [Eval #171] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.879
+02:26:00 [INFO] [Status] Cost: $0.881 | Evals: 171 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 2670s
+02:26:02 [INFO] [Eval #172] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.476809 | best: 2.626133 | $0.881
+02:26:10 [INFO] [Eval #173] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.610513 | best: 2.626133 | $0.882
+02:26:22 [INFO] [Eval #174] qwen3-30b-a3b-instruct-2507 ERROR (repair): boolean index did not match indexed array along axis 0; size of axis is 26 but s
+02:26:23 [INFO] [BLADE PE] trigger #3 at eval=174 | stage=mid | best=2.626133 | pool=100 | families=3
+02:26:30 [INFO] [Status] Cost: $0.884 | Evals: 174 | Clients in-flight: 4 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 2700s
+02:26:35 [INFO] [Eval #175] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.504516 | best: 2.626133 | $0.884
+02:26:53 [INFO] [Eval #176] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.885
+02:27:00 [INFO] [Status] Cost: $0.885 | Evals: 176 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2730s
+02:27:26 [INFO] [Eval #177] qwen3-30b-a3b-instruct-2507 rejected     | source: repair             | score: 1.375120 | best: 2.626133 | $0.887
+02:27:30 [INFO] [Status] Cost: $0.888 | Evals: 177 | Clients in-flight: 3 | Eval in-flight: 3 | Pool: 100 | Best: 2.626133 | Elapsed: 2760s
+02:27:34 [INFO] [Eval #178] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.610513 | best: 2.626133 | $0.888
+02:27:34 [INFO] [Eval #179] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.504516 | best: 2.626133 | $0.888
+02:28:00 [INFO] [Status] Cost: $0.888 | Evals: 179 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2790s
+02:28:14 [INFO] [Eval #180] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $0.995
+02:28:14 [INFO] [Eval #181] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.476173 | best: 2.626133 | $0.995
+02:28:14 [INFO] [Eval #182] gpt-5                       accepted     | source: paradigm           | score: 2.488953 | best: 2.626133 | $0.995
+02:28:14 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.4890)
+02:28:30 [INFO] [Status] Cost: $0.997 | Evals: 182 | Clients in-flight: 8 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2820s
+02:28:35 [INFO] [Eval #183] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.488392 | best: 2.626133 | $0.997
+02:28:55 [INFO] [Eval #184] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.477710 | best: 2.626133 | $1.002
+02:28:56 [INFO] [Eval #185] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.473546 | best: 2.626133 | $1.002
+02:29:00 [INFO] [Status] Cost: $1.002 | Evals: 185 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2850s
+02:29:30 [INFO] [Status] Cost: $1.003 | Evals: 185 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2880s
+02:29:30 [INFO] [Eval #186] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.626133 | $1.003
+02:29:38 [INFO] [Eval #187] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.610513 | best: 2.626133 | $1.005
+02:29:39 [INFO] [Eval #188] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.476836 | best: 2.626133 | $1.005
+02:29:50 [INFO] [Eval #189] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.604790 | best: 2.626133 | $1.007
+02:29:52 [INFO] [Eval #190] qwen3-30b-a3b-instruct-2507 ERROR (mutate): too many indices for array: array is 1-dimensional, but 2 were indexed
+02:30:00 [INFO] [Status] Cost: $1.009 | Evals: 190 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 2910s
+02:30:04 [INFO] [Eval #191] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.492733 | best: 2.626133 | $1.009
+02:30:28 [INFO] [Eval #192] qwen3-30b-a3b-instruct-2507 rejected     | source: repair             | score: 1.420136 | best: 2.626133 | $1.010
+02:30:30 [INFO] [Status] Cost: $1.010 | Evals: 192 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2940s
+02:30:55 [INFO] [Eval #193] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.530134 | best: 2.626133 | $1.011
+02:31:00 [INFO] [Status] Cost: $1.011 | Evals: 193 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 2970s
+02:31:16 [INFO] [Eval #194] qwen3-30b-a3b-instruct-2507 ERROR (crossover): invalid index to scalar variable.
+02:31:16 [INFO] [Eval #195] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.504516 | best: 2.626133 | $1.014
+02:31:19 [INFO] [Eval #196] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.513895 | best: 2.626133 | $1.014
+02:31:30 [INFO] [Status] Cost: $1.014 | Evals: 196 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3000s
+02:31:41 [INFO] [Eval #197] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 2.464590 | best: 2.626133 | $1.017
+02:31:42 [INFO] [Eval #198] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.504516 | best: 2.626133 | $1.017
+02:31:50 [INFO] [Eval #199] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.476836 | best: 2.626133 | $1.018
+02:32:00 [INFO] [Status] Cost: $1.018 | Evals: 199 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3030s
+02:32:30 [INFO] [Status] Cost: $1.018 | Evals: 199 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3060s
+02:33:00 [INFO] [Status] Cost: $1.020 | Evals: 199 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 3090s
+02:33:01 [INFO] [Eval #200] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.616965 | best: 2.626133 | $1.020
+02:33:07 [INFO] [Eval #201] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.513895 | best: 2.626133 | $1.022
+02:33:08 [INFO] [Eval #202] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.626133 | best: 2.626133 | $1.022
+02:33:09 [INFO] [BLADE PE] trigger #4 at eval=202 | stage=late | best=2.626133 | pool=100 | families=3
+02:33:10 [INFO] [Eval #203] qwen3-30b-a3b-instruct-2507 ERROR (repair): object of type 'NoneType' has no len()
+02:33:30 [INFO] [Status] Cost: $1.022 | Evals: 203 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3120s
+02:33:33 [INFO] [Eval #204] qwen3-30b-a3b-instruct-2507 ERROR (repair): operands could not be broadcast together with shapes (0,) (2,) 
+02:33:47 [INFO] [Eval #205] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.504516 | best: 2.626133 | $1.025
+02:33:54 [INFO] [Eval #206] qwen3-30b-a3b-instruct-2507 ERROR (repair): operands could not be broadcast together with shapes (27,) (2,) 
+02:33:55 [INFO] [BLADE advisor] trigger #3 at eval=206
+02:34:00 [INFO] [BLADE advisor] new advice (516 chars) at eval=206
+02:34:00 [INFO] [Status] Cost: $1.027 | Evals: 206 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3150s
+02:34:01 [INFO] [Eval #207] qwen3-30b-a3b-instruct-2507 ERROR (crossover): Boundary violation on x
+02:34:06 [INFO] [Eval #208] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.467484 | best: 2.626133 | $1.029
+02:34:11 [INFO] [Eval #209] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.614118 | best: 2.626133 | $1.029
+02:34:15 [INFO] [Eval #210] qwen3-30b-a3b-instruct-2507 ERROR (repair): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:34:23 [INFO] [Eval #211] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 1.476836 | best: 2.626133 | $1.031
+02:34:30 [INFO] [Status] Cost: $1.031 | Evals: 211 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3180s
+02:34:57 [INFO] [Eval #212] qwen3-30b-a3b-instruct-2507 ERROR (repair): Cannot cast ufunc 'divide' output from dtype('float64') to dtype('int64') with c
+02:35:00 [INFO] [Status] Cost: $1.033 | Evals: 212 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3210s
+02:35:04 [INFO] [Eval #213] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.325721 | best: 2.626133 | $1.033
+02:35:30 [INFO] [Status] Cost: $1.033 | Evals: 213 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3240s
+02:35:50 [INFO] [Eval #214] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.488953 | best: 2.626133 | $1.034
+02:35:56 [INFO] [Eval #215] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.367123 | best: 2.626133 | $1.035
+02:36:00 [INFO] [Status] Cost: $1.035 | Evals: 215 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3270s
+02:36:15 [INFO] [Eval #216] qwen3-30b-a3b-instruct-2507 ERROR (repair): index 25 is out of bounds for axis 0 with size 25
+02:36:28 [INFO] [Eval #217] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613484 | best: 2.626133 | $1.038
+02:36:30 [INFO] [Status] Cost: $1.038 | Evals: 217 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3300s
+02:36:58 [INFO] [Eval #218] gpt-5                       accepted     | source: paradigm           | score: 2.626133 | best: 2.626133 | $1.124
+02:36:58 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.6261)
+02:36:59 [INFO] [Eval #219] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.325721 | best: 2.626133 | $1.124
+02:37:00 [INFO] [Status] Cost: $1.126 | Evals: 219 | Clients in-flight: 8 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3330s
+02:37:02 [INFO] [Eval #220] qwen3-30b-a3b-instruct-2507 ERROR (crossover): name 'iu' is not defined
+02:37:17 [INFO] [Eval #221] qwen3-30b-a3b-instruct-2507 ERROR (repair): The truth value of an array with more than one element is ambiguous. Use a.any()
+02:37:19 [INFO] [Eval #222] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): Syntax error: invalid decimal literal (<string>, line 90)
+02:37:30 [INFO] [Status] Cost: $1.129 | Evals: 222 | Clients in-flight: 8 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 3360s
+02:37:49 [INFO] [Eval #223] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.000000 | best: 2.626133 | $1.133
+02:38:00 [INFO] [Status] Cost: $1.133 | Evals: 223 | Clients in-flight: 7 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3390s
+02:38:06 [INFO] [Eval #224] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.623839 | best: 2.626133 | $1.133
+02:38:16 [INFO] [Eval #225] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.513266 | best: 2.626133 | $1.134
+02:38:30 [INFO] [Status] Cost: $1.138 | Evals: 225 | Clients in-flight: 4 | Eval in-flight: 3 | Pool: 100 | Best: 2.626133 | Elapsed: 3420s
+02:38:45 [INFO] [Eval #226] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): float() argument must be a string or a real number, not 'NoneType'
+02:38:45 [INFO] [Eval #227] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.613484 | best: 2.626133 | $1.140
+02:38:53 [INFO] [Eval #228] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.182629 | best: 2.626133 | $1.140
+02:38:55 [INFO] [Eval #229] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.618563 | best: 2.626133 | $1.140
+02:39:00 [INFO] [Status] Cost: $1.140 | Evals: 229 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3450s
+02:39:30 [INFO] [Status] Cost: $1.140 | Evals: 229 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3480s
+02:40:00 [INFO] [Status] Cost: $1.143 | Evals: 229 | Clients in-flight: 2 | Eval in-flight: 3 | Pool: 100 | Best: 2.626133 | Elapsed: 3510s
+02:40:02 [INFO] [Eval #230] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 1.722350 | best: 2.626133 | $1.143
+02:40:02 [INFO] [Eval #231] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 2.325721 | best: 2.626133 | $1.143
+02:40:30 [INFO] [Status] Cost: $1.143 | Evals: 231 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3540s
+02:40:38 [INFO] [Eval #232] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 2.481806 | best: 2.626133 | $1.145
+02:41:00 [INFO] [Status] Cost: $1.146 | Evals: 232 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 3570s
+02:41:23 [INFO] [Eval #233] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.610513 | best: 2.626133 | $1.147
+02:41:26 [INFO] [Eval #234] qwen3-30b-a3b-instruct-2507 ERROR (crossover): Overlap between circles 1 and 19
+02:41:30 [INFO] [Status] Cost: $1.147 | Evals: 234 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3600s
+02:42:00 [INFO] [Status] Cost: $1.148 | Evals: 234 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 3630s
+02:42:01 [INFO] [Eval #235] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.606222 | best: 2.626133 | $1.148
+02:42:30 [INFO] [Status] Cost: $1.148 | Evals: 235 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3660s
+02:43:00 [INFO] [Status] Cost: $1.148 | Evals: 235 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3690s
+02:43:30 [INFO] [Status] Cost: $1.148 | Evals: 235 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3720s
+02:43:44 [INFO] [Eval #236] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.606222 | best: 2.626133 | $1.150
+02:44:00 [INFO] [Status] Cost: $1.150 | Evals: 236 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3750s
+02:44:30 [INFO] [Status] Cost: $1.150 | Evals: 236 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3780s
+02:45:00 [INFO] [Status] Cost: $1.150 | Evals: 236 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3810s
+02:45:30 [INFO] [Status] Cost: $1.151 | Evals: 236 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.626133 | Elapsed: 3840s
+02:45:35 [INFO] [Eval #237] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.616202 | best: 2.626133 | $1.151
+02:46:00 [INFO] [Status] Cost: $1.151 | Evals: 237 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3870s
+02:46:30 [INFO] [Status] Cost: $1.151 | Evals: 237 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3900s
+02:47:00 [INFO] [Status] Cost: $1.151 | Evals: 237 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3930s
+02:47:30 [INFO] [Status] Cost: $1.151 | Evals: 237 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3960s
+02:48:00 [INFO] [Eval #238] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.613506 | best: 2.626133 | $1.152
+02:48:00 [INFO] [Status] Cost: $1.152 | Evals: 238 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 3990s
+02:48:30 [INFO] [Status] Cost: $1.152 | Evals: 238 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 4020s
+02:48:45 [INFO] [Eval #239] qwen3-30b-a3b-instruct-2507 ERROR (repair): executor error: Process exceeded 600.0s timeout
+02:48:45 [INFO] [BLADE PE] trigger #5 at eval=239 | stage=late | best=2.626133 | pool=100 | families=2
+02:49:00 [INFO] [Status] Cost: $1.152 | Evals: 239 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4050s
+02:49:09 [INFO] [Eval #240] qwen3-30b-a3b-instruct-2507 ERROR (repair): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:49:13 [INFO] [Eval #241] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.072869 | best: 2.626133 | $1.154
+02:49:30 [INFO] [Status] Cost: $1.154 | Evals: 241 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4080s
+02:49:52 [INFO] [Eval #242] gpt-5                       rejected     | source: paradigm           | score: 2.623006 | best: 2.626133 | $1.220
+02:49:52 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.6230)
+02:50:00 [INFO] [Status] Cost: $1.220 | Evals: 242 | Clients in-flight: 9 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4110s
+02:50:11 [INFO] [Eval #243] qwen3-30b-a3b-instruct-2507 ERROR (repair): cannot access local variable 'rlist' where it is not associated with a value
+02:50:30 [INFO] [Status] Cost: $1.220 | Evals: 243 | Clients in-flight: 9 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4140s
+02:50:55 [INFO] [Eval #244] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.410279 | best: 2.626133 | $1.221
+02:51:00 [INFO] [Status] Cost: $1.221 | Evals: 244 | Clients in-flight: 9 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4170s
+02:51:30 [INFO] [Status] Cost: $1.224 | Evals: 244 | Clients in-flight: 7 | Eval in-flight: 1 | Pool: 100 | Best: 2.626133 | Elapsed: 4200s
+02:51:31 [INFO] [Eval #245] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.620978 | best: 2.626133 | $1.224
+02:51:33 [INFO] [Eval #246] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.534419 | best: 2.626133 | $1.224
+02:51:54 [INFO] [Eval #247] qwen3-30b-a3b-instruct-2507 ERROR (repair): Boundary violation on x
+02:52:00 [INFO] [Status] Cost: $1.225 | Evals: 247 | Clients in-flight: 7 | Eval in-flight: 0 | Pool: 100 | Best: 2.626133 | Elapsed: 4230s
+02:52:27 [INFO] [Eval #248] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: paradigm_variant   | score: 2.626809 | best: 2.626809 | $1.228
+02:52:27 [INFO] [Eval #249] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: paradigm_variant   | score: 2.627176 | best: 2.627176 | $1.228
+02:52:30 [INFO] [Status] Cost: $1.228 | Evals: 249 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627176 | Elapsed: 4260s
+02:53:00 [INFO] [Eval #250] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.483837 | best: 2.627176 | $1.229
+02:53:00 [INFO] [Status] Cost: $1.229 | Evals: 250 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627176 | Elapsed: 4290s
+02:53:30 [INFO] [Status] Cost: $1.229 | Evals: 250 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627176 | Elapsed: 4320s
+02:54:00 [INFO] [Status] Cost: $1.230 | Evals: 250 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627176 | Elapsed: 4350s
+02:54:17 [INFO] [Eval #251] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: repair             | score: 2.627293 | best: 2.627293 | $1.230
+02:54:30 [INFO] [Status] Cost: $1.231 | Evals: 251 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4380s
+02:54:48 [INFO] [Eval #252] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 1.433426 | best: 2.627293 | $1.231
+02:55:00 [INFO] [Status] Cost: $1.231 | Evals: 252 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4410s
+02:55:21 [INFO] [Eval #253] qwen3-30b-a3b-instruct-2507 ERROR (mutate): minimum() takes from 2 to 3 positional arguments but 4 were given
+02:55:30 [INFO] [Status] Cost: $1.232 | Evals: 253 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4440s
+02:55:52 [INFO] [Eval #254] qwen3-30b-a3b-instruct-2507 ERROR (repair): too many indices for array: array is 1-dimensional, but 2 were indexed
+02:55:58 [INFO] [Eval #255] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.616965 | best: 2.627293 | $1.235
+02:56:00 [INFO] [Status] Cost: $1.235 | Evals: 255 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4470s
+02:56:11 [INFO] [Eval #256] qwen3-30b-a3b-instruct-2507 ERROR (repair): too many indices for array: array is 1-dimensional, but 2 were indexed
+02:56:12 [INFO] [BLADE advisor] trigger #4 at eval=256
+02:56:20 [INFO] [BLADE advisor] new advice (542 chars) at eval=256
+02:56:30 [INFO] [Status] Cost: $1.236 | Evals: 256 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4500s
+02:57:00 [INFO] [Status] Cost: $1.236 | Evals: 256 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4530s
+02:57:05 [INFO] [Eval #257] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.000010 | best: 2.627293 | $1.237
+02:57:25 [INFO] [Eval #258] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 1.735873 | best: 2.627293 | $1.238
+02:57:30 [INFO] [Status] Cost: $1.238 | Evals: 258 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4560s
+02:57:57 [INFO] [Eval #259] qwen3-30b-a3b-instruct-2507 ERROR (repair): invalid index to scalar variable.
+02:57:58 [INFO] [BLADE PE] trigger #6 at eval=259 | stage=early | best=2.627293 | pool=100 | families=2
+02:58:00 [INFO] [Status] Cost: $1.239 | Evals: 259 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4590s
+02:58:30 [INFO] [Status] Cost: $1.240 | Evals: 259 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4620s
+02:58:56 [INFO] [Eval #260] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.590764 | best: 2.627293 | $1.240
+02:59:00 [INFO] [Status] Cost: $1.240 | Evals: 260 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4650s
+02:59:30 [INFO] [Status] Cost: $1.240 | Evals: 260 | Clients in-flight: 6 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4680s
+02:59:41 [INFO] [Eval #261] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 1.742366 | best: 2.627293 | $1.241
+03:00:00 [INFO] [Status] Cost: $1.352 | Evals: 261 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4710s
+03:00:30 [INFO] [Status] Cost: $1.352 | Evals: 261 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4740s
+03:00:38 [INFO] [Eval #262] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.477710 | best: 2.627293 | $1.353
+03:00:49 [INFO] [Eval #263] qwen3-30b-a3b-instruct-2507 ERROR (repair): name 'iu' is not defined
+03:01:00 [INFO] [Status] Cost: $1.354 | Evals: 263 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4770s
+03:01:30 [INFO] [Status] Cost: $1.354 | Evals: 263 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 4800s
+03:01:56 [INFO] [Eval #264] gpt-5                       accepted     | source: paradigm           | score: 2.399376 | best: 2.627293 | $1.354
+03:01:56 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.3994)
+03:02:00 [INFO] [Status] Cost: $1.354 | Evals: 264 | Clients in-flight: 9 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 4830s
+03:02:30 [INFO] [Status] Cost: $1.358 | Evals: 264 | Clients in-flight: 6 | Eval in-flight: 3 | Pool: 100 | Best: 2.627293 | Elapsed: 4860s
+03:02:41 [INFO] [Eval #265] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.477710 | best: 2.627293 | $1.359
+03:02:54 [INFO] [Eval #266] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 2.617886 | best: 2.627293 | $1.359
+03:03:00 [INFO] [Status] Cost: $1.359 | Evals: 266 | Clients in-flight: 7 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 4890s
+03:03:17 [INFO] [Eval #267] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.616965 | best: 2.627293 | $1.360
+03:03:30 [INFO] [Status] Cost: $1.360 | Evals: 267 | Clients in-flight: 7 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 4920s
+03:04:00 [INFO] [Status] Cost: $1.362 | Evals: 267 | Clients in-flight: 6 | Eval in-flight: 3 | Pool: 100 | Best: 2.627293 | Elapsed: 4950s
+03:04:19 [INFO] [Eval #268] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.345897 | best: 2.627293 | $1.363
+03:04:30 [INFO] [Status] Cost: $1.363 | Evals: 268 | Clients in-flight: 5 | Eval in-flight: 3 | Pool: 100 | Best: 2.627293 | Elapsed: 4980s
+03:04:44 [INFO] [Eval #269] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.616965 | best: 2.627293 | $1.364
+03:05:00 [INFO] [Status] Cost: $1.364 | Evals: 269 | Clients in-flight: 5 | Eval in-flight: 3 | Pool: 100 | Best: 2.627293 | Elapsed: 5010s
+03:05:24 [INFO] [Eval #270] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.317539 | best: 2.627293 | $1.366
+03:05:30 [INFO] [Status] Cost: $1.366 | Evals: 270 | Clients in-flight: 4 | Eval in-flight: 3 | Pool: 100 | Best: 2.627293 | Elapsed: 5040s
+03:05:42 [INFO] [Eval #271] qwen3-30b-a3b-instruct-2507 rejected     | source: repair             | score: 1.300000 | best: 2.627293 | $1.366
+03:05:58 [INFO] [Eval #272] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.333845 | best: 2.627293 | $1.366
+03:06:00 [INFO] [Status] Cost: $1.366 | Evals: 272 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5070s
+03:06:07 [INFO] [Eval #273] qwen3-30b-a3b-instruct-2507 ERROR (crossover): operands could not be broadcast together with shapes (26,) (325,) 
+03:06:30 [INFO] [Status] Cost: $1.368 | Evals: 273 | Clients in-flight: 4 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 5100s
+03:06:54 [INFO] [Eval #274] qwen3-30b-a3b-instruct-2507 ERROR (repair): Overlap between circles 1 and 19
+03:07:00 [INFO] [Status] Cost: $1.368 | Evals: 274 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5130s
+03:07:30 [INFO] [Status] Cost: $1.368 | Evals: 274 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5160s
+03:07:56 [INFO] [Eval #275] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613506 | best: 2.627293 | $1.370
+03:08:00 [INFO] [Status] Cost: $1.370 | Evals: 275 | Clients in-flight: 4 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 5190s
+03:08:05 [INFO] [Eval #276] qwen3-30b-a3b-instruct-2507 accepted     | source: repair             | score: 2.519876 | best: 2.627293 | $1.370
+03:08:30 [INFO] [Status] Cost: $1.370 | Evals: 276 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5220s
+03:09:00 [INFO] [Status] Cost: $1.370 | Evals: 276 | Clients in-flight: 5 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5250s
+03:09:13 [INFO] [Eval #277] qwen3-30b-a3b-instruct-2507 ERROR (repair): operands could not be broadcast together with shapes (26,) (325,) 
+03:09:30 [INFO] [Status] Cost: $1.372 | Evals: 277 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 5280s
+03:09:32 [INFO] [Eval #278] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613506 | best: 2.627293 | $1.372
+03:10:00 [INFO] [Status] Cost: $1.372 | Evals: 278 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5310s
+03:10:30 [INFO] [Status] Cost: $1.372 | Evals: 278 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5340s
+03:11:00 [INFO] [Status] Cost: $1.372 | Evals: 278 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5370s
+03:11:30 [INFO] [Status] Cost: $1.373 | Evals: 278 | Clients in-flight: 3 | Eval in-flight: 2 | Pool: 100 | Best: 2.627293 | Elapsed: 5400s
+03:11:33 [INFO] [Eval #279] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613506 | best: 2.627293 | $1.373
+03:12:00 [INFO] [Status] Cost: $1.373 | Evals: 279 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5430s
+03:12:30 [INFO] [Status] Cost: $1.373 | Evals: 279 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5460s
+03:13:00 [INFO] [Status] Cost: $1.373 | Evals: 279 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5490s
+03:13:14 [INFO] [Eval #280] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.613506 | best: 2.627293 | $1.374
+03:13:27 [INFO] [Eval #281] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.444847 | best: 2.627293 | $1.374
+03:13:30 [INFO] [Status] Cost: $1.374 | Evals: 281 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5520s
+03:14:00 [INFO] [Status] Cost: $1.374 | Evals: 281 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5550s
+03:14:30 [INFO] [Status] Cost: $1.374 | Evals: 281 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5580s
+03:15:00 [INFO] [Status] Cost: $1.374 | Evals: 281 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5610s
+03:15:19 [INFO] [Eval #282] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613484 | best: 2.627293 | $1.376
+03:15:30 [INFO] [Status] Cost: $1.376 | Evals: 282 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5640s
+03:15:46 [INFO] [Eval #283] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613484 | best: 2.627293 | $1.377
+03:16:00 [INFO] [Status] Cost: $1.377 | Evals: 283 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5670s
+03:16:30 [INFO] [Status] Cost: $1.377 | Evals: 283 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5700s
+03:17:00 [INFO] [Status] Cost: $1.377 | Evals: 283 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5730s
+03:17:30 [INFO] [Status] Cost: $1.377 | Evals: 283 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5760s
+03:18:00 [INFO] [Status] Cost: $1.378 | Evals: 283 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 5790s
+03:18:02 [INFO] [Eval #284] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.613484 | best: 2.627293 | $1.378
+03:18:28 [INFO] [Eval #285] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.613484 | best: 2.627293 | $1.380
+03:18:30 [INFO] [Status] Cost: $1.380 | Evals: 285 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5820s
+03:19:00 [INFO] [Status] Cost: $1.380 | Evals: 285 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5850s
+03:19:30 [INFO] [Status] Cost: $1.380 | Evals: 285 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5880s
+03:20:00 [INFO] [Status] Cost: $1.380 | Evals: 285 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5910s
+03:20:25 [INFO] [Eval #286] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 2.613484 | best: 2.627293 | $1.382
+03:20:30 [INFO] [Status] Cost: $1.382 | Evals: 286 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5940s
+03:21:00 [INFO] [Status] Cost: $1.382 | Evals: 286 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 5970s
+03:21:30 [INFO] [Status] Cost: $1.382 | Evals: 286 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6000s
+03:22:00 [INFO] [Status] Cost: $1.382 | Evals: 286 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6030s
+03:22:30 [INFO] [Status] Cost: $1.383 | Evals: 286 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6060s
+03:22:38 [INFO] [Eval #287] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.619608 | best: 2.627293 | $1.383
+03:23:00 [INFO] [Status] Cost: $1.383 | Evals: 287 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6090s
+03:23:30 [INFO] [Status] Cost: $1.383 | Evals: 287 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6120s
+03:24:00 [INFO] [Status] Cost: $1.383 | Evals: 287 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6150s
+03:24:30 [INFO] [Status] Cost: $1.384 | Evals: 287 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6180s
+03:24:38 [INFO] [Eval #288] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.619608 | best: 2.627293 | $1.384
+03:25:00 [INFO] [Status] Cost: $1.384 | Evals: 288 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6210s
+03:25:30 [INFO] [Status] Cost: $1.384 | Evals: 288 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6240s
+03:26:00 [INFO] [Status] Cost: $1.384 | Evals: 288 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6270s
+03:26:30 [INFO] [Status] Cost: $1.384 | Evals: 288 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6300s
+03:26:58 [INFO] [Eval #289] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.621419 | best: 2.627293 | $1.385
+03:27:00 [INFO] [Status] Cost: $1.385 | Evals: 289 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6330s
+03:27:30 [INFO] [Status] Cost: $1.385 | Evals: 289 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6360s
+03:28:00 [INFO] [Status] Cost: $1.385 | Evals: 289 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6390s
+03:28:30 [INFO] [Status] Cost: $1.385 | Evals: 289 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6420s
+03:29:00 [INFO] [Status] Cost: $1.385 | Evals: 289 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6450s
+03:29:30 [INFO] [Status] Cost: $1.387 | Evals: 289 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6480s
+03:29:33 [INFO] [Eval #290] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.621419 | best: 2.627293 | $1.387
+03:30:00 [INFO] [Status] Cost: $1.389 | Evals: 290 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6510s
+03:30:28 [INFO] [Eval #291] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.622878 | best: 2.627293 | $1.389
+03:30:29 [INFO] [BLADE PE] trigger #7 at eval=291 | stage=mid | best=2.627293 | pool=100 | families=2
+03:30:30 [INFO] [Status] Cost: $1.389 | Evals: 291 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6540s
+03:31:00 [INFO] [Status] Cost: $1.389 | Evals: 291 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6570s
+03:31:30 [INFO] [Status] Cost: $1.389 | Evals: 291 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6600s
+03:32:00 [INFO] [Eval #292] gpt-5                       rejected     | source: paradigm           | score: 1.675298 | best: 2.627293 | $1.486
+03:32:00 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.6753)
+03:32:00 [INFO] [Status] Cost: $1.486 | Evals: 292 | Clients in-flight: 8 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6630s
+03:32:30 [INFO] [Status] Cost: $1.487 | Evals: 292 | Clients in-flight: 7 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6660s
+03:32:33 [INFO] [Eval #293] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.680297 | best: 2.627293 | $1.487
+03:33:00 [INFO] [Status] Cost: $1.487 | Evals: 293 | Clients in-flight: 7 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6690s
+03:33:23 [INFO] [Eval #294] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.561090 | best: 2.627293 | $1.491
+03:33:26 [INFO] [Eval #295] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.921665 | best: 2.627293 | $1.491
+03:33:30 [INFO] [Status] Cost: $1.491 | Evals: 295 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6720s
+03:33:43 [INFO] [Eval #296] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.622878 | best: 2.627293 | $1.491
+03:33:57 [INFO] [Eval #297] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.851016 | best: 2.627293 | $1.492
+03:34:00 [INFO] [Status] Cost: $1.492 | Evals: 297 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6750s
+03:34:30 [INFO] [Status] Cost: $1.494 | Evals: 297 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6780s
+03:35:00 [INFO] [Status] Cost: $1.494 | Evals: 297 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6810s
+03:35:30 [INFO] [Status] Cost: $1.494 | Evals: 297 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6840s
+03:35:35 [INFO] [Eval #298] qwen3-30b-a3b-instruct-2507 ERROR (mutate): '>=' not supported between instances of 'NoneType' and 'float'
+03:36:00 [INFO] [Status] Cost: $1.494 | Evals: 298 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6870s
+03:36:16 [INFO] [Eval #299] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate             | score: 0.060510 | best: 2.627293 | $1.498
+03:36:30 [INFO] [Status] Cost: $1.498 | Evals: 299 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6900s
+03:36:42 [INFO] [Eval #300] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate             | score: 2.530134 | best: 2.627293 | $1.499
+03:37:00 [INFO] [Status] Cost: $1.499 | Evals: 300 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 6930s
+03:37:13 [INFO] [Eval #301] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover          | score: 2.457443 | best: 2.627293 | $1.500
+03:37:19 [INFO] [Eval #302] qwen3-30b-a3b-instruct-2507 ERROR (repair): '>=' not supported between instances of 'NoneType' and 'float'
+03:37:30 [INFO] [Status] Cost: $1.500 | Evals: 302 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6960s
+03:37:40 [INFO] [Eval #303] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.530134 | best: 2.627293 | $1.502
+03:38:00 [INFO] [Status] Cost: $1.502 | Evals: 303 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 6990s
+03:38:30 [INFO] [Status] Cost: $1.502 | Evals: 303 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7020s
+03:39:00 [INFO] [Status] Cost: $1.502 | Evals: 303 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7050s
+03:39:30 [INFO] [Status] Cost: $1.504 | Evals: 303 | Clients in-flight: 3 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 7080s
+03:39:37 [INFO] [Eval #304] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover          | score: 2.626133 | best: 2.627293 | $1.504
+03:40:00 [INFO] [Status] Cost: $1.504 | Evals: 304 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7110s
+<string>:9: RuntimeWarning: divide by zero encountered in divide
+<string>:9: RuntimeWarning: invalid value encountered in divide
+<string>:9: RuntimeWarning: invalid value encountered in remainder
+03:40:13 [INFO] [Eval #305] qwen3-30b-a3b-instruct-2507 ERROR (mutate): could not broadcast input array from shape (8000,8000) into shape (8000,)
+03:40:30 [INFO] [Status] Cost: $1.506 | Evals: 305 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7140s
+03:41:00 [INFO] [Status] Cost: $1.506 | Evals: 305 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7170s
+03:41:30 [INFO] [Status] Cost: $1.506 | Evals: 305 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7200s
+03:42:00 [INFO] [Status] Cost: $1.506 | Evals: 305 | Clients in-flight: 5 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7230s
+<string>:50: RuntimeWarning: divide by zero encountered in divide
+<string>:50: RuntimeWarning: invalid value encountered in divide
+03:42:30 [INFO] [Status] Cost: $1.507 | Evals: 305 | Clients in-flight: 4 | Eval in-flight: 1 | Pool: 100 | Best: 2.627293 | Elapsed: 7260s
+<string>:50: RuntimeWarning: invalid value encountered in remainder
+03:42:31 [INFO] [Eval #306] qwen3-30b-a3b-instruct-2507 ERROR (repair): could not broadcast input array from shape (8000,8000) into shape (8000,)
+03:42:32 [INFO] [BLADE advisor] trigger #5 at eval=306
+03:42:38 [INFO] [BLADE advisor] new advice (526 chars) at eval=306
+03:43:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7290s
+03:43:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7320s
+03:44:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7350s
+03:44:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7380s
+03:45:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7410s
+03:45:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7440s
+03:46:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7470s
+03:46:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7500s
+03:47:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7530s
+03:47:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7560s
+03:48:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7590s
+03:48:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7620s
+03:49:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7650s
+03:49:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7680s
+03:50:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7710s
+03:50:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7740s
+03:51:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7770s
+03:51:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7800s
+03:52:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7830s
+03:52:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7860s
+03:53:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7890s
+03:53:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7920s
+03:54:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7950s
+03:54:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 7980s
+03:55:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8010s
+03:55:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8040s
+03:56:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8070s
+03:56:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8100s
+03:57:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8130s
+03:57:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8160s
+03:58:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8190s
+03:58:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8220s
+03:59:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8250s
+03:59:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8280s
+04:00:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8310s
+04:00:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8340s
+04:01:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8370s
+04:01:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8400s
+04:02:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8430s
+04:02:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8460s
+04:03:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8490s
+04:03:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8520s
+04:04:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8550s
+04:04:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8580s
+04:05:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8610s
+04:05:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8640s
+04:06:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8670s
+04:06:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8700s
+04:07:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8730s
+04:07:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8760s
+04:08:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8790s
+04:08:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8820s
+04:09:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8850s
+04:09:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8880s
+04:10:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8910s
+04:10:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8940s
+04:11:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 8970s
+04:11:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9000s
+04:12:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9030s
+04:12:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9060s
+04:13:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9090s
+04:13:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9120s
+04:14:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9150s
+04:14:30 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9180s
+04:15:00 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9210s
+04:15:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9240s
+04:16:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9270s
+04:16:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9300s
+04:17:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9330s
+04:17:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9360s
+04:18:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9390s
+04:18:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9420s
+04:19:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9450s
+04:19:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9480s
+04:20:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9510s
+04:20:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9540s
+04:21:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9570s
+04:21:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9600s
+04:22:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9630s
+04:22:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9660s
+04:23:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9690s
+04:23:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9720s
+04:24:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9750s
+04:24:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9780s
+04:25:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9810s
+04:25:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9840s
+04:26:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9870s
+04:26:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9900s
+04:27:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9930s
+04:27:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9960s
+04:28:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 9990s
+04:28:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10020s
+04:29:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10050s
+04:29:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10080s
+04:30:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10110s
+04:30:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10140s
+04:31:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10170s
+04:31:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10200s
+04:32:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10230s
+04:32:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10260s
+04:33:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10290s
+04:33:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10320s
+04:34:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10350s
+04:34:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10380s
+04:35:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10410s
+04:35:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10440s
+04:36:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10470s
+04:36:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10500s
+04:37:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10530s
+04:37:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10560s
+04:38:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10590s
+04:38:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10620s
+04:39:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10650s
+04:39:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10680s
+04:40:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10710s
+04:40:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10740s
+04:41:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10770s
+04:41:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10800s
+04:42:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10830s
+04:42:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10860s
+04:43:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10890s
+04:43:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10920s
+04:44:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10950s
+04:44:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 10980s
+04:45:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11010s
+04:45:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11040s
+04:46:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11070s
+04:46:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11100s
+04:47:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11130s
+04:47:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11160s
+04:48:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11190s
+04:48:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11220s
+04:49:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11250s
+04:49:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11280s
+04:50:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11310s
+04:50:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11340s
+04:51:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11370s
+04:51:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11400s
+04:52:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11430s
+04:52:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11460s
+04:53:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11490s
+04:53:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11520s
+04:54:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11550s
+04:54:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11580s
+04:55:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11610s
+04:55:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11640s
+04:56:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11670s
+04:56:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11700s
+04:57:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11730s
+04:57:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11760s
+04:58:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11790s
+04:58:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11820s
+04:59:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11850s
+04:59:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11880s
+05:00:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11910s
+05:00:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11940s
+05:01:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 11970s
+05:01:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12000s
+05:02:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12030s
+05:02:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12060s
+05:03:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12090s
+05:03:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12120s
+05:04:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12150s
+05:04:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12180s
+05:05:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12210s
+05:05:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12240s
+05:06:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12270s
+05:06:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12300s
+05:07:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12330s
+05:07:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12360s
+05:08:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12390s
+05:08:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12421s
+05:09:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12451s
+05:09:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12481s
+05:10:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12511s
+05:10:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12541s
+05:11:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12571s
+05:11:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12601s
+05:12:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12631s
+05:12:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12661s
+05:13:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12691s
+05:13:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12721s
+05:14:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12751s
+05:14:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12781s
+05:15:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12811s
+05:15:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12841s
+05:16:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12871s
+05:16:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12901s
+05:17:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12931s
+05:17:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12961s
+05:18:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 12991s
+05:18:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13021s
+05:19:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13051s
+05:19:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13081s
+05:20:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13111s
+05:20:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13141s
+05:21:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13171s
+05:21:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13201s
+05:22:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13231s
+05:22:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13261s
+05:23:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13291s
+05:23:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13321s
+05:24:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13351s
+05:24:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13381s
+05:25:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13411s
+05:25:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13441s
+05:26:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13471s
+05:26:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13501s
+05:27:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13531s
+05:27:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13561s
+05:28:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13591s
+05:28:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13621s
+05:29:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13651s
+05:29:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13681s
+05:30:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13711s
+05:30:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13741s
+05:31:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13771s
+05:31:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13801s
+05:32:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13831s
+05:32:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13861s
+05:33:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13891s
+05:33:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13921s
+05:34:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13951s
+05:34:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 13981s
+05:35:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14011s
+05:35:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14041s
+05:36:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14071s
+05:36:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14101s
+05:37:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14131s
+05:37:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14161s
+05:38:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14191s
+05:38:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14221s
+05:39:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14251s
+05:39:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14281s
+05:40:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14311s
+05:40:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14341s
+05:41:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14371s
+05:41:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14401s
+05:42:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14431s
+05:42:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14461s
+05:43:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14491s
+05:43:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14521s
+05:44:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14551s
+05:44:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14581s
+05:45:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14611s
+05:45:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14641s
+05:46:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14671s
+05:46:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14701s
+05:47:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14731s
+05:47:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14761s
+05:48:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14791s
+05:48:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14821s
+05:49:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14851s
+05:49:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14881s
+05:50:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14911s
+05:50:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14941s
+05:51:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 14971s
+05:51:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15001s
+05:52:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15031s
+05:52:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15061s
+05:53:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15091s
+05:53:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15121s
+05:54:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15151s
+05:54:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15181s
+05:55:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15211s
+05:55:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15241s
+05:56:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15271s
+05:56:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15301s
+05:57:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15331s
+05:57:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15361s
+05:58:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15391s
+05:58:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15421s
+05:59:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15451s
+05:59:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15481s
+06:00:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15511s
+06:00:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15541s
+06:01:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15571s
+06:01:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15601s
+06:02:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15631s
+06:02:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15661s
+06:03:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15691s
+06:03:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15721s
+06:04:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15751s
+06:04:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15781s
+06:05:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15811s
+06:05:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15841s
+06:06:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15871s
+06:06:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15901s
+06:07:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15931s
+06:07:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15961s
+06:08:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 15991s
+06:08:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16021s
+06:09:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16051s
+06:09:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16081s
+06:10:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16111s
+06:10:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16141s
+06:11:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16171s
+06:11:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16201s
+06:12:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16231s
+06:12:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16261s
+06:13:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16291s
+06:13:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16321s
+06:14:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16351s
+06:14:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16381s
+06:15:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16411s
+06:15:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16441s
+06:16:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16471s
+06:16:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16501s
+06:17:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16531s
+06:17:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16561s
+06:18:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16591s
+06:18:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16621s
+06:19:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16651s
+06:19:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16681s
+06:20:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16711s
+06:20:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16741s
+06:21:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16771s
+06:21:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16801s
+06:22:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16831s
+06:22:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16861s
+06:23:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16891s
+06:23:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16921s
+06:24:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16951s
+06:24:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 16981s
+06:25:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17011s
+06:25:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17041s
+06:26:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17071s
+06:26:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17101s
+06:27:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17131s
+06:27:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17161s
+06:28:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17191s
+06:28:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17221s
+06:29:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17251s
+06:29:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17281s
+06:30:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17311s
+06:30:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17341s
+06:31:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17371s
+06:31:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17401s
+06:32:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17431s
+06:32:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17461s
+06:33:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17491s
+06:33:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17521s
+06:34:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17551s
+06:34:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17581s
+06:35:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17611s
+06:35:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17641s
+06:36:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17671s
+06:36:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17701s
+06:37:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17731s
+06:37:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17761s
+06:38:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17791s
+06:38:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17821s
+06:39:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17851s
+06:39:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17881s
+06:40:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17911s
+06:40:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17941s
+06:41:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 17971s
+06:41:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18001s
+06:42:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18031s
+06:42:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18061s
+06:43:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18091s
+06:43:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18121s
+06:44:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18151s
+06:44:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18181s
+06:45:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18211s
+06:45:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18241s
+06:46:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18271s
+06:46:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18301s
+06:47:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18331s
+06:47:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18361s
+06:48:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18391s
+06:48:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18421s
+06:49:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18451s
+06:49:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18481s
+06:50:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18511s
+06:50:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18541s
+06:51:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18571s
+06:51:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18601s
+06:52:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18631s
+06:52:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18661s
+06:53:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18691s
+06:53:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18721s
+06:54:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18751s
+06:54:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18781s
+06:55:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18811s
+06:55:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18841s
+06:56:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18871s
+06:56:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18901s
+06:57:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18931s
+06:57:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18961s
+06:58:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 18991s
+06:58:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19021s
+06:59:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19051s
+06:59:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19081s
+07:00:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19111s
+07:00:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19141s
+07:01:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19171s
+07:01:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19201s
+07:02:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19231s
+07:02:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19261s
+07:03:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19291s
+07:03:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19321s
+07:04:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19351s
+07:04:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19381s
+07:05:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19411s
+07:05:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19441s
+07:06:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19471s
+07:06:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19501s
+07:07:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19531s
+07:07:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19561s
+07:08:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19591s
+07:08:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19621s
+07:09:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19651s
+07:09:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19681s
+07:10:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19711s
+07:10:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19741s
+07:11:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19771s
+07:11:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19801s
+07:12:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19831s
+07:12:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19861s
+07:13:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19891s
+07:13:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19921s
+07:14:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19951s
+07:14:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 19981s
+07:15:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20011s
+07:15:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20041s
+07:16:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20071s
+07:16:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20101s
+07:17:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20131s
+07:17:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20161s
+07:18:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20191s
+07:18:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20221s
+07:19:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20251s
+07:19:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20281s
+07:20:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20311s
+07:20:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20341s
+07:21:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20371s
+07:21:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20401s
+07:22:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20431s
+07:22:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20461s
+07:23:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20491s
+07:23:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20521s
+07:24:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20551s
+07:24:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20581s
+07:25:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20611s
+07:25:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20641s
+07:26:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20671s
+07:26:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20701s
+07:27:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20731s
+07:27:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20761s
+07:28:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20791s
+07:28:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20821s
+07:29:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20851s
+07:29:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20881s
+07:30:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20911s
+07:30:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20941s
+07:31:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 20971s
+07:31:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21001s
+07:32:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21031s
+07:32:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21061s
+07:33:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21091s
+07:33:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21121s
+07:34:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21151s
+07:34:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21181s
+07:35:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21211s
+07:35:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21241s
+07:36:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21271s
+07:36:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21301s
+07:37:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21331s
+07:37:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21361s
+07:38:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21391s
+07:38:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21421s
+07:39:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21451s
+07:39:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21481s
+07:40:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21511s
+07:40:31 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21541s
+07:41:01 [INFO] [Status] Cost: $1.507 | Evals: 306 | Clients in-flight: 4 | Eval in-flight: 0 | Pool: 100 | Best: 2.627293 | Elapsed: 21571s
+Error: The operation was canceled.

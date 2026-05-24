@@ -213,3 +213,74 @@ def test_blade_budget_evals_actually_halts(tmp_path: Path, monkeypatch):
     # n_workers=1 means we may overshoot by at most one in-flight task.
     assert result.total_evaluations <= 5, result.total_evaluations
     assert result.total_evaluations >= 3, result.total_evaluations
+
+
+class _HangingLM(BaseClient):
+    """LLM stub that blocks forever inside ``acompletion``.
+
+    Simulates the OpenRouter / GPT-5 whitespace-keepalive failure mode where
+    a stalled upstream provider produces no result and no error — the call
+    just sits there for hours. Without the per-call ``llm_call_timeout`` +
+    main-loop ``asyncio.wait(timeout=...)`` defence, ``BladeOrchestrator.run``
+    would block indefinitely once the budget exhausts but in-flight tasks
+    haven't returned. This regression test pins that fix in place."""
+
+    def __init__(self, model: str):
+        super().__init__(model)
+        self.calls = 0
+
+    async def acompletion(self, prompt, **kwargs) -> ClientResult:
+        self.calls += 1
+        # Sleep way past the test's deadline; we expect the orchestrator
+        # to cancel us, not for this to ever complete.
+        await asyncio.sleep(3600)
+        return ClientResult(text="never", cost=0.0)
+
+
+def test_blade_terminates_when_llm_hangs(tmp_path: Path, monkeypatch):
+    """Budget exhaustion must short-circuit hung LLM calls.
+
+    Pre-fix: ``_main_loop``'s ``asyncio.wait(return_when=FIRST_COMPLETED)``
+    blocked forever when every in-flight LLM coroutine was stuck inside
+    a third-party HTTP call. GitHub Actions only ended the job when its
+    6h hard cap kicked in (see ``log_levi/run.txt``: Elapsed grew past
+    21500s with ``Clients in-flight: 4`` for hours after the 10800s budget).
+    """
+    from levi.simple import embedder as embedder_module
+
+    monkeypatch.setattr(embedder_module.DescriptionEmbedder, "embed", _hash_embed)
+
+    cfg = BladeConfig(
+        problem_description="trivial",
+        function_signature="def solve(x):",
+        score_fn=_score_fn,
+        fn_name="solve",
+        seed_program=SEED,  # admit a seed so the loop has something to chew on
+        budget_seconds=1.0,  # very tight — we want budget to exhaust fast
+        n_workers=2,
+        n_eval_processes=1,
+        eval_timeout=5.0,
+        pe_cron_interval=999,
+        n_diverse_seeds=0,  # skip frontier phase 1 — no need to wait on it
+        n_variants_per_seed=0,  # skip phase 2 fanout too
+        output_dir=tmp_path / "blade_hang",
+        embedder_config=EmbedderConfig(model="fake/embed", dim=64),
+        llm_call_timeout=2.0,  # mutation calls must give up within 2s
+        shutdown_grace_seconds=5.0,
+    )
+    orch = BladeOrchestrator(cfg)
+    orch.mutation_lm = _HangingLM("fake/hanging-mutation")
+    orch.paradigm_lm = _HangingLM("fake/hanging-paradigm")
+
+    import time as _time
+
+    start = _time.monotonic()
+    result = asyncio.run(orch.run())
+    elapsed = _time.monotonic() - start
+
+    # Whole run (budget=1s + grace=5s + a bit of overhead) must finish well
+    # under the test's 30s ceiling. Pre-fix this would block ~3600s.
+    assert elapsed < 30.0, f"run() took {elapsed:.1f}s — orchestrator hung"
+    # Seed should still have been admitted before the hang.
+    assert result.pool_size >= 1
+    assert result.runtime_seconds >= 1.0

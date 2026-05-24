@@ -443,6 +443,31 @@ Description luôn có sẵn → không cần `_summarize_if_needed` cho mutation
 output → tiết kiệm 1 LLM call cho mỗi candidate, đồng thời pool description-
 embedding niching nhận được mô tả "do model viết" thay vì "summary từ code".
 
+### 9.2 Transient OpenRouter / GPT-5 gateway error (không phải bug)
+
+Trong run 26348569129 (sau khi đã apply fix `max_tokens=None`), `[seed 1]`
+fail với:
+
+```text
+litellm.APIError: OpenrouterException - Unable to get json response
+- Expecting value: line 547 column 1 (char 3003)
+Original Response: <~620 dòng whitespace, không có JSON>
+```
+
+**Nguyên nhân**: OpenRouter gateway trả 200 OK nhưng body chỉ chứa whitespace
+heartbeat (giữ TCP connection alive trong lúc GPT-5 đang reasoning). Khi
+upstream cắt kết nối giữa chừng, litellm nhận body whitespace-only và raise
+`JSONDecodeError`. Pattern điển hình của reasoning-heavy models qua proxy.
+
+**Không phải bug BLADE**. Retry mechanism trong
+[orchestrator.py:929](levi/levi/blade/orchestrator.py#L929) (`max_retries=3`)
+xử lý đúng — `[seed 1 retry 1]` thành công với score 1.4515. Chi phí phụ:
+~2 phút cho call lỗi, không tốn tiền (call fail không tính phí).
+
+Nếu pattern này lặp lại nhiều và làm chậm bootstrap đáng kể, cân nhắc thêm
+client-side timeout ngắn (≤ 90 s) cho frontier call để fail nhanh thay vì
+chờ TCP timeout — nhưng hiện tại retry hoạt động ổn, không cần đụng.
+
 `pe_interval=10` và `n_diverse_seeds=4` trong workflow đều là *LEVI parity*
 chứ không phải bug:
 
