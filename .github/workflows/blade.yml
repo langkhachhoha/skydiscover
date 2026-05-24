@@ -39,6 +39,7 @@ on:
           - ifbench
           - pupa
           - quickstart
+          - circle_packing_rect
       evaluations:
         description: "Max evaluations (blank = no cap)"
         required: false
