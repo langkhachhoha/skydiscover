@@ -22,7 +22,7 @@ on:
           - adaevolve
           - evox
       benchmark_dir:
-        description: "Benchmark directory (must contain initial_program.py, evaluator.py, config.yaml)"
+        description: "Benchmark directory (must contain initial_program.py, config.yaml, and either evaluator.py or evaluator/evaluator.py)"
         required: false
         default: "benchmarks/math/circle_packing"
       iterations:
@@ -64,15 +64,31 @@ jobs:
             exit 1
           fi
 
-      - name: Validate benchmark dir
+      - name: Validate benchmark dir & resolve evaluator
+        id: resolve
         run: |
           BD="${{ inputs.benchmark_dir }}"
-          for f in initial_program.py evaluator.py config.yaml; do
+          # Required files at the benchmark root.
+          for f in initial_program.py config.yaml; do
             if [ ! -f "$BD/$f" ]; then
               echo "::error::Expected $BD/$f to exist"
               exit 1
             fi
           done
+          # Evaluator can live at either:
+          #   <bench>/evaluator.py            (legacy "outer" layout, e.g. circle_packing)
+          #   <bench>/evaluator/evaluator.py  (container layout, e.g. circle_packing_rect)
+          # Both define `evaluate(program_path) -> dict` and run fine without Docker.
+          if [ -f "$BD/evaluator.py" ]; then
+            EVAL_FILE="$BD/evaluator.py"
+          elif [ -f "$BD/evaluator/evaluator.py" ]; then
+            EVAL_FILE="$BD/evaluator/evaluator.py"
+          else
+            echo "::error::Could not find an evaluator at $BD/evaluator.py or $BD/evaluator/evaluator.py"
+            exit 1
+          fi
+          echo "Using evaluator: $EVAL_FILE"
+          echo "eval_file=$EVAL_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: |
@@ -89,7 +105,7 @@ jobs:
         run: |
           mkdir -p "outputs/github-actions/baseline_${{ inputs.baseline }}_${{ github.run_id }}"
           uv run skydiscover-run "${{ inputs.benchmark_dir }}/initial_program.py" \
-            "${{ inputs.benchmark_dir }}/evaluator.py" \
+            "${{ steps.resolve.outputs.eval_file }}" \
             --config "${{ inputs.benchmark_dir }}/config.yaml" \
             --search "${{ inputs.baseline }}" \
             --model "${{ inputs.model }}" \
