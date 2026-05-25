@@ -1,18 +1,34 @@
-"""Search-state monitor: three dense sliding-window signals.
+"""Stagnation monitor for BLADE Lite.
 
-Replaces the PPS stagnation formula. Monitor only *routes* (frontier phase,
-operator mix, advisor mode) — it does **not** trigger frontier paradigm
-shifts (those stay on a cron schedule, exactly as in LEVI).
+Two stagnation signals, combined by ``max`` into a single
+``stagnation_level()`` consumed by the rank sampler:
 
-Three signals:
+* **Global stagnation**: evaluations since the global *best* score
+  increased — i.e. since the last ``NEW BEST`` event. NEW BEST is
+  rare (a handful of events in a multi-hour run), so this signal
+  saturates only when the search has truly halted.
 
-- ``plateau_steps``: evaluations since the global best score increased.
-  Drives ``stagnation_level() ∈ [0,1]`` for phase routing.
-- ``accept_window``: deque of bool, recent pool-accept outcomes. A drop in
-  acceptance rate flags ``is_stuck()``.
-- ``diversity_window``: deque of pairwise cosine of recently added
-  embeddings. A high mean flags ``is_collapsing()`` — pool is converging on
-  one family.
+* **Local stagnation**: evaluations since the last *admit* — i.e. since
+  the last time any cell's incumbent was replaced. Admits are far more
+  frequent than NEW BEST events: every time a worker beats a cell
+  incumbent (even one that is not the global best), we count it as a
+  small step of local progress. When admits also dry up, the search is
+  not just failing to find a new global best, it is failing to improve
+  any cell — that is the regime where we want β to drop and the sampler
+  to broaden.
+
+The combined level is
+
+    stagnation = max(plateau_steps  / plateau_max,
+                     admit_gap      / admit_gap_max)
+
+so β shrinks as soon as *either* signal saturates. Tuning them
+independently (``admit_gap_max`` smaller than ``plateau_max`` by ~5×) is
+intentional: admits happen ~5× more often than new-best events, so we
+want the admit-side timer to fire on a tighter horizon.
+
+``accept_rate`` is still reported for the meta-advisor prompt but does
+not switch any control pathway.
 """
 
 from __future__ import annotations
@@ -22,31 +38,33 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 
-import numpy as np
-
-from .embedder import cosine
-
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class MonitorConfig:
     plateau_max: int = 100
-    """Denominator for ``stagnation_level()`` — at plateau_max, level=1.0."""
+    """Denominator for the **global** stagnation signal — evaluations
+    since the last NEW BEST event. At ``plateau_max``, that signal
+    saturates to 1.0. Tuned so one paradigm-shift interval (default 50
+    evals) corresponds to ~0.5 on the global signal."""
+
+    admit_gap_max: int = 20
+    """Denominator for the **local** stagnation signal — evaluations
+    since the last admit (any cell incumbent replacement). Smaller than
+    ``plateau_max`` because admits are far more frequent than new-best
+    events; we want the admit timer to fire on a tighter horizon.
+
+    The combined :meth:`Monitor.stagnation_level` is
+    ``max(plateau_steps / plateau_max, admit_gap / admit_gap_max)``, so
+    20 evals with **zero admits** is enough to push the rank sampler
+    fully toward exploration even when the last new-best is only a few
+    dozen evals old."""
 
     accept_window_size: int = 50
-    diversity_window_size: int = 20
-
-    stuck_plateau_threshold: int = 80
-    stuck_accept_threshold: float = 0.08
-    collapse_diversity_threshold: float = 0.78
-    """Mean pairwise cosine above this ⇒ recent additions are too similar.
-    Tuned from live runs: cross-paradigm pairs average ~0.6, same-paradigm
-    variants average ~0.78-0.85, so 0.78 fires once recent accepts are
-    almost exclusively same-paradigm."""
+    """How many evaluations to track for the rolling accept-rate."""
 
     score_eps: float = 1e-9
-    """Minimum score improvement to count as a 'new best'."""
 
 
 @dataclass
@@ -56,103 +74,72 @@ class Monitor:
     eval_count: int = 0
     best_score: float = -math.inf
     last_best_eval: int = 0
+    last_admit_eval: int = 0
+    """Last evaluation at which the archive accepted a program (admit
+    semantics: the candidate either opened a new cell or replaced a cell
+    incumbent). Drives the local stagnation signal."""
 
     accept_window: deque[bool] = field(default_factory=lambda: deque(maxlen=50))
-    diversity_window: deque[float] = field(default_factory=lambda: deque(maxlen=20))
-
-    # Buffer of recent embeddings used to compute pairwise diversity. We keep
-    # them separately from accept_window because diversity tracks *added*
-    # programs (winners), not all attempted evaluations.
-    _recent_embeddings: deque[np.ndarray] = field(default_factory=lambda: deque(maxlen=20))
 
     def __post_init__(self) -> None:
         if self.accept_window.maxlen != self.config.accept_window_size:
             self.accept_window = deque(self.accept_window, maxlen=self.config.accept_window_size)
-        if self.diversity_window.maxlen != self.config.diversity_window_size:
-            self.diversity_window = deque(self.diversity_window, maxlen=self.config.diversity_window_size)
-        if self._recent_embeddings.maxlen != self.config.diversity_window_size:
-            self._recent_embeddings = deque(self._recent_embeddings, maxlen=self.config.diversity_window_size)
 
-    # ------------------------------------------------------------------
-    # Event ingestion
-    # ------------------------------------------------------------------
-
-    def record_eval(self, *, score: float, accepted: bool, embedding: np.ndarray | None) -> None:
-        """Record one evaluation outcome. Call once per finished candidate."""
+    def record_eval(self, *, score: float, accepted: bool) -> None:
         self.eval_count += 1
         self.accept_window.append(bool(accepted))
-
-        # Only count as new best if this candidate was actually accepted into
-        # the pool — rejects can't be the current incumbent, even if their
-        # raw score looks high (e.g. crashed-after-accept paths).
+        if accepted:
+            # Every admit advances the local-progress clock — even if
+            # this candidate is far from the global best. The semantic
+            # claim is that an admit means *some* cell improved, which
+            # is the unit of progress the rank sampler should respect.
+            self.last_admit_eval = self.eval_count
         if accepted and score > self.best_score + self.config.score_eps:
             self.best_score = score
             self.last_best_eval = self.eval_count
 
-        if accepted and embedding is not None and embedding.size > 0:
-            # Compute mean pairwise cosine of the new embedding vs the
-            # existing buffer, then push it. Single scalar per accept keeps
-            # the window cheap.
-            if self._recent_embeddings:
-                sims = [cosine(embedding, e) for e in self._recent_embeddings]
-                self.diversity_window.append(float(np.mean(sims)))
-            self._recent_embeddings.append(embedding.astype(np.float32, copy=False))
-
-    # ------------------------------------------------------------------
-    # Read-only signals
-    # ------------------------------------------------------------------
-
     @property
     def plateau_steps(self) -> int:
+        """Evals since the last NEW BEST event (global stagnation timer)."""
         return self.eval_count - self.last_best_eval
 
-    def stagnation_level(self) -> float:
-        """Float in [0,1]: 0 means just improved, 1 means stuck ≥ plateau_max.
+    @property
+    def admit_gap(self) -> int:
+        """Evals since the last admit (local stagnation timer)."""
+        return self.eval_count - self.last_admit_eval
 
-        Feeds ``get_budget_stage`` to choose early / mid / late frontier prompt.
-        """
+    def global_stagnation(self) -> float:
+        """Plateau-side signal in [0, 1] (1 = ``plateau_max`` evals without a new best)."""
         return min(1.0, self.plateau_steps / max(1, self.config.plateau_max))
+
+    def local_stagnation(self) -> float:
+        """Admit-side signal in [0, 1] (1 = ``admit_gap_max`` evals without an admit)."""
+        return min(1.0, self.admit_gap / max(1, self.config.admit_gap_max))
+
+    def stagnation_level(self) -> float:
+        """Combined stagnation in [0, 1]: max of the global and local signals.
+
+        Either signal saturating is enough to drive β fully toward
+        exploration. In practice ``local_stagnation`` is the one that
+        moves on the second-to-second timescale; ``global_stagnation``
+        accumulates more slowly and pushes things over the edge when the
+        search truly stalls.
+        """
+        return max(self.global_stagnation(), self.local_stagnation())
 
     def acceptance_rate(self) -> float:
         if not self.accept_window:
-            return 1.0  # Avoid early false-positive "stuck" before window fills.
+            return 1.0
         return sum(self.accept_window) / len(self.accept_window)
 
-    def mean_recent_diversity(self) -> float:
-        if not self.diversity_window:
-            return 0.0
-        return float(np.mean(self.diversity_window))
-
-    def is_stuck(self) -> bool:
-        """Plateau too long OR acceptance rate collapsed."""
-        if self.plateau_steps > self.config.stuck_plateau_threshold:
-            return True
-        if len(self.accept_window) >= max(10, self.config.accept_window_size // 2):
-            if self.acceptance_rate() < self.config.stuck_accept_threshold:
-                return True
-        return False
-
-    def is_collapsing(self) -> bool:
-        """Recent accepted programs are too similar — pool converging on one
-        family. Distinct from ``is_stuck``: progress may still be happening,
-        but only within a single basin.
-        """
-        if len(self.diversity_window) < max(3, self.config.diversity_window_size // 4):
-            return False
-        return self.mean_recent_diversity() > self.config.collapse_diversity_threshold
-
-    # ------------------------------------------------------------------
-    # Aggregate state (cheap snapshot for logging / advisor)
-    # ------------------------------------------------------------------
-
-    def snapshot(self) -> dict[str, float | int | bool]:
+    def snapshot(self) -> dict[str, float | int]:
         return {
             "eval_count": self.eval_count,
             "best_score": self.best_score if math.isfinite(self.best_score) else float("nan"),
             "plateau_steps": self.plateau_steps,
+            "admit_gap": self.admit_gap,
+            "global_stagnation": self.global_stagnation(),
+            "local_stagnation": self.local_stagnation(),
             "stagnation_level": self.stagnation_level(),
             "accept_rate": self.acceptance_rate(),
-            "mean_recent_diversity": self.mean_recent_diversity(),
-            "is_stuck": self.is_stuck(),
-            "is_collapsing": self.is_collapsing(),
         }

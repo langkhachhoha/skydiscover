@@ -90,8 +90,8 @@ def evolve_code_blade(
         Where to write ``snapshot.json`` + ``best.py``. Defaults to
         ``runs/blade-<timestamp>``.
     **overrides
-        Any extra ``BladeConfig`` field (``pool_config``, ``monitor_config``,
-        ``selector_config``, ``parser_config``, ``llm_temperature``, ...).
+        Any extra ``BladeConfig`` field (``archive_config``, ``monitor_config``,
+        ``sampler_config``, ``parser_config``, ``llm_temperature``, ...).
     """
     if output_dir is None:
         from datetime import datetime

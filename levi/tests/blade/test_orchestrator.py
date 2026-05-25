@@ -170,7 +170,7 @@ def test_blade_orchestrator_end_to_end(tmp_path: Path, monkeypatch):
     # --- assertions ---
     assert result.total_evaluations >= 1
     # At least the seed should have been admitted.
-    assert result.pool_size >= 1
+    assert result.archive_size >= 1
     # Best score should be at least the seed's (0+1+2 = 3).
     assert result.best_score >= 3.0
     # Snapshot artefacts written.
@@ -179,10 +179,10 @@ def test_blade_orchestrator_end_to_end(tmp_path: Path, monkeypatch):
     assert snap_path.exists()
     assert best_path.exists()
     snap = json.loads(snap_path.read_text())
-    assert snap["method"] == "blade"
+    assert snap["method"] == "blade-lite"
     assert snap["best_score"] == result.best_score
-    # Pool elites carry descriptions.
-    assert all("description" in e for e in snap["elites"])
+    # Cell elites carry descriptions.
+    assert all("description" in e for e in snap["cells"])
 
 
 def test_blade_budget_evals_actually_halts(tmp_path: Path, monkeypatch):
@@ -282,5 +282,5 @@ def test_blade_terminates_when_llm_hangs(tmp_path: Path, monkeypatch):
     # under the test's 30s ceiling. Pre-fix this would block ~3600s.
     assert elapsed < 30.0, f"run() took {elapsed:.1f}s — orchestrator hung"
     # Seed should still have been admitted before the hang.
-    assert result.pool_size >= 1
+    assert result.archive_size >= 1
     assert result.runtime_seconds >= 1.0

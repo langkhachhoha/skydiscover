@@ -12,11 +12,7 @@ import math
 from collections.abc import Sequence
 
 from ..artifacts.code import DIVERSITY_SEED_PROMPT
-from ..equilibrium.prompts import (
-    PARADIGM_SHIFT_PROMPTS,
-    VARIANT_GENERATION_PROMPT,
-    get_budget_stage,
-)
+from ..equilibrium.prompts import VARIANT_GENERATION_PROMPT
 from ..simple.parser import OUTPUT_FORMAT_INSTRUCTION
 
 __all__ = [
@@ -30,8 +26,6 @@ __all__ = [
     "build_init_variant_prompt",
     "build_paradigm_variant_prompt",
     "build_meta_advice_prompt",
-    "PARADIGM_SHIFT_PROMPTS",
-    "get_budget_stage",
 ]
 
 
@@ -440,29 +434,25 @@ def build_paradigm_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Paradigm-shift prompt (BLADE-native, code-aware representatives + inspirations)
+# Paradigm-shift prompt (BLADE Lite — one prompt, stagnation-aware framing)
 # ---------------------------------------------------------------------------
 #
-# Earlier BLADE wrapped LEVI's PARADIGM_SHIFT_PROMPTS verbatim and passed only
-# (description, score) tuples — the frontier model saw what each family
-# *claimed* to do, never the source. Live runs showed this hobbled the model
-# on synthesis/refinement stages: it could not point to concrete mechanisms.
+# The previous version had three separate stage prompts (early/mid/late)
+# routed by a budget/stagnation heuristic. Live runs showed the late-stage
+# template ("surgical fix on best anchor") starved exploration exactly when
+# the search needed it most, and the budget routing made the prompt depend
+# on a value the model cannot see.
 #
-# The new prompt is BLADE-native:
-#   * 3 *anchor representatives* are presented with their full code, score,
-#     and description so the frontier can read the actual mechanism.
-#   * Up to 5 *inspirations* are presented description-only (code withheld)
-#     to widen the model's picture of the archive without exploding token use.
-#   * The placeholder formerly called "n_regions" is now "n_families" — that
-#     is literally what ``Pool.num_families()`` returns, and the prompt text
-#     uses the correct label.
-#   * The three stages (early / mid / late) are spelled out inline rather than
-#     pulled from LEVI's template, so the variable substitutions and section
-#     order are guaranteed to line up.
+# This module exposes a single ``build_paradigm_prompt`` that always asks
+# the frontier to *either* synthesise a stronger hybrid from the anchors,
+# *or* propose a fundamentally different paradigm if synthesis is no longer
+# productive. The frontier itself picks. A short numeric context block
+# (best score, evaluations, stagnation level) is included so the model can
+# calibrate without us hard-coding stage routing.
 
 
-_PARADIGM_HEADER = """\
-# Algorithmic Paradigm Shift Challenge ({stage_label})
+_PARADIGM_PROMPT = """\
+# Algorithmic Paradigm Shift Challenge
 
 ## Problem
 {problem_description}
@@ -473,89 +463,53 @@ _PARADIGM_HEADER = """\
 ```
 
 ## Archive Snapshot
-The archive has evolved through {n_evaluations} evaluations and currently
-contains {n_families} distinct behavioural families. Below are the three
-strongest *anchor* solutions (full code) and up to five additional
-*inspiration* sketches (description + score; code intentionally withheld so
-you focus on their ideas, not their phrasing).
+The archive has run {n_evaluations} evaluations and currently occupies
+{n_cells} behavioural cells (one cell ≈ one algorithmic paradigm — cells
+are recomputed periodically from program AST features + description
+embeddings, so each anchor below is the strongest representative of a
+distinct paradigm).
 
-### Anchor representatives (code + description + score)
+Stagnation level (0 = just improved, 1 = stuck): {stagnation:.2f}.
+
+### Anchor representatives (full code + description + score)
 {anchor_block}
 
-### Additional inspirations (description + score only)
+### Additional inspirations (description + score only — different paradigms whose code is withheld)
 {inspiration_block}
-{strategy_log_block}"""
+{strategy_log_block}
+## Your Task
 
+Read the anchors above and decide *which* of the two moves is the better
+bet, given the stagnation level:
 
-_STAGE_BODIES = {
-    "early": """\
-## Your Challenge: PARADIGM SHIFT (early-stage exploration)
+**(A) SYNTHESISE** — combine 2-3 concrete mechanisms drawn from
+different anchors into one structurally coherent program that beats each
+of them individually. Prefer this when several anchors are close in
+score (the archive has good ingredients; the missing piece is the
+combination).
 
-Search is still EARLY — the archive only knows a handful of paradigms.
-Engineer a **fundamentally different algorithmic approach** that explores
-untapped regions of the solution space.
+**(B) PARADIGM SHIFT** — design a fundamentally different algorithmic
+approach (a paradigm class that does NOT appear in any anchor or
+inspiration). Internal data structures, control flow, and termination
+condition must all reflect the new paradigm. Prefer this when
+synthesis would only produce a marginal mix.
 
-### Analysis Steps:
-1. **Identify current paradigms**: Which algorithmic family does each anchor belong to? (greedy, graph search, dynamic programming, simulated annealing, gradient methods, brute-force with pruning, …)
-2. **Find the gap**: Which paradigm classes are NOT represented in either the anchors or the inspirations?
-3. **Design a novel approach**: Pick ONE gap-paradigm and design a complete solution around it. The internal data structures, control flow, and termination condition must all reflect that paradigm — not a re-skin of an existing solution.
+Make the choice explicit in your description (start with "MOVE: A" or
+"MOVE: B" on the first line of `## Description`). Whatever you pick:
 
-### Instructions:
-1. Match the function signature exactly.
-2. AVOID the core logic, heuristics, and search structures used in the anchors.
-3. AVOID any approach whose summary already appears in the Strategy Log (especially ones with non-positive deltas).
-4. Pick a strategy that is structurally different, not just numerically retuned.
-""",
-    "mid": """\
-## Your Challenge: SYNTHESISE A STRONGER SOLUTION (mid-stage consolidation)
+- Match the function signature exactly.
+- Include all imports.
+- Avoid any strategy whose Strategy-Log entry already has delta ≤ 0 —
+  that approach has been tried and did not improve over the best.
+- Do NOT just retune constants in an anchor — that is not a paradigm
+  shift, it is mutation, and the mutation worker is already doing it.
 
-Search has accumulated several decent approaches across distinct
-behavioural families. Pure exploration is no longer the best move — combine
-the best ideas from the anchor solutions into a stronger hybrid that beats
-each of them individually.
-
-### Analysis Steps:
-1. **Per-anchor strengths**: For each anchor, identify *one* concrete mechanism it does well (e.g. better initialization, a clever tie-breaking rule, an aggressive prune).
-2. **Per-anchor weaknesses**: For each anchor, identify *one* concrete failure mode (e.g. blows up at the boundary, ignores a constraint, gets stuck on adversarial inputs).
-3. **Synthesis blueprint**: Choose 2-3 mechanisms to KEEP from different anchors. Choose 1-2 weaknesses to FIX. Let the inspirations widen your menu of mechanisms even if their code is withheld.
-
-### Instructions:
-1. Match the function signature exactly.
-2. Borrow and adapt the strongest mechanisms from multiple anchors; do not just copy one of them.
-3. Where the Strategy Log shows a synthesis that already produced no improvement, choose a different mechanism mix.
-4. The result must be a structurally coherent program — not three solutions stitched together with `if/elif/else`.
-""",
-    "late": """\
-## Your Challenge: TARGETED IMPROVEMENT (late-stage exploitation)
-
-The archive is mature and stagnation is high. Radical rewrites at this stage
-usually under-perform the best incumbent. Your goal is a **focused,
-high-impact improvement** to the highest-scoring anchor above.
-
-### Analysis Steps:
-1. **Study the best anchor carefully**: Understand exactly what it does and crucially WHERE it loses points (which inputs / which constraints / which edge cases).
-2. **Find a single weak spot**: Pick ONE specific failure mode. Resist the urge to address several at once — those usually regress.
-3. **Make a surgical fix**: Add a targeted patch (extra branch, post-processing step, tighter constraint check, refined tie-breaking) that fixes that failure WITHOUT touching the parts that already work.
-
-### Instructions:
-1. Match the function signature exactly.
-2. Start from the logic of the highest-scoring anchor; keep its overall control flow and data structures intact.
-3. Do NOT rewrite the algorithm from scratch.
-4. If the Strategy Log already shows a late-stage attempt with delta ≤ 0 targeting the same weak spot, choose a different weak spot.
-""",
-}
-
-_STAGE_LABELS = {
-    "early": "early-stage exploration",
-    "mid": "mid-stage consolidation",
-    "late": "late-stage exploitation",
-}
+{format_instruction}
+"""
 
 
 def _anchor_block(anchors: Sequence[tuple[str, str, float]]) -> str:
-    """Render anchor representatives with full code.
-
-    Each element is ``(code, description, score)``."""
+    """Render anchor representatives with full code."""
     if not anchors:
         return "(archive too small — no anchors yet)"
     parts: list[str] = []
@@ -573,38 +527,21 @@ def _anchor_block(anchors: Sequence[tuple[str, str, float]]) -> str:
 
 def build_paradigm_prompt(
     *,
-    stage: str,
     problem_description: str,
     function_signature: str,
     n_evaluations: int,
-    n_families: int,
+    n_cells: int,
     anchors: Sequence[tuple[str, str, float]],
     inspirations: Sequence[tuple[str, float]] = (),
     recent_trials: Sequence[str] = (),
+    stagnation: float = 0.0,
 ) -> str:
-    """Build the BLADE paradigm-shift prompt.
+    """Build the BLADE Lite paradigm-shift prompt.
 
-    Parameters
-    ----------
-    stage
-        One of ``"early"`` / ``"mid"`` / ``"late"``. Falls back to ``"early"``
-        for unknown values.
-    n_evaluations, n_families
-        Diagnostic numbers shown in the prompt header. ``n_families`` is the
-        live ``Pool.num_families()``; the prompt text refers to families,
-        not LEVI's CVT-MAP-Elites regions, so the wording matches.
-    anchors
-        Up to 3 ``(code, description, score)`` triples. Full code is shown
-        so the frontier can reason about the actual mechanism.
-    inspirations
-        Up to 5 ``(description, score)`` pairs. Code is intentionally
-        withheld so the model treats them as idea sources, not copy targets.
-    recent_trials
-        Strings rendered into the Strategy Log block. Empty → block omitted.
+    One prompt, no stage routing. ``stagnation`` and ``n_cells`` are
+    surfaced in the prompt header so the frontier model can calibrate
+    its own choice between synthesis (A) and paradigm shift (B).
     """
-    body = _STAGE_BODIES.get(stage, _STAGE_BODIES["early"])
-    stage_label = _STAGE_LABELS.get(stage, "early-stage exploration")
-
     if recent_trials:
         strategy_log_block = (
             "\n## Strategy Log (recent paradigm attempts)\n"
@@ -614,15 +551,14 @@ def build_paradigm_prompt(
     else:
         strategy_log_block = ""
 
-    header = _PARADIGM_HEADER.format(
-        stage_label=stage_label,
+    return _PARADIGM_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
         n_evaluations=n_evaluations,
-        n_families=n_families,
+        n_cells=n_cells,
+        stagnation=stagnation,
         anchor_block=_anchor_block(anchors),
         inspiration_block=_inspiration_block(inspirations),
         strategy_log_block=strategy_log_block,
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
     )
-
-    return f"{header}\n{body}\n{OUTPUT_FORMAT_INSTRUCTION}"

@@ -1,34 +1,36 @@
-"""SIMPLE-EVO: a simplified successor to LEVI.
+"""BLADE Lite primitives.
 
-Keeps LEVI's frontier + mutation parallelism, error archive, self-repair, and
-meta-advisor. Replaces CVT-MAP-Elites with description-based semantic niching,
-the PPS stagnation formula with three sliding-window signals, and the 4D
-bandit with two operators plus UCB-style selection.
+Three components, in dependency order:
 
-See docs/SIMPLE_EVO.md for the full design.
+* :class:`ClusterArchive` — adaptive MAP-Elites with hybrid AST +
+  description-embedding behavior signature.
+* :class:`RankSampler` — Zipfian rank-based parent / inspiration draw.
+* :class:`Monitor` — plateau + accept-rate diagnostics.
+
+Plus the same :class:`OutputParser` and :class:`DescriptionEmbedder`
+the orchestrator has always used.
 """
 
-from .ast_signature import N_FEATURES, ast_cosine, compute_ast_signature
+from .archive import ArchiveConfig, ClusterArchive, Program
+from .ast_features import N_AST_FEATURES, compute_ast_features
 from .embedder import DescriptionEmbedder, EmbedderConfig
 from .monitor import Monitor, MonitorConfig
 from .parser import LLMOutput, OutputParser, ParserConfig
-from .pool import Pool, PoolConfig, Program
-from .selector import Selector, SelectorConfig
+from .rank_sampler import RankSampler, RankSamplerConfig
 
 __all__ = [
+    "ArchiveConfig",
+    "ClusterArchive",
     "DescriptionEmbedder",
     "EmbedderConfig",
     "LLMOutput",
     "Monitor",
     "MonitorConfig",
-    "N_FEATURES",
+    "N_AST_FEATURES",
     "OutputParser",
     "ParserConfig",
-    "Pool",
-    "PoolConfig",
     "Program",
-    "Selector",
-    "SelectorConfig",
-    "ast_cosine",
-    "compute_ast_signature",
+    "RankSampler",
+    "RankSamplerConfig",
+    "compute_ast_features",
 ]

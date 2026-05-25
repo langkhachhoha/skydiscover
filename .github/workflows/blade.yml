@@ -1,26 +1,19 @@
 name: BLADE
 
-# Run BLADE — Behavior-Latent Adaptive Discovery Engine — on a self-contained
-# LEVI example directory under ./levi/examples/<name>/ (problem.py exports
-# PROBLEM_DESCRIPTION, FUNCTION_SIGNATURE, score_fn, optionally SEED_PROGRAM
-# and INPUTS).
+# Run BLADE Lite — adaptive MAP-Elites with hybrid AST + description-embedding
+# behavior signature — on a self-contained LEVI example under
+# ./levi/examples/<name>/ (problem.py exports PROBLEM_DESCRIPTION,
+# FUNCTION_SIGNATURE, score_fn, optionally SEED_PROGRAM and INPUTS).
 #
-# BLADE shares LEVI's frontier 3-phase paradigm prompts, async producer/
-# consumer parallelism, error-archive self-repair, and meta-advisor wiring.
-# It replaces three subsystems:
+# The architecture is intentionally small: ClusterArchive (cells follow the
+# population via periodic KMeans re-clustering), RankSampler (Zipfian over
+# score rank, β adaptive to stagnation), Monitor (plateau + accept-rate).
+# There are exactly three paper-facing ablation toggles, exposed below.
 #
-#   * Behavioral archive  : CVT-MAP-Elites → description-embedding top-K pool
-#   * Stagnation signal   : PPS formula     → 3 sliding-window stats
-#   * Sampler             : 4-D Thompson    → UCB-style selection (novelty +
-#                                              recency − diversity penalty)
-#
-# This workflow invokes ``scripts/run_blade.py``. Only the knobs that
-# change run-to-run are first-class inputs; everything else (problem
-# module name, eval-processes / timeout, pe-interval, embedding model,
-# pool/family thresholds, repair toggle) is funnelled through a single
-# JSON ``advanced_options`` input — same pattern as legacy blade.yml /
-# `_levi.yml`. Keeps the dispatch UI usable and stays well under the
-# GitHub Actions ≤21-input limit.
+# Only knobs that change run-to-run are first-class inputs; everything else
+# (problem module name, eval-processes / timeout, pe-interval, embedding
+# model, archive low-level parameters, repair toggle) is funnelled through a
+# single JSON ``advanced_options`` input — keeps the dispatch UI usable.
 
 on:
   workflow_dispatch:
@@ -61,7 +54,7 @@ on:
         type: string
         default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
       paradigm_model:
-        description: "OpenRouter id of the larger frontier (paradigm-shift) model"
+        description: "OpenRouter id of the frontier (paradigm-shift) model"
         required: true
         type: string
         default: "openrouter/openai/gpt-5"
@@ -74,39 +67,45 @@ on:
         description: "Paradigm-shift cadence (every N evaluations)"
         required: false
         type: string
-        default: "10"
+        default: "50"
       eval_timeout:
         description: "Per-candidate evaluation timeout in seconds"
         required: false
         type: string
         default: "600"
       n_diverse_seeds:
-        description: "Phase-0 diverse seeds from the frontier model (sequential)"
+        description: "Phase-1 diverse seeds from the frontier model (sequential)"
         required: false
         type: string
-        default: "4"
+        default: "5"
       n_variants_per_seed:
-        description: "Phase-0 mutation-model variants per seed (parallel)"
+        description: "Phase-2 mutation-model variants per seed (parallel)"
         required: false
         type: string
         default: "20"
+      ablation:
+        description: >-
+          Ablation mode for the paper-facing knobs. One of:
+            "full"          — both halves of the hybrid behavior signature ON, adaptive re-clustering ON (DEFAULT)
+            "ast_only"      — disable the description-embedding half (A2)
+            "emb_only"      — disable the AST half (A1)
+            "static_cells"  — disable adaptive re-clustering (A3)
+        required: false
+        type: choice
+        default: "full"
+        options:
+          - full
+          - ast_only
+          - emb_only
+          - static_cells
       advanced_options:
         description: >-
-          Advanced BLADE knobs as a JSON object. Recognised keys:
+          Optional JSON object with low-level overrides. Recognised keys:
           problem_module, target_score, embedding_model, eval_processes,
           n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
-          pool_k, niche_threshold, structural_threshold, family_threshold,
-          max_per_family, repair_disabled, meta_advice_disabled,
-          meta_advice_interval,
-          ast_mode (bigram|count14),
-          quota_niching_disabled, target_n_families,
-          paradigm_grace_disabled, paradigm_grace_evals,
-          hall_of_fame_disabled, hof_size,
-          paradigm_boost_disabled, paradigm_boost, paradigm_exploit_window,
-          cross_family_anchors_disabled, force_early_on_collapse_disabled,
-          paradigm_temperature, paradigm_temperature_stuck.
-          Example ablation (kill HoF + quota):
-          '{"hall_of_fame_disabled":true,"quota_niching_disabled":true}'
+          n_cells, recluster_every, embedding_dim,
+          repair_disabled, meta_advice_disabled, meta_advice_interval.
+          Example: '{"n_cells":48,"paradigm_n_anchors":5}'
         required: false
         type: string
         default: ""
@@ -114,7 +113,6 @@ on:
   workflow_call:
     inputs:
       benchmark:
-        description: "Benchmark name under levi/examples/<name>/"
         required: true
         type: string
       evaluations:
@@ -144,7 +142,7 @@ on:
       pe_interval:
         required: false
         type: string
-        default: "10"
+        default: "50"
       eval_timeout:
         required: false
         type: string
@@ -152,11 +150,15 @@ on:
       n_diverse_seeds:
         required: false
         type: string
-        default: "4"
+        default: "5"
       n_variants_per_seed:
         required: false
         type: string
         default: "20"
+      ablation:
+        required: false
+        type: string
+        default: "full"
       advanced_options:
         required: false
         type: string
@@ -183,7 +185,7 @@ jobs:
         run: |
           test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml"; exit 1; }
           test -d levi/levi/blade   || { echo "::error::Expected ./levi/levi/blade/ (BLADE orchestrator)"; exit 1; }
-          test -d levi/levi/simple  || { echo "::error::Expected ./levi/levi/simple/ (BLADE core modules)"; exit 1; }
+          test -d levi/levi/simple  || { echo "::error::Expected ./levi/levi/simple/ (BLADE Lite primitives)"; exit 1; }
           test -f scripts/run_blade.py || { echo "::error::Expected ./scripts/run_blade.py"; exit 1; }
 
       - name: Set up uv
@@ -221,40 +223,29 @@ jobs:
       - name: Run BLADE on ${{ inputs.benchmark }}
         working-directory: levi
         run: |
-          # ----- defaults that match scripts/run_blade.py CLI defaults -----
           PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
           EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
           EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
 
-          # ----- optional scalar overrides from advanced_options -----
           EXTRA_OPTS=""
           [ -n "$ADV_TARGET_SCORE" ]    && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
-          [ -n "$ADV_POOL_K" ]          && EXTRA_OPTS="$EXTRA_OPTS --pool-k $ADV_POOL_K"
-          [ -n "$ADV_NICHE_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --niche-threshold $ADV_NICHE_THRESHOLD"
-          [ -n "$ADV_STRUCTURAL_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --structural-threshold $ADV_STRUCTURAL_THRESHOLD"
-          [ -n "$ADV_FAMILY_THRESHOLD" ] && EXTRA_OPTS="$EXTRA_OPTS --family-threshold $ADV_FAMILY_THRESHOLD"
-          [ -n "$ADV_MAX_PER_FAMILY" ]  && EXTRA_OPTS="$EXTRA_OPTS --max-per-family $ADV_MAX_PER_FAMILY"
           [ -n "$ADV_N_PARADIGM_VARIANTS" ] && EXTRA_OPTS="$EXTRA_OPTS --n-paradigm-variants $ADV_N_PARADIGM_VARIANTS"
           [ -n "$ADV_PARADIGM_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-anchors $ADV_PARADIGM_N_ANCHORS"
           [ -n "$ADV_PARADIGM_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-inspirations $ADV_PARADIGM_N_INSPIRATIONS"
+          [ -n "$ADV_N_CELLS" ]         && EXTRA_OPTS="$EXTRA_OPTS --n-cells $ADV_N_CELLS"
+          [ -n "$ADV_RECLUSTER_EVERY" ] && EXTRA_OPTS="$EXTRA_OPTS --recluster-every $ADV_RECLUSTER_EVERY"
+          [ -n "$ADV_EMBEDDING_DIM" ]   && EXTRA_OPTS="$EXTRA_OPTS --embedding-dim $ADV_EMBEDDING_DIM"
           [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
           [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"
-          # ---- ablation toggles for the new architectural components ----
-          [ -n "$ADV_AST_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --ast-mode $ADV_AST_MODE"
-          [ "$ADV_QUOTA_NICHING_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-quota-niching"
-          [ -n "$ADV_TARGET_N_FAMILIES" ] && EXTRA_OPTS="$EXTRA_OPTS --target-n-families $ADV_TARGET_N_FAMILIES"
-          [ "$ADV_PARADIGM_GRACE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-paradigm-grace"
-          [ -n "$ADV_PARADIGM_GRACE_EVALS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-grace-evals $ADV_PARADIGM_GRACE_EVALS"
-          [ "$ADV_HALL_OF_FAME_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-hall-of-fame"
-          [ -n "$ADV_HOF_SIZE" ] && EXTRA_OPTS="$EXTRA_OPTS --hof-size $ADV_HOF_SIZE"
-          [ "$ADV_PARADIGM_BOOST_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-paradigm-boost"
-          [ -n "$ADV_PARADIGM_BOOST" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-boost $ADV_PARADIGM_BOOST"
-          [ -n "$ADV_PARADIGM_EXPLOIT_WINDOW" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-exploit-window $ADV_PARADIGM_EXPLOIT_WINDOW"
-          [ "$ADV_CROSS_FAMILY_ANCHORS_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-cross-family-anchors"
-          [ "$ADV_FORCE_EARLY_ON_COLLAPSE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-force-early-on-collapse"
-          [ -n "$ADV_PARADIGM_TEMPERATURE" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-temperature $ADV_PARADIGM_TEMPERATURE"
-          [ -n "$ADV_PARADIGM_TEMPERATURE_STUCK" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-temperature-stuck $ADV_PARADIGM_TEMPERATURE_STUCK"
+
+          # Ablation toggles (one of: full / ast_only / emb_only / static_cells)
+          case "${{ inputs.ablation }}" in
+            ast_only)     EXTRA_OPTS="$EXTRA_OPTS --ast-only" ;;
+            emb_only)     EXTRA_OPTS="$EXTRA_OPTS --emb-only" ;;
+            static_cells) EXTRA_OPTS="$EXTRA_OPTS --static-cells" ;;
+            full|*)       ;;
+          esac
 
           uv run --active python ../scripts/run_blade.py \
             --example-dir "levi/examples/${{ inputs.benchmark }}" \
@@ -278,7 +269,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blade-${{ inputs.benchmark }}-${{ github.run_id }}
+          name: blade-${{ inputs.benchmark }}-${{ inputs.ablation }}-${{ github.run_id }}
           path: ${{ env.OUTPUT_DIR }}
           if-no-files-found: warn
           retention-days: 14
