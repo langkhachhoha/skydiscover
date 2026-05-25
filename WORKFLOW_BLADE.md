@@ -6,17 +6,43 @@
 >
 > | Hệ con | LEVI | BLADE |
 > | --- | --- | --- |
-> | Archive | CVT-MAP-Elites (centroid behavioural grid) | Top-K **Pool** với 2 lớp dedup (description embedding + AST signature) ([levi/levi/simple/pool.py](levi/levi/simple/pool.py)) |
+> | Archive | CVT-MAP-Elites (centroid behavioural grid) | Top-K **Pool** với 2 lớp dedup + **quota niching** + **Hall-of-Fame** ([levi/levi/simple/pool.py](levi/levi/simple/pool.py)) |
 > | Stagnation signal | PPS formula (Punctuated-Equilibrium PPS) | 3 sliding-window stats: accept-rate / plateau / diversity ([levi/levi/simple/monitor.py](levi/levi/simple/monitor.py)) |
-> | Sampler | 4-D Thompson bandit (SAL) | UCB-style **Selector** (novelty + recency − diversity penalty) ([levi/levi/simple/selector.py](levi/levi/simple/selector.py)) |
+> | Sampler | 4-D Thompson bandit (SAL) | UCB-style **Selector** + **paradigm-source boost** ([levi/levi/simple/selector.py](levi/levi/simple/selector.py)) |
 >
 > Frontier prompts (3-phase paradigm shift), error-archive self-repair, async
 > producer/consumer giữ nguyên ý tưởng từ LEVI; nhưng paradigm prompt đã được
-> viết lại BLADE-native (anchors có CODE + inspirations description-only).
+> viết lại BLADE-native (anchors có CODE + inspirations description-only) và
+> được "vũ trang" với cross-family anchor selection + HoF backfill + stuck-aware
+> stage/temperature routing.
 
 Entry point: [scripts/run_blade.py](scripts/run_blade.py) → `levi.evolve_code_blade()`
 ([levi/levi/methods/blade.py](levi/levi/methods/blade.py))
 → `BladeOrchestrator.run()` ([levi/levi/blade/orchestrator.py](levi/levi/blade/orchestrator.py)).
+
+---
+
+## 0. Bản nâng cấp này giải quyết bốn vấn đề quan sát được
+
+Run trước (3 giờ, circle_packing_rect) cho thấy:
+
+- Pool 100 elite nhưng **chỉ 1 family** (toàn bộ collapse) — `mean_recent_diversity = 0.81`, `is_collapsing = True`.
+- 21 paradigm trials, 9/21 accepted nhưng delta vs prev_best đều **âm** — paradigm bị evict ngay sau khi admit, không kịp fanout.
+- AST signature 14-count log-vec: cross-paradigm cosine ≈ 0.95-0.99 → lớp AST **luôn pass**, dedup chỉ dựa description embedding một mình.
+- Late-stage paradigm prompt yêu cầu "surgical fix on best anchor" trong khi pool đã stuck — đảm bảo paradigm-shift biến thành paradigm-stay.
+
+Bốn component kiến trúc mới khắc phục bốn vấn đề trên (mỗi component có flag `enable_*` riêng để ablation):
+
+| Vấn đề | Component | Toggle |
+| --- | --- | --- |
+| Pool collapse về 1 family | **A. Quota niching** — family cap kick-in từ admit đầu tiên (không defer) + family threshold 0.72→0.85 | `PoolConfig.enable_quota_niching` |
+| AST gate luôn pass | **B. Bigram histogram** — (parent, child) node-type histogram thay 14-count log-vec | `PoolConfig.ast_mode ∈ {"bigram", "count14"}` |
+| Paradigm-shift không phá vỡ stagnation | **C. Cross-family anchors + stuck-early routing + bumped temperature** | `paradigm_cross_family_anchors`, `paradigm_force_early_on_collapse` |
+| Paradigm tốt bị loại sớm | **D. Hall-of-Fame + paradigm grace + selector boost** | `PoolConfig.enable_hall_of_fame`, `enable_paradigm_grace`, `SelectorConfig.enable_paradigm_boost` |
+
+Defaults = **tất cả ON**. Để ablate component nào, set flag tương ứng = `False`
+hoặc dùng cờ `--disable-*` của CLI. Snapshot.json ghi `ablation_flags` block đầy đủ
+để post-hoc attribution.
 
 ---
 
@@ -25,7 +51,8 @@ Entry point: [scripts/run_blade.py](scripts/run_blade.py) → `levi.evolve_code_
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  run_blade.py (CLI)                                                  │
-│      │   parse args, load problem.py, setup output dir              │
+│      │   parse args (kèm --disable-* ablation toggles)              │
+│      │   load problem.py, setup output dir                          │
 │      ▼                                                               │
 │  evolve_code_blade()  ──►  _setup_logging() + BladeConfig            │
 │      │                                                               │
@@ -34,11 +61,11 @@ Entry point: [scripts/run_blade.py](scripts/run_blade.py) → `levi.evolve_code_
 │      │                                                               │
 │      ├── [start] _status_monitor (heartbeat 30s)                    │
 │      │                                                               │
-│      ├── PHASE 1 — Diverse seeds (SEQUENTIAL, frontier model GPT-5) │
+│      ├── PHASE 1 — Diverse seeds (SEQUENTIAL, frontier GPT-5)       │
 │      │     for i in 1..n_diverse_seeds:                              │
 │      │       build_diverse_seed_prompt → paradigm_lm → eval → admit │
 │      │                                                               │
-│      ├── PHASE 2 — Init variants (PARALLEL, mutation model Qwen)    │
+│      ├── PHASE 2 — Init variants (PARALLEL, mutation Qwen)          │
 │      │     n_diverse_seeds × n_variants_per_seed prompts            │
 │      │     asyncio.gather → build_init_variant_prompt → mutation_lm │
 │      │                                                               │
@@ -48,12 +75,17 @@ Entry point: [scripts/run_blade.py](scripts/run_blade.py) → `levi.evolve_code_
 │      └── MAIN LOOP — mutate / crossover / repair workers             │
 │            ▲                                                         │
 │            │  Mỗi N evals (pe_cron_interval) → paradigm shift:       │
-│            │    1) anchors (3 code) + inspirations (5 desc) → gpt-5  │
-│            │    2) n_paradigm_variants fanout (qwen, parallel)      │
+│            │    1) ANCHORS = cross-family + HoF backfill             │
+│            │    2) stage = stuck/collapse ? "early" : budget-route   │
+│            │    3) frontier_temp = stuck ? 1.0 : 0.7                 │
+│            │    4) n_paradigm_variants fanout (qwen, parallel)      │
+│            │    5) seed admitted với paradigm grace (30 evals)       │
 │            │                                                         │
 │            │  Mỗi N evals (meta_advice_interval) → advisor refresh   │
+│            │                                                         │
+│            │  Pool.tick_eval() đồng bộ eviction clock                │
 │            ▼                                                         │
-│        budget exhausted → snapshot.json + best.py                   │
+│        budget exhausted → snapshot.json + best.py + HoF              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,6 +95,8 @@ Entry point: [scripts/run_blade.py](scripts/run_blade.py) → `levi.evolve_code_
 
 Workflow: [.github/workflows/blade.yml](.github/workflows/blade.yml)
 
+### Knobs cũ (giữ nguyên)
+
 | Tham số | Giá trị mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `mutation_model` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | "Worker bee" — mọi LLM call tần suất cao |
@@ -70,55 +104,57 @@ Workflow: [.github/workflows/blade.yml](.github/workflows/blade.yml)
 | `embedding_model` | `openrouter/openai/text-embedding-3-small` | Description embedding cho Pool niching |
 | `workers` | 4 | Số coroutine LLM song song trong main loop |
 | `eval_processes` | 4 | Subprocess pool đánh giá code |
-| `pe_interval` | **10** (workflow) / 50 (CLI default) | Mỗi N evals kích hoạt paradigm shift |
+| `pe_interval` | 10 (workflow) / 50 (CLI default) | Mỗi N evals kích hoạt paradigm shift |
 | `n_diverse_seeds` | 4 | Số seed đa dạng phase 1 |
 | `n_variants_per_seed` | 20 | Variant/seed ở phase 2 (tổng init ≈ 4×20 = 80) |
 | `n_paradigm_variants` | 4 | Fanout sau mỗi paradigm seed |
 | `meta_advice_interval` | 50 | Cron refresh advice |
-| `pool_k` (PoolConfig.K) | **100** | Target population size — trong khi chưa đầy Pool nới các ràng buộc để fill đủ K |
+| `pool_k` (PoolConfig.K) | 100 | Target population size |
 | `niche_cosine_threshold` | 0.92 | Description-embedding cosine **gắn cờ** trùng nghĩa (lớp 1) |
-| `structural_cosine_threshold` | **0.97** | AST-signature cosine **lớp 2** — phải đồng tình lớp 1 mới drop. *Mới thêm* |
-| `family_cosine_threshold` | 0.72 | Single-linkage gom cụm "họ" thuật toán |
-| `max_per_family` | **10** | Một họ tối đa 10 chỗ — và *chỉ enforce khi pool ≥ K* |
-| `paradigm_n_anchors` | 3 | Số anchor representative (kèm code) cho frontier mỗi paradigm shift |
-| `paradigm_n_inspirations` | 5 | Số inspiration description-only gửi kèm |
+| `paradigm_n_anchors` | 3 | Số anchor representative (kèm code) cho frontier |
+| `paradigm_n_inspirations` | 5 | Số inspiration description-only |
 | `budget_seconds` | 10800 (3 giờ) | Wall-clock cap |
+
+### Knobs mới (component A+B+C+D)
+
+| Tham số | Default | Ý nghĩa |
+| --- | --- | --- |
+| `ast_mode` | **`"bigram"`** | Component B. AST signature implementation. `"count14"` reproduces legacy. |
+| `structural_cosine_threshold` | **0.85** (đã hạ từ 0.97) | Lớp 2 AST — với bigram, cross-paradigm cosine ở 0.4-0.6 và paraphrase ở 0.9+ → 0.85 phân biệt sạch. |
+| `family_cosine_threshold` | **0.85** (đã tăng từ 0.72) | Single-linkage gom cụm "họ" thuật toán. 0.72 quá lỏng, gộp mọi paraphrase vào 1 family. |
+| `enable_quota_niching` | **True** | Component A. Family cap fire từ admit đầu (không defer) → ngăn pool collapse trong giai đoạn fill. |
+| `target_n_families` | 5 | Mỗi family được cấp `ceil(K/N)` slots = 20 (với K=100, N=5). |
+| `max_per_family` | 10 | Hard ceiling per family (hard cap nhỏ hơn quota → cap này fire trước). |
+| `enable_paradigm_grace` | **True** | Component D. Paradigm-source program có `protected_until_eval = current + 30` → không bị evict trong grace window. |
+| `paradigm_grace_evals` | 30 | Length grace window (≈ 1 fanout + vài rounds mutate/crossover). |
+| `enable_hall_of_fame` | **True** | Component D. Side-store paradigm seeds + top-score-per-family ever. |
+| `hof_size` | 30 | Capacity HoF. Paradigm-source entries không bao giờ evict. |
+| `enable_paradigm_boost` | **True** | Component D. Selector boost cộng vào UCB priority cho paradigm-source. |
+| `paradigm_boost` | 0.6 | Magnitude boost (additive, decay linear theo age). |
+| `paradigm_exploit_window` | 25 | Bao lâu boost còn active sau `created_at_eval`. |
+| `paradigm_cross_family_anchors` | **True** | Component C. Anchors = 1 top/family + HoF backfill (thay top-3-by-score). |
+| `paradigm_force_early_on_collapse` | **True** | Component C. `is_stuck() OR is_collapsing()` → force stage="early". |
+| `paradigm_temperature` | 0.7 | Frontier temperature healthy regime. |
+| `paradigm_temperature_stuck` | **1.0** | Frontier temperature khi stuck/collapsing. |
+| `paradigm_variant_temperature_stuck` | **1.0** | Variant fanout temperature khi stuck. |
 
 ---
 
 ## 3. Phase 1 — Diverse Seeds (sequential, frontier)
 
 Code: `BladeOrchestrator._bootstrap_population()` phase 1, prompt builder
-`build_diverse_seed_prompt` ([levi/levi/blade/prompts.py:272](levi/levi/blade/prompts.py#L272)).
+`build_diverse_seed_prompt` ([levi/levi/blade/prompts.py](levi/levi/blade/prompts.py)).
 
 - **Model**: `paradigm_lm` (GPT-5).
 - **Tuần tự**: mỗi prompt sau phải nhìn các seed đã chấp nhận trước đó để được
   "đẩy" theo hướng paradigm khác hẳn.
 - **Retry**: tối đa 3 lần per seed (LLM lỗi / parse miss / eval fail đều retry).
-- **Prompt**: wrap LEVI's `DIVERSITY_SEED_PROMPT`
-  ([levi/levi/artifacts/code.py:23](levi/levi/artifacts/code.py#L23)) + dán
-  `OUTPUT_FORMAT_INSTRUCTION` (yêu cầu trả về `## Description` và `## Code`).
+- **Admit qua Pool.add**: nếu `ast_mode="bigram"`, structural signature được
+  compute ngay khi admit và **không có HoF/grace gì đặc biệt** ở phase này
+  (init không phải paradigm-source).
+- **Prompt**: wrap LEVI's `DIVERSITY_SEED_PROMPT` + `OUTPUT_FORMAT_INSTRUCTION`.
 
-Tóm tắt nội dung prompt diverse seed:
-
-```text
-# {problem_title}
-## Problem: {problem_description}
-## Function signature: ```python {function_signature}```
-
-## Existing diverse seeds (so far)
-{existing_seeds_text}    # code + score của các seed trước đó
-
-## Task
-Design a SOLUTION that uses a fundamentally DIFFERENT algorithmic paradigm
-than ANY of the seeds above. Identify which paradigm families are missing
-(greedy / DP / graph / SA / gradient / brute-prune / …) and pick one of
-the missing classes.
-
-{OUTPUT_FORMAT_INSTRUCTION}
-```
-
-Sau phase 1: log dòng `[BLADE init] phase 1 done: K seeds admitted`.
+Sau phase 1: log `[BLADE init] phase 1 done: K seeds admitted`.
 
 ## 4. Phase 2 — Init Variants (parallel, mutation)
 
@@ -126,30 +162,13 @@ Code: cùng method, phase 2. Prompt builder: `build_init_variant_prompt`.
 
 - **Model**: `mutation_lm` (Qwen 30B).
 - **Parallel**: `asyncio.gather` chạy `n_diverse_seeds × n_variants_per_seed`
-  prompt đồng thời (mỗi prompt vẫn đi qua `_semaphore` của worker pool).
+  prompt đồng thời.
 - Mỗi variant prompt lấy **2 seed ngẫu nhiên** làm inspiration (code + score).
-- Mục tiêu: khai thác chiều sâu xung quanh từng paradigm — *giữ paradigm gốc*,
-  chỉ tinh chỉnh hằng số / heuristic phụ / xử lý edge-case.
-
-Prompt template ([levi/levi/blade/prompts.py:228](levi/levi/blade/prompts.py#L228)):
-
-```text
-# Init Variant
-## Problem … / Function signature …
-## Inspirations (existing diverse seeds — code + score)
-{inspirations_block}
-
-## Your task
-Produce a variant of one of the inspirations. Borrow mechanisms across them
-but KEEP the core algorithmic paradigm intact — variant exploration only.
-
-### Critical requirements
-- Function signature MUST match exactly
-- Standard libraries only (numpy, …)
-- Include all imports; no placeholders
-
-{OUTPUT_FORMAT_INSTRUCTION}
-```
+- Mục tiêu: khai thác chiều sâu xung quanh từng paradigm — *giữ paradigm gốc*.
+- **Quota niching đã active**: nếu phase 1 chỉ tạo 2 family thực sự khác nhau
+  và phase 2 sinh 80 variants thì pool **không** chứa 80 variants — quota cap
+  20/family sẽ evict yếu nhất. Đây là intent: pool đầu vào main-loop đã có
+  cấu trúc đa dạng-bằng-cấu-trúc thay vì cào bằng theo score.
 
 ## 5. Main Loop — mutate / crossover / repair
 
@@ -157,95 +176,95 @@ Code: `_main_loop()` + `_generate_one()` + `_repair_one()`.
 
 - **Workers**: tối đa `n_workers` coroutine `_generate_one` chạy song song
   (cap bằng `asyncio.Semaphore`).
-- **Operator chọn ngẫu nhiên** theo trạng thái stagnation (`monitor.is_stuck()`):
+- **Operator** chọn ngẫu nhiên theo trạng thái stagnation (`monitor.is_stuck()`):
   - Healthy: p_crossover = 0.30 → 70% mutate, 30% crossover.
   - Stuck: p_crossover = 0.70 → ngược lại.
 - **Selector** (`levi.simple.Selector`) chọn parent (1 cho mutate, 2 cho
-  crossover) bằng UCB-style.
+  crossover) bằng UCB priority **+ paradigm boost** (component D):
+
+  ```text
+  priority(p; S) = score_norm
+                 + α · √(log(1+N) / (1+uses_count))           # UCB novelty
+                 + β · exp(-age / τ)                          # recency
+                 − γ · max cosine(p, q∈S)                     # diversity penalty
+                 + paradigm_boost · max(0, 1 - age/window)    # NEW: D
+                   for p.source ∈ {paradigm, paradigm_variant}
+  ```
+
+  Với `paradigm_boost=0.6` và `window=25`, một paradigm seed mới (age=0) được
+  cộng thêm 0.6 priority — đủ để outrank các elite cao điểm hơn một chút và
+  đảm bảo workers thực sự mutate/crossover quanh paradigm seed sau khi nó vừa
+  được admit (thay vì để nó "chết" trong pool).
+
 - **Inspirations**: thêm 2-3 program nữa từ pool, chỉ truyền `description + score`
-  vào prompt (không truyền code — tiết kiệm token, tăng diversity).
-- **Meta-advice**: ở 80% xác suất, chèn block "Lessons learnt so far" do
-  advisor sinh ra ngay trước phần `## Your task`.
+  vào prompt.
+- **Meta-advice**: ở 80% xác suất, chèn block "Lessons learnt so far".
 
-### Mutate prompt ([levi/levi/blade/prompts.py:38](levi/levi/blade/prompts.py#L38))
+### Mutate / Crossover prompt
 
-```text
-# Mutate
-## Problem … / Function signature …
-
-## Parent solution
-Score: {parent_score:.4f}
-```python {parent_code} ```
-
-## Inspirations (paradigm sketches from the archive — descriptions only)
-{inspirations_block}
-
-{meta_advice_block}
-## Your task
-Produce a mutated variant of the parent that is meaningfully different.
-Treat the inspirations as ideas to draw from — do NOT copy their code.
-Keep what works in the parent, change what doesn't.
-
-{OUTPUT_FORMAT_INSTRUCTION}
-```
-
-### Crossover prompt ([levi/levi/blade/prompts.py:68](levi/levi/blade/prompts.py#L68))
-
-Cùng template + 2 parent (A, B) đầy đủ code. Task:
-
-> Produce a hybrid solution that combines the strongest mechanisms of both
-> parents while fixing at least one weakness. Be structural, not stitched:
-> do not paste A's branch into B's branch.
+Giữ nguyên (không đổi vì không phải nguồn gốc vấn đề). Xem
+[levi/levi/blade/prompts.py](levi/levi/blade/prompts.py).
 
 ### Repair (one-shot)
 
-Khi một candidate raise exception ở `_evaluate_code`, BLADE đẩy
+Khi candidate raise exception ở `_evaluate_code`, BLADE đẩy
 `(broken_code, parent_score, error_msg)` vào `error_buffer` (deque maxlen 64).
-Main loop opportunistically `_repair_one()`. Mutation model nhận
-`build_repair_prompt`:
+Main loop opportunistically `_repair_one()`. **One-shot**: nếu repair lại lỗi
+thì drop, không loop. (Có thể tắt với `--no-repair`.)
 
-```text
-# Repair
-## Problem … / Function signature …
+## 6. Paradigm Shift 2.0 — Cross-family + Stuck-aware + HoF
 
-## Broken candidate (parent score was {parent_score})
-```python {broken_code} ```
+Code: `_pe_monitor()` + `_paradigm_shift()` + `build_paradigm_prompt`.
 
-## Error
-``` {error_msg_last_1500_chars} ```
+### Cron trigger (không đổi)
 
-## Your task
-Produce a corrected version of the candidate that addresses the error above.
-Keep the algorithmic intent intact — only patch what's broken.
+Task chạy nền `await asyncio.sleep(2.0)`, mỗi lần wake kiểm tra
+`eval_count >= last_pe_eval_count + pe_cron_interval`. Vì BLADE bootstrap
+phase 2 và variant fanout submit nhiều eval qua `asyncio.gather`, dùng
+**boundary-crossing** (không phải modulo) để không bị skip.
+`_pe_lock` đảm bảo tối đa **một** paradigm shift in-flight.
+
+### Stage routing — đã có cờ stuck-early (component C)
+
+```python
+stage = get_budget_stage(budget_progress, stagnation)
+if paradigm_force_early_on_collapse and (is_stuck() or is_collapsing()):
+    stage = "early"   # override route bất kể budget_progress
 ```
 
-**One-shot**: nếu repair lại lỗi thì drop, không loop.
+Lý do: legacy logic gửi search đã stuck vào `late` (do `budget_progress` đã cao)
+— nhưng late-stage prompt yêu cầu "surgical fix on best anchor", chính xác là
+điều **không** nên làm khi đã collapse. Forced-early ép frontier nghĩ paradigm
+mới thay vì điều chỉnh paradigm hiện tại.
 
-## 6. Punctuated Equilibrium (paradigm shift)
+### Anchor selection — cross-family + HoF backfill (component C)
 
-Code: `_pe_monitor()` + `_paradigm_shift()` + `build_paradigm_prompt`
-([levi/levi/blade/prompts.py](levi/levi/blade/prompts.py)).
+Legacy: `pool.representatives(stage, n=3)` → 3 best-by-score → **khi pool collapse,
+3 anchors là 3 paraphrase của cùng paradigm**.
 
-- **Cron**: task chạy nền `await asyncio.sleep(2.0)`, mỗi lần wake kiểm tra
-  `eval_count >= last_pe_eval_count + pe_cron_interval`. Vì BLADE bootstrap
-  phase 2 và variant fanout submit nhiều eval qua `asyncio.gather`, dùng
-  **boundary-crossing** (không phải modulo) để không bị skip.
-- **Lock**: `_pe_lock` đảm bảo tối đa **một** paradigm shift in-flight.
-- **Stage routing** (`get_budget_stage`): tuỳ `budget_progress` + `stagnation`,
-  chọn 1 trong 3 stage: `early` / `mid` / `late`.
+Mới: `pool.representatives_cross_family(n=3, include_hof=True)`:
 
-### Prompt mới (BLADE-native, code-aware)
+1. Group programs by `family_id`, pick **1 top-score per family**.
+2. Sort by score desc → strongest paradigm-anchor leads.
+3. Nếu thiếu (pool ít family hơn `n`), backfill từ **Hall-of-Fame**: với mỗi
+   HoF entry, chỉ pick nếu cosine vs các anchor đã chọn < `family_cosine_threshold`.
+   → đảm bảo frontier luôn thấy N paradigm-distinct anchors ngay cả khi pool
+   hiện tại đã collapse.
 
-Khác bản trước (wrap LEVI template, chỉ truyền description):
+Inspirations cũng được top-up từ HoF nếu pool không đủ diversity.
 
-1. **3 anchor representatives** kèm **toàn bộ code + description + score** —
-   frontier có thể đọc *cơ chế thật*, không chỉ paraphrase.
-2. **5 inspirations** chỉ description-only — mở rộng góc nhìn về archive mà
-   không phình token.
-3. **`n_families`** thay cho placeholder mơ hồ `n_regions` — đúng nghĩa
-   `Pool.num_families()`.
+### Temperature — stuck-aware (component C)
 
-Khung prompt:
+```python
+paradigm_temp = 1.0 if (is_stuck() or is_collapsing()) else 0.7
+variant_temp  = 1.0 if (is_stuck() or is_collapsing()) else 0.8
+```
+
+Ở 0.7, GPT-5 có xu hướng paraphrase best anchor; ở 1.0 nó thực sự rời family.
+Bump variant temperature giúp variants thoát khỏi description-embedding niche
+của paradigm seed (nếu không, niche-dedup gate sẽ giết hầu hết variants).
+
+### Khung prompt (giữ nguyên về form, richer Strategy Log)
 
 ```text
 # Algorithmic Paradigm Shift Challenge ({early|mid|late})
@@ -257,266 +276,246 @@ The archive has evolved through {n_evaluations} evaluations and currently
 contains {n_families} distinct behavioural families.
 
 ### Anchor representatives (code + description + score)
-#### Anchor 1 (score=…)
+#### Anchor 1 (score=…)   ← từ family 0
 _Description_: …
 ```python … ```
 
-#### Anchor 2 (score=…)
+#### Anchor 2 (score=…)   ← từ family 1 (hoặc HoF backfill)
 …
 
-#### Anchor 3 (score=…)
+#### Anchor 3 (score=…)   ← từ family 2 (hoặc HoF backfill)
 …
 
 ### Additional inspirations (description + score only)
 1. (score=…) …
-2. (score=…) …
 …
 
-## Strategy Log (recent paradigm attempts)
-- [#1 early] ✓ score=… Δ=+… :: …
+## Strategy Log (recent paradigm attempts) — description budget 360 chars
+- [#1 early] ✓ score=… Δ=+… :: <full description, không cắt 160>
 - [#2 mid]  ✗ score=… Δ=…  :: …
 …
 
-## Your Challenge: {early=PARADIGM SHIFT | mid=SYNTHESIS | late=TARGETED REFINEMENT}
-{stage-specific instructions}
+## Your Challenge: {stage-specific instructions}
 {OUTPUT_FORMAT_INSTRUCTION}
 ```
 
-| Stage | Trigger | Yêu cầu chính |
-| --- | --- | --- |
-| **early** | stagnation < 0.3 | PARADIGM SHIFT — chọn lớp paradigm CHƯA xuất hiện ở anchor/inspiration, structurally different |
-| **mid** | 0.3 ≤ stagnation < 0.7 | SYNTHESIS — kết hợp 2-3 cơ chế từ các anchor, fix 1-2 điểm yếu |
-| **late** | stagnation ≥ 0.7 | TARGETED REFINEMENT — siết hằng số / patch surgical trên anchor mạnh nhất |
+`ParadigmTrial.render()` mới mặc định `max_desc_chars=360` (cũ 160) — với 160
+chars mọi late-stage trial trông giống nhau ("A hybrid discrete-continuous
+search first selects 21 centers…") và frontier kept proposing variations on
+the same idea.
 
-Sau khi frontier trả về paradigm seed → mutation model fanout
-`n_paradigm_variants` variants song song với `build_paradigm_variant_prompt`
-(wrap `VARIANT_GENERATION_PROMPT` của LEVI).
+### Sau khi accept seed
+
+Mutation model fanout `n_paradigm_variants` variants song song với
+`build_paradigm_variant_prompt` ở `variant_temp`. Mỗi variant sinh ra được
+admit qua `Pool.add` với `source="paradigm_variant"` → **được stamp grace +
+HoF + selector boost** (component D).
 
 ## 7. Meta-Advisor (lessons learnt)
 
-Code: `_meta_advice_monitor()` + `_generate_meta_advice()`.
+Không đổi. Code: `_meta_advice_monitor()` + `_generate_meta_advice()`.
 
-- **Cron**: cùng pattern boundary-crossing, mỗi `meta_advice_interval` eval.
-- **Model**: mutation model (Qwen) — bài toán summarisation rẻ, low-temp 0.4,
-  cap 400 tokens.
-- **Input**: best_score, accept_rate, stagnation_level, 5 lỗi gần nhất, advice
-  trước (để refine, không restart).
-- **Output**: 3-5 câu prescriptive, chèn vào 80% mutate/crossover prompt kế.
+- Cron boundary-crossing, mỗi `meta_advice_interval` eval.
+- Model: mutation model, low-temp 0.4, cap 400 tokens.
+- Output: 3-5 câu prescriptive, chèn vào 80% mutate/crossover prompt kế.
 
-Prompt ([levi/levi/blade/prompts.py:325](levi/levi/blade/prompts.py#L325)):
+## 8. Pool 3.0 — Quota niching + Hall-of-Fame + paradigm grace
 
-```text
-# Lessons-Learned Advisor
-You are reviewing the last batch of attempts.
-Output a SHORT (3-5 sentences) note that future mutation prompts will include verbatim.
-Focus on what to AVOID and what to TRY next — concrete, prescriptive, code-shaped.
+Đây là thay đổi cốt lõi so với Pool 2.0 (bản trước). Pool 3.0 không còn chế độ
+"fill-first" / "at-capacity" rời rạc — thay vào đó:
 
-## Current state
-- Best score so far: {best_score}
-- Evaluations completed: {n_evaluations}
-- Accept rate (last window): {accept_rate}
-- Stagnation level: {stagnation_level} (0=fresh, 1=plateaued)
+### Niche dedup 2 lớp (giữ nguyên, nhưng AST mạnh hơn)
 
-## Recent failure modes
-{error_block}
-
-## Previous advice (carried over so you can refine, not repeat)
-{previous_advice_block}
-
-## Your task
-Write the new advice block. No preamble, no markdown headers.
-Keep under 100 words. Do NOT restate the problem.
-```
-
-## 8. Pool 2.0 — fill-first, then niche+family
-
-Đây là thay đổi quan trọng nhất so với bản trước. Pool hoạt động theo **hai
-chế độ**:
-
-### Chế độ "filling" (len(pool) < K)
-
-Mục tiêu: lấp đầy pool tới K càng nhanh càng tốt, ưu tiên đa dạng.
-
-1. Tính embedding (đã có) + AST signature (`compute_ast_signature(code)` —
-   length-14 log-normalised vector: depth, cyclomatic, loop/branch/call
-   counts, comprehension/comparison/subscript counts, …).
-2. **Niche check 2 lớp**: nếu description cosine ≥ 0.92 *VÀ* AST cosine
-   ≥ 0.97 với hàng xóm gần nhất → coi là duplicate thật:
-   - Điểm cao hơn ⇒ `replaced_duplicate`.
+1. Compute embedding (có sẵn) + AST signature qua `compute_ast_signature(code, mode="bigram")`.
+   Bigram = histogram của `(parent_node_type, child_node_type)` edges trên 40 node-types
+   được chọn (`FunctionDef`, `For`, `If`, `BinOp`, `Compare`, `Subscript`, …),
+   L2-normalised, dim = 40×40 = 1600.
+2. **Niche check**: nếu description cosine ≥ 0.92 **VÀ** AST cosine ≥ 0.85
+   với nearest neighbour → duplicate thật:
+   - Điểm cao hơn ⇒ `replaced_duplicate` (inherit `uses_count` và
+     `protected_until_eval` từ incumbent).
    - Không cao hơn ⇒ `dropped_duplicate`.
-3. Nếu **chỉ** description ≥ 0.92 nhưng AST < 0.97 → vẫn admit dưới dạng
-   biến thể có cấu trúc khác. *Đây là điểm chốt: paraphrase nhưng code khác
-   sẽ không bị giết oan.*
-4. **Bỏ qua family cap**. Bỏ qua global K cap (pool chưa đầy mà).
-5. Return `"added"`.
+3. Nếu chỉ description ≥ 0.92 nhưng AST < 0.85 → admit (biến thể có cấu trúc khác).
 
-### Chế độ "at capacity" (len(pool) ≥ K)
+### Quota niching — luôn enforce (component A)
 
-Mục tiêu: giữ chất lượng, tránh một paradigm độc tài.
+Khác Pool 2.0 (defer family cap đến khi pool đầy), Pool 3.0 enforce cap **ngay
+từ admit đầu tiên** khi `enable_quota_niching=True`:
 
-1. Niche check 2 lớp như trên.
-2. Append, sau đó:
-3. **Family cap**: `_enforce_family_cap()` — nếu family của newcomer vượt
-   `max_per_family=10`, evict member yếu nhất của family đó. Nếu newcomer
-   tự là weakest → `dropped_family_full`.
-4. **Global K cap**: nếu sau bước 3 vẫn `len > K`, evict program điểm thấp
-   nhất toàn cục. Nếu chính newcomer là worst → `dropped_full`.
-
-Code: [levi/levi/simple/pool.py](levi/levi/simple/pool.py).
-
-### Vì sao thiết kế này khắc phục được "pool_size=19"?
-
-Trong run cũ, 1032 evals mà pool chỉ 19. Nguyên nhân:
-
-- Niche threshold 0.92 trên text-embedding-3-small chấm các variant cùng
-  paradigm rơi dải 0.75–0.92 → quá nhiều candidate bị giết oan ở cửa dedup.
-- Family cap 8 enforce ngay từ đầu → khi 1 paradigm thắng được phase 1, mọi
-  variant của nó chỉ giữ tối đa 8 chỗ → pool nghẹt sớm.
-
-Với Pool 2.0:
-
-- Lớp AST cho phép "cùng mô tả nhưng code khác cấu trúc" qua được — Qwen
-  thường paraphrase y hệt nhau nhưng code khác hẳn ⇒ sống.
-- Family cap bị defer tới khi pool đầy → phase bootstrap không bị siết.
-- Cấu trúc reason `dropped_family_full` mới giúp log rõ ràng vì sao đào
-  thải.
-
-## 9. Vì sao điểm BLADE (2.5206) thấp hơn LEVI (2.6027) — và đã làm gì để gỡ
-
-Đối chiếu run cũ (cùng problem `circle_packing`, cùng ngân sách 3 giờ):
-
-| Chỉ số | LEVI | BLADE cũ | BLADE 2.0 (kỳ vọng) |
-| --- | --- | --- | --- |
-| best_score | 2.6027 | 2.5206 | ≥ 2.55 |
-| total_evaluations | 205 | 1032 | tương tự |
-| total_cost | $1.35 | $2.81 | tương tự + ít prompt token paradigm hơn |
-| archive / pool | 53 elites | **19** | gần K=100 |
-| runtime | 10800 s | 10803 s | tương tự |
-
-Các thay đổi đã làm:
-
-1. **Pool 2-lớp + fill-first** (mục 8) — giải quyết gốc rễ "pool=19".
-2. **Paradigm prompt có code anchor + inspirations** (mục 6) — frontier nhìn
-   thấy cơ chế thật, kết hợp được; trước đó chỉ thấy mô tả nên hay sinh ra
-   side-grade.
-3. **Default `max_per_family` 8 → 10** — nới thêm một chút khi pool đầy.
-4. **`structural_cosine_threshold=0.97`** (mới) — lộ ra qua flag
-   `--structural-threshold`; đặt > 1.0 để tắt lớp AST nếu muốn so sánh.
-5. Surface thêm `--paradigm-n-anchors`, `--paradigm-n-inspirations` để tune.
-6. **Bug fix: `parse_miss` storm ở mutation model** — xem mục 9.1.
-
-### 9.1 Bug fix: `parse_miss (no code in output)` chiếm gần toàn bộ Phase 2
-
-Trong run sau khi đã áp dụng các thay đổi trên, log Phase 2 cho thấy **30/32
-variants liên tiếp bị reject** với lý do `parse_miss (no code in output)` —
-nghĩa là output của Qwen mutation không chứa fenced code block nào.
-
-**Giả thuyết đầu tiên** (sai): đổ lỗi cho format prompt — nghĩ rằng
-`OUTPUT_FORMAT_INSTRUCTION` 2-section (`## Description` + `## Code`) quá khó
-cho Qwen3-30B-A3B. Đã thử tạo `MUTATION_OUTPUT_FORMAT` mới gọn hơn.
-
-**A/B test trên Qwen thật** (16 calls mỗi cấu hình, `scripts/test_mutation_format.py`):
-
-| Cấu hình | has_code |
-| --- | --- |
-| OLD strict format, `max_tokens=1200` | 15/16 (93.8%) — **1 truncated** |
-| OLD strict format, `max_tokens=4096` | 16/16 (100%) |
-| OLD strict format, `max_tokens=None` | 16/16 (100%) |
-| NEW gọn format, `max_tokens=1200` | 15/16 (93.8%) — vẫn truncated |
-| NEW gọn format, `max_tokens=4096` | 16/16 (100%) |
-
-Format prompt **không phải nguyên nhân** — cả hai format đều bị miss như
-nhau ở mức `max_tokens=1200`. Thủ phạm thật là **`llm_max_tokens=1200`** —
-prompt phase-2 chứa 2 seed program full (đến hàng ngàn token mỗi cái) cộng
-với `## Description` prose mà model viết trước → response bị truncate
-TRƯỚC khi kịp mở fence ` ```python `.
-
-**Fix thật sự**: đổi default `BladeConfig.llm_max_tokens` từ `1200` → `None`
-([levi/levi/blade/orchestrator.py:104](levi/levi/blade/orchestrator.py#L104)).
-Khi `None`, `LM.acompletion` strip key `max_tokens` trước khi gọi litellm
-([levi/levi/clients/lm.py:153](levi/levi/clients/lm.py#L153)) — provider
-(OpenRouter / Qwen) tự dùng ceiling mặc định ≥ 4096, đủ rộng để Qwen luôn
-hoàn thành cả description + code fence.
-
-Prompt giữ nguyên `OUTPUT_FORMAT_INSTRUCTION` 2-section cho tất cả prompts.
-Description luôn có sẵn → không cần `_summarize_if_needed` cho mutation
-output → tiết kiệm 1 LLM call cho mỗi candidate, đồng thời pool description-
-embedding niching nhận được mô tả "do model viết" thay vì "summary từ code".
-
-### 9.2 Transient OpenRouter / GPT-5 gateway error (không phải bug)
-
-Trong run 26348569129 (sau khi đã apply fix `max_tokens=None`), `[seed 1]`
-fail với:
-
-```text
-litellm.APIError: OpenrouterException - Unable to get json response
-- Expecting value: line 547 column 1 (char 3003)
-Original Response: <~620 dòng whitespace, không có JSON>
+```python
+quota = min(max_per_family, ceil(K / target_n_families))   # = min(10, 20) = 10
+if len(family_of_newcomer) > quota:
+    evict the weakest non-protected member of that family
 ```
 
-**Nguyên nhân**: OpenRouter gateway trả 200 OK nhưng body chỉ chứa whitespace
-heartbeat (giữ TCP connection alive trong lúc GPT-5 đang reasoning). Khi
-upstream cắt kết nối giữa chừng, litellm nhận body whitespace-only và raise
-`JSONDecodeError`. Pattern điển hình của reasoning-heavy models qua proxy.
+Nếu toàn bộ family hiện đang **protected** (paradigm grace cover all), cap được
+*defer* — chấp nhận overshoot tạm thời thay vì giết paradigm đang cooling.
 
-**Không phải bug BLADE**. Retry mechanism trong
-[orchestrator.py:929](levi/levi/blade/orchestrator.py#L929) (`max_retries=3`)
-xử lý đúng — `[seed 1 retry 1]` thành công với score 1.4515. Chi phí phụ:
-~2 phút cho call lỗi, không tốn tiền (call fail không tính phí).
+### Paradigm grace (component D)
 
-Nếu pattern này lặp lại nhiều và làm chậm bootstrap đáng kể, cân nhắc thêm
-client-side timeout ngắn (≤ 90 s) cho frontier call để fail nhanh thay vì
-chờ TCP timeout — nhưng hiện tại retry hoạt động ổn, không cần đụng.
+Khi `program.source in {"paradigm", "paradigm_variant"}` và
+`enable_paradigm_grace=True`, Pool stamp:
 
-`pe_interval=10` và `n_diverse_seeds=4` trong workflow đều là *LEVI parity*
-chứ không phải bug:
+```python
+program.protected_until_eval = current_eval + paradigm_grace_evals    # = +30
+```
 
-- LEVI `PunctuatedEquilibriumConfig.interval = 10` mặc định
-  ([levi/levi/config/models.py:111](levi/levi/config/models.py#L111)); BLADE
-  workflow giữ cùng cadence.
-- Khi không có `seed_program`, bootstrap **tự cộng thêm 1 seed** để bù
-  ([levi/levi/blade/orchestrator.py:921](levi/levi/blade/orchestrator.py#L921)):
-  `n_seeds = cfg.n_diverse_seeds + (0 if cfg.seed_program else 1)` → với
-  `n_diverse_seeds=4` thực tế vẫn sinh **5 seed**, ngang LEVI.
+`current_eval` được orchestrator đồng bộ qua `pool.tick_eval(monitor.eval_count)`
+sau mỗi `record_eval`. Trong grace window:
 
-Hai con số đó không cần đụng. Cải thiện gốc rễ kỳ vọng đến từ Pool 2.0 +
-paradigm prompt code-aware.
+- Family cap **không evict** program đó.
+- Global K cap **không evict** program đó (trừ trường hợp tất cả đều protected
+  → cap defer; hoặc newcomer chính là weakest và pool ≥ K → drop newcomer).
+- Niche dedup vẫn áp dụng — duplicate là chuyện khác với quota.
 
-## 10. Output artifacts
+Khi `replaced_duplicate`, newcomer kế thừa `protected_until_eval` của incumbent
+(không bao giờ làm ngắn grace).
 
-- **`snapshot.json`** — dump đầy đủ: monitor stats, meta-advice cuối, danh
-  sách `paradigm_trials` và tất cả `elites` (kèm code).
+### Hall-of-Fame (component D)
+
+Side-store thuần read-only ngoài pool chính (`_hof: list[Program]`, capacity `hof_size=30`):
+
+**Admit rule**:
+
+- Mọi paradigm-source program ⇒ admit.
+- Non-paradigm: admit nếu cosine vs **mọi** HoF entry hiện tại < `family_cosine_threshold`
+  (i.e. nó đem lại family axis mới). Skip noise.
+
+**Eviction rule**: chỉ evict non-paradigm. Paradigm-source entries **không bao
+giờ bị evict** — chúng là long-term memory của các paradigm đã được frontier sinh ra.
+
+Truy cập:
+
+- `pool.hall_of_fame()` → snapshot read-only.
+- `pool.representatives_cross_family(include_hof=True)` → backfill anchors.
+- `snapshot.json["hall_of_fame"]` → dump artifact cuối run.
+
+### Reasons trả về bởi `pool.add`
+
+| Reason | Khi nào |
+| --- | --- |
+| `added` | Append clean |
+| `replaced_duplicate` | Duplicate (cả niche+struct) score cao hơn |
+| `dropped_duplicate` | Duplicate score thấp hơn |
+| `replaced_family_weak` | Family cap evicted weakest non-protected (≠ newcomer) |
+| `dropped_family_full` | Family cap fire và newcomer là weakest non-protected |
+| `dropped_full` | Pool > K và newcomer là global weakest non-protected |
+| `no_embedding` | Refuse (cần embedding) |
+
+## 9. Vì sao Pool 3.0 + Paradigm 2.0 khắc phục được collapse
+
+Đối chiếu run cũ (circle_packing_rect, 3 giờ):
+
+| Chỉ số | LEVI baseline | BLADE Pool 2.0 | BLADE Pool 3.0 (kỳ vọng) |
+| --- | --- | --- | --- |
+| best_score | 2.6027 | 2.2745 (collapsed) | ≥ 2.6 |
+| pool_size | 53 elites | 100 (full nhưng 1 family) | 100 với 4-6 families |
+| paradigm_trials accepted | n/a | 9/21 (toàn delta âm) | similar count, delta dương khả thi |
+| mean_recent_diversity | n/a | 0.81 (collapse) | < 0.7 |
+| HoF entries | n/a | n/a | 5-15 paradigm seeds |
+
+Các thay đổi đem lại:
+
+1. **Bigram AST** — cross-paradigm cosine 0.95 → 0.69 (smoke test). Lớp AST
+   bây giờ thực sự discriminate, niche dedup ngừng accept variants chỉ-vì-AST-trông-giống-nhau.
+2. **Family threshold 0.72 → 0.85** — paraphrase cùng paradigm (cosine 0.75-0.85)
+   không còn merge thành 1 family. Live runs show 4-6 family thay vì 1.
+3. **Quota niching luôn enforce** — không còn cửa sổ "fill-first" để 1 paradigm
+   thắng phase bootstrap rồi chiếm 100 slot.
+4. **Paradigm cross-family anchors** — kể cả khi pool collapse, frontier vẫn
+   thấy 3 paradigm-distinct anchors (HoF backfill). Trước đó 3 anchors là 3
+   paraphrase của cùng paradigm → frontier không có thông tin để break out.
+5. **Stuck → early** — stage routing fix bug "late-stage forbids rewrites we
+   need". Khi stuck/collapse, prompt chuyển sang PARADIGM SHIFT mode.
+6. **Paradigm grace 30 evals** — paradigm seed có 30 evals để fanout + xác minh
+   trước khi quota cap có thể kill nó. Trước đó paradigm bị evict ngay khi
+   admit (vì điểm thấp hơn best, family cap chọn nó làm weakest).
+7. **Selector paradigm boost +0.6 decay-linear-25-evals** — workers thực sự
+   chọn paradigm seed làm parent cho mutate/crossover trong 25 evals đầu. Trước
+   đó paradigm có recency tốt nhưng score-normalized thấp → bị các elite
+   cao điểm outrank → workers không bao giờ mutate trên paradigm.
+8. **Hall-of-Fame** — paradigm seeds tốt nhất qua đời các epoch vẫn còn sống
+   để backfill cho paradigm shift sau và frontier có chu kỳ memory dài hạn.
+
+## 10. Ablation framework
+
+Mọi component đều có toggle, chạy ablation bằng cờ CLI hoặc JSON advanced_options.
+
+### Bảng ablation đề xuất
+
+| Cấu hình | Ý nghĩa | CLI |
+| --- | --- | --- |
+| **Full** | Tất cả ON (default) | (no flag) |
+| `-A` | Ablate quota niching | `--disable-quota-niching` |
+| `-B` | Ablate bigram AST | `--ast-mode count14` |
+| `-C` | Ablate cross-family + stuck-early | `--disable-cross-family-anchors --disable-force-early-on-collapse` |
+| `-D` | Ablate HoF + grace + boost | `--disable-hall-of-fame --disable-paradigm-grace --disable-paradigm-boost` |
+| **Legacy** | Tất cả OFF (≈ behavior Pool 2.0) | Tất cả `--disable-*` + `--ast-mode count14` + `--family-threshold 0.72` + `--structural-threshold 0.97` |
+
+### Snapshot phản ánh cấu hình
+
+`snapshot.json["ablation_flags"]` ghi rõ:
+
+```json
+{
+  "ast_mode": "bigram",
+  "enable_quota_niching": true,
+  "enable_paradigm_grace": true,
+  "enable_hall_of_fame": true,
+  "enable_paradigm_boost": true,
+  "paradigm_cross_family_anchors": true,
+  "paradigm_force_early_on_collapse": true,
+  "family_cosine_threshold": 0.85,
+  "structural_cosine_threshold": 0.85,
+  "target_n_families": 5,
+  "max_per_family": 10,
+  "paradigm_grace_evals": 30,
+  "hof_size": 30,
+  "paradigm_boost": 0.6,
+  "paradigm_exploit_window": 25
+}
+```
+
+Post-hoc attribution: chạy mỗi cấu hình 2-3 seeds, so `best_score` + `pool_size`
++ `num_families_final` + `paradigm_trials_with_positive_delta`.
+
+## 11. Output artifacts
+
+- **`snapshot.json`** — dump đầy đủ:
+  - `monitor` stats (eval_count, best_score, plateau_steps, stagnation_level,
+    accept_rate, mean_recent_diversity, is_stuck, is_collapsing).
+  - `meta_advice` cuối + trigger_count.
+  - `paradigm_trials` (idx, stage, accepted, score, delta, description).
+  - `elites` (kèm `family_id`, `protected_until_eval`, `created_at_eval`,
+    `uses_count`, `description`, `content`).
+  - **`hall_of_fame`** (mới) — danh sách HoF entries sorted by score desc.
+  - **`ablation_flags`** (mới) — phản ánh BladeConfig cho component A/B/C/D.
 - **`best.py` / `best_program.py`** — chương trình điểm cao nhất.
 - **`summary.json`** — `run_blade.py` thêm metadata model/budget.
 
-## 11. Logging
+## 12. Logging
 
-`evolve_code_blade` gọi `_setup_logging()` (giống Levi) và orchestrator có:
+Không đổi nhiều. Bổ sung:
 
-1. **`_status_monitor`** — heartbeat mỗi 30 s:
-   `[Status] Cost: $… | Evals: … | Clients in-flight: … | Eval in-flight: … | Pool: … | Best: … | Elapsed: …s`
-2. **`_record_reject(source, score, error_msg)`** — helper duy nhất bọc
-   `monitor.record_eval` cho mọi spot reject. Log:
-   `[Eval #N] {model:27s} ERROR (source): {msg[:80]}`.
-3. **`_admit`** — log dòng:
-   `[Eval #N] {model:27s} {status:12s} | source: … | score: … | best: … | $cost`
-   với `status` ∈ `{NEW BEST ★, accepted, rejected}`.
-4. **In-flight counters** — wrap `_call` và `_evaluate_code` bằng try/finally
-   tăng/giảm `_client_in_flight` và `_eval_in_flight`.
-5. **PE trigger log** giàu:
-   `[BLADE PE] trigger #N at eval=… | stage=… | best=… | pool=… | families=…`.
-6. Thông báo phase đầu cuối + summary sau bootstrap:
-   `[BLADE] bootstrap complete — pool=… best=… cost=$… evals=…`.
+- **`[BLADE PE] forcing stage=early (was X) — monitor flags stuck=… collapsing=…`**
+  khi component C trigger.
+- **`[BLADE PE] trigger #N at eval=… | stage=… | best=… | pool=… | families=…`**
+  vẫn như cũ, nhưng `families` count bây giờ phản ánh family threshold mới
+  (0.85) — kỳ vọng 2-6 thay vì 1-2 ở run cũ.
+- Pool internal: `_log` paradigm grace stamps, HoF admits/evictions không
+  emit log (giữ runtime quiet); kiểm tra qua snapshot cuối run.
 
-## 12. Knobs CLI / workflow advanced_options
+## 13. Knobs CLI / workflow advanced_options
 
 ```text
-# scripts/run_blade.py flags (mới + đã có)
---pool-k                       # PoolConfig.K (target 100)
+# scripts/run_blade.py flags
+
+# === Knobs cũ ===
+--pool-k                       # PoolConfig.K (100)
 --niche-threshold              # lớp 1: description cosine (0.92)
---structural-threshold         # lớp 2: AST cosine (0.97); >1.0 để tắt
---family-threshold             # family clustering (0.72)
---max-per-family               # cap khi đầy (10)
+--structural-threshold         # lớp 2: AST cosine (0.85, đã hạ từ 0.97)
+--family-threshold             # family clustering (0.85, đã tăng từ 0.72)
+--max-per-family               # cap (10)
 --paradigm-n-anchors           # anchors có code (3)
 --paradigm-n-inspirations      # inspirations description-only (5)
 --n-paradigm-variants          # fanout sau paradigm shift (4)
@@ -524,34 +523,89 @@ paradigm prompt code-aware.
 --n-variants-per-seed          # phase-2 parallel variants/seed (20)
 --pe-interval                  # cron N evals (50)
 --meta-advice-interval         # cron N evals (50)
---no-repair / --no-meta-advice # tắt các phụ trợ
+--no-repair / --no-meta-advice # tắt phụ trợ
+
+# === Ablation toggles (mới) ===
+
+# Component B — AST signature
+--ast-mode {bigram, count14}   # bigram = production, count14 = legacy
+
+# Component A — Quota niching
+--disable-quota-niching        # ablate
+--target-n-families            # quota = ceil(K/N) (5)
+
+# Component D — Paradigm grace
+--disable-paradigm-grace
+--paradigm-grace-evals         # grace window (30)
+
+# Component D — Hall of Fame
+--disable-hall-of-fame
+--hof-size                     # capacity (30)
+
+# Component D — Selector boost
+--disable-paradigm-boost
+--paradigm-boost               # additive boost magnitude (0.6)
+--paradigm-exploit-window      # window in evals (25)
+
+# Component C — Paradigm shift
+--disable-cross-family-anchors      # fall back to representatives(stage)
+--disable-force-early-on-collapse   # let budget_progress alone route stage
+--paradigm-temperature              # healthy regime (0.7)
+--paradigm-temperature-stuck        # stuck/collapsing (1.0)
 ```
 
 Trong `.github/workflows/blade.yml`, các knob nâng cao đi qua JSON
-`advanced_options`, ví dụ:
+`advanced_options`. Key tương ứng theo pattern `snake_case`:
 
 ```json
 {
-  "structural_threshold": 0.95,
-  "max_per_family": 12,
-  "paradigm_n_inspirations": 8,
-  "pe_interval": 30
+  "ast_mode": "count14",
+  "quota_niching_disabled": true,
+  "hall_of_fame_disabled": true,
+  "paradigm_grace_disabled": true,
+  "paradigm_boost_disabled": true,
+  "cross_family_anchors_disabled": true,
+  "force_early_on_collapse_disabled": true
 }
 ```
 
-## 13. Gợi ý A/B tiếp theo
+(ví dụ trên = ablate hết, run BLADE ở chế độ "legacy" gần Pool 2.0).
 
-Để khẳng định Pool 2.0 + paradigm prompt mới thực sự cải thiện kết quả
-(thay vì kết luận từ một run đơn lẻ):
+Đầy đủ keys được handle bởi step "Parse advanced options" trong workflow:
+`problem_module, target_score, embedding_model, eval_processes, n_paradigm_variants,
+paradigm_n_anchors, paradigm_n_inspirations, pool_k, niche_threshold,
+structural_threshold, family_threshold, max_per_family, repair_disabled,
+meta_advice_disabled, meta_advice_interval, ast_mode, quota_niching_disabled,
+target_n_families, paradigm_grace_disabled, paradigm_grace_evals,
+hall_of_fame_disabled, hof_size, paradigm_boost_disabled, paradigm_boost,
+paradigm_exploit_window, cross_family_anchors_disabled,
+force_early_on_collapse_disabled, paradigm_temperature, paradigm_temperature_stuck`.
 
-1. **A/B Pool**: chạy 2 lần cùng seed, một lần `--structural-threshold 1.5`
-   (tắt lớp AST, fallback về description-only như bản cũ) → so `pool_size`
-   và `best_score` cuối run.
-2. **A/B Paradigm**: tạm rollback `paradigm_n_inspirations=0` để xem có
-   cần inspirations description-only không; hoặc `paradigm_n_anchors=1` vs
-   `=3` để đo giá trị biên của việc cho frontier xem nhiều code anchor.
-3. **A/B family cap**: `max_per_family=10` (default) vs `=100` (gần như
-   tắt) để xem family cap có còn cần khi pool 2-lớp dedup đã chặt.
+## 14. Gợi ý A/B tiếp theo
 
-Mỗi A/B nên dùng cùng `seed=0` (đã có trong `BladeConfig`) để loại bỏ
-noise khởi tạo.
+Để khẳng định mỗi component thực sự đóng góp:
+
+1. **A/B Pool architecture** (component A):
+   - Full vs `--disable-quota-niching` → đo `num_families_final` và
+     `mean_recent_diversity`. Kỳ vọng quota niching giữ 4-6 family, ablate
+     thường về 1-2.
+
+2. **A/B AST signature** (component B):
+   - Full vs `--ast-mode count14 --structural-threshold 0.97` → đếm số
+     "lỡ admit duplicate" qua bigram cosine của các cặp elite sau run.
+
+3. **A/B paradigm shift** (component C):
+   - Full vs `--disable-cross-family-anchors --disable-force-early-on-collapse`
+     → đếm % paradigm trials có delta > 0.
+
+4. **A/B paradigm protection** (component D):
+   - Full vs `--disable-paradigm-grace --disable-paradigm-boost --disable-hall-of-fame`
+     → tỷ lệ `paradigm_variant` sống trong pool cuối, average lifetime
+     (created_at_eval → evicted_at) của paradigm seeds.
+
+5. **Sweep family threshold**: `--family-threshold {0.72, 0.80, 0.85, 0.90}`
+   ở chế độ full → đo `num_families_final`. Kỳ vọng 0.85 sweet spot.
+
+Mỗi A/B nên dùng cùng `seed=0` (đã có trong `BladeConfig`) + 2-3 repeat để
+loại bỏ noise khởi tạo. Output dir phân biệt qua `--output-dir` để snapshot
+không bị overwrite.

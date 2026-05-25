@@ -169,6 +169,36 @@ class BladeConfig:
     paradigm-shift solution (parallel asyncio.gather). LEVI default."""
     paradigm_variant_temperature: float = 0.8
     """Temperature for the mutation-model paradigm-variant calls."""
+    paradigm_variant_temperature_stuck: float = 1.0
+    """Bumped variant temperature when ``Monitor.is_stuck()`` or
+    ``is_collapsing()``. Without the bump, variants of a fresh paradigm
+    seed tend to land in the same description-embedding niche as the
+    seed itself and get pruned by the niche-dedup gate."""
+
+    paradigm_temperature: float = 0.7
+    """Frontier-model temperature for paradigm-shift calls in normal
+    (healthy) regime."""
+    paradigm_temperature_stuck: float = 1.0
+    """Frontier-model temperature when the monitor flags ``is_stuck`` or
+    ``is_collapsing``. A 0.3 bump is what live runs needed to push the
+    frontier off the dominant family — at 0.7 the model kept emitting
+    paraphrases of the best anchor."""
+
+    # Paradigm-shift architectural toggles (component C in the proposal)
+    paradigm_cross_family_anchors: bool = True
+    """Pick anchors via :meth:`Pool.representatives_cross_family` (one
+    top-score program per family, HoF-backfilled) instead of the legacy
+    ``Pool.representatives(stage)`` path. Without this, the anchor set
+    collapses onto a single family the moment the pool itself collapses
+    — exactly when the frontier needs cross-paradigm input the most."""
+
+    paradigm_force_early_on_collapse: bool = True
+    """When the monitor reports ``is_stuck()`` or ``is_collapsing()``,
+    force the paradigm-shift stage to ``"early"`` regardless of budget
+    progress. The legacy logic routes to ``"late"`` (surgical fix on the
+    best anchor) at high budget progress, which is the wrong move when
+    the search has already collapsed — late-stage prompts forbid the
+    rewrites that breaking out actually needs."""
 
     # Operator mix
     p_crossover_healthy: float = 0.30
@@ -237,14 +267,22 @@ class ParadigmTrial:
     score: float | None
     delta_vs_prev_best: float | None
 
-    def render(self) -> str:
+    def render(self, *, max_desc_chars: int = 360) -> str:
+        """Render a single Strategy-Log line.
+
+        The default description budget is intentionally generous (360
+        chars vs the legacy 160) so the frontier prompt sees enough of
+        each prior trial to actually distinguish them. With 160 chars
+        every late-stage trial's preface looked alike ("A hybrid
+        discrete-continuous search first selects 21 centers…") and the
+        frontier kept proposing variations on the same idea."""
         score_str = f"{self.score:.4f}" if self.score is not None else "n/a"
         delta = self.delta_vs_prev_best
         delta_str = f"Δ={delta:+.4f}" if delta is not None else "Δ=n/a"
         accepted_str = "✓" if self.accepted else "✗"
         desc = self.description.strip().replace("\n", " ")
-        if len(desc) > 160:
-            desc = desc[:160] + "…"
+        if len(desc) > max_desc_chars:
+            desc = desc[: max_desc_chars - 1] + "…"
         return f"[#{self.trial_idx} {self.stage}] {accepted_str} score={score_str} {delta_str} :: {desc}"
 
 
@@ -474,6 +512,9 @@ class BladeOrchestrator:
         admitting a program (parse miss, eval crash, LLM error, etc.). Bumps the
         monitor and emits the LEVI-style log line in one go."""
         self.monitor.record_eval(score=score, accepted=False, embedding=None)
+        # Keep the pool's eviction clock in sync — paradigm grace windows
+        # are measured against ``eval_count``.
+        self.pool.tick_eval(self.monitor.eval_count)
         self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg)
 
     def _log_eval(
@@ -545,6 +586,10 @@ class BladeOrchestrator:
             accepted=accepted,
             embedding=embedding if accepted else None,
         )
+        # Bump the pool's eviction clock so paradigm grace windows can
+        # measure their horizon against the same ``eval_count`` the
+        # monitor just incremented.
+        self.pool.tick_eval(self.monitor.eval_count)
         is_new_best = score > prev_best  # monitor.best_score updated above
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best)
         if not accepted and reason == "dropped_duplicate" and parent_score is not None:
@@ -746,22 +791,43 @@ class BladeOrchestrator:
             budget_progress=self._budget_progress(),
             stagnation=self.monitor.stagnation_level(),
         )
-        anchors = self.pool.representatives(stage, n=cfg.paradigm_n_anchors)  # type: ignore[arg-type]
+        # When the search has collapsed, route to ``early`` regardless of
+        # budget progress. The legacy mapping sends a stuck/collapsed
+        # search to ``late`` because budget_progress is already high — but
+        # late-stage prompts forbid the rewrites we actually need.
+        if cfg.paradigm_force_early_on_collapse and (
+            self.monitor.is_collapsing() or self.monitor.is_stuck()
+        ):
+            if stage != "early":
+                logger.info(
+                    "[BLADE PE] forcing stage=early (was %s) — monitor flags "
+                    "stuck=%s collapsing=%s",
+                    stage,
+                    self.monitor.is_stuck(),
+                    self.monitor.is_collapsing(),
+                )
+            stage = "early"
+
+        # Anchor selection: cross-family preferred so the frontier sees N
+        # paradigm-distinct anchors even when the working pool itself has
+        # collapsed onto one family. The Hall of Fame backfills any
+        # missing axes.
+        if cfg.paradigm_cross_family_anchors:
+            anchors = self.pool.representatives_cross_family(
+                n=cfg.paradigm_n_anchors,
+                include_hof=True,
+            )
+        else:
+            anchors = self.pool.representatives(stage, n=cfg.paradigm_n_anchors)  # type: ignore[arg-type]
         anchor_triples = [(p.code, p.description, p.score) for p in anchors]
         for p in anchors:
             self.pool.mark_used(p)
 
         # Build a diverse pool of *additional* inspirations (description-only).
-        # We over-fetch from ``representatives("early", …)`` (which uses MMR with
-        # a low score weight, so the selection is diversity-biased) and skip
-        # any program that already appears as an anchor.
         inspiration_pairs: list[tuple[str, float]] = []
         if cfg.paradigm_n_inspirations > 0:
             anchor_ids = {id(p) for p in anchors}
             wanted = cfg.paradigm_n_inspirations
-            # Ask for n_anchors + n_inspirations so we still have ``wanted``
-            # candidates after filtering out the anchors. ``representatives``
-            # clamps to the pool size, so on small pools we just get fewer.
             fetch_n = len(anchors) + wanted
             candidates = self.pool.representatives("early", n=fetch_n)  # type: ignore[arg-type]
             for p in candidates:
@@ -770,6 +836,17 @@ class BladeOrchestrator:
                 inspiration_pairs.append((p.description, p.score))
                 if len(inspiration_pairs) >= wanted:
                     break
+            # If the working pool didn't give us enough inspirations (it's
+            # collapsed onto one family), top up from the HoF.
+            if cfg.paradigm_cross_family_anchors and len(inspiration_pairs) < wanted:
+                hof_seen = anchor_ids
+                for hof_p in self.pool.hall_of_fame():
+                    if id(hof_p) in hof_seen:
+                        continue
+                    inspiration_pairs.append((hof_p.description, hof_p.score))
+                    hof_seen.add(id(hof_p))
+                    if len(inspiration_pairs) >= wanted:
+                        break
 
         prev_best = self.monitor.best_score
         prompt = build_paradigm_prompt(
@@ -784,11 +861,19 @@ class BladeOrchestrator:
         )
 
         # ----- step 1: frontier paradigm seed -----
+        # Bump temperature when stuck/collapsing so the frontier actually
+        # leaves the dominant family. At 0.7 the model tends to paraphrase
+        # the best anchor — useless when we're already stuck on it.
+        paradigm_temp = (
+            cfg.paradigm_temperature_stuck
+            if (self.monitor.is_stuck() or self.monitor.is_collapsing())
+            else cfg.paradigm_temperature
+        )
         try:
             raw = await self._call(
                 self.paradigm_lm,
                 prompt,
-                temperature=0.7,
+                temperature=paradigm_temp,
                 max_tokens=cfg.paradigm_max_tokens,  # None — never cap frontier
             )
         except Exception as e:
@@ -866,6 +951,12 @@ class BladeOrchestrator:
             base_score,
         )
 
+        variant_temp = (
+            cfg.paradigm_variant_temperature_stuck
+            if (self.monitor.is_stuck() or self.monitor.is_collapsing())
+            else cfg.paradigm_variant_temperature
+        )
+
         async def _one_paradigm_variant() -> None:
             if self._budget_exhausted():
                 return
@@ -879,7 +970,7 @@ class BladeOrchestrator:
                 raw_v = await self._call(
                     self.mutation_lm,
                     v_prompt,
-                    temperature=cfg.paradigm_variant_temperature,
+                    temperature=variant_temp,
                 )
             except Exception as e:
                 logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
@@ -1517,11 +1608,38 @@ class BladeOrchestrator:
                     "created_at_eval": p.created_at_eval,
                     "uses_count": p.uses_count,
                     "family_id": p.family_id,
+                    "protected_until_eval": p.protected_until_eval,
                     "description": p.description,
                     "content": p.code,
                 }
                 for p in sorted(self.pool.programs(), key=lambda x: -x.score)
             ],
+            "hall_of_fame": [
+                {
+                    "score": p.score,
+                    "source": p.source,
+                    "created_at_eval": p.created_at_eval,
+                    "description": p.description,
+                }
+                for p in sorted(self.pool.hall_of_fame(), key=lambda x: -x.score)
+            ],
+            "ablation_flags": {
+                "ast_mode": self.config.pool_config.ast_mode,
+                "enable_quota_niching": self.config.pool_config.enable_quota_niching,
+                "enable_paradigm_grace": self.config.pool_config.enable_paradigm_grace,
+                "enable_hall_of_fame": self.config.pool_config.enable_hall_of_fame,
+                "enable_paradigm_boost": self.config.selector_config.enable_paradigm_boost,
+                "paradigm_cross_family_anchors": self.config.paradigm_cross_family_anchors,
+                "paradigm_force_early_on_collapse": self.config.paradigm_force_early_on_collapse,
+                "family_cosine_threshold": self.config.pool_config.family_cosine_threshold,
+                "structural_cosine_threshold": self.config.pool_config.structural_cosine_threshold,
+                "target_n_families": self.config.pool_config.target_n_families,
+                "max_per_family": self.config.pool_config.max_per_family,
+                "paradigm_grace_evals": self.config.pool_config.paradigm_grace_evals,
+                "hof_size": self.config.pool_config.hof_size,
+                "paradigm_boost": self.config.selector_config.paradigm_boost,
+                "paradigm_exploit_window": self.config.selector_config.paradigm_exploit_window,
+            },
         }
         (self.output_dir / "snapshot.json").write_text(json.dumps(snap, indent=2))
         if result.best_program:

@@ -57,6 +57,7 @@ Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time
 
 def circle_packing21() -> np.ndarray:
     '''

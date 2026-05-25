@@ -51,6 +51,31 @@ class SelectorConfig:
     family-mean cosine to the first parent is BELOW this value, to push
     the LLM toward cross-family hybridization."""
 
+    # ------------------------------------------------------------------
+    # Paradigm-source boost (component D in the proposal)
+    # ------------------------------------------------------------------
+
+    paradigm_boost: float = 0.6
+    """Additive priority boost applied to programs whose ``source`` is in
+    {"paradigm", "paradigm_variant"} while they are still inside the
+    exploitation window. Without this boost, freshly-admitted paradigm
+    seeds with a slightly lower score than the global best are starved
+    by the UCB pick — workers never select them as parents and the
+    paradigm dies before its variants can prove it out.
+
+    Set to 0.0 (or disable via :attr:`enable_paradigm_boost`) to recover
+    the legacy UCB behaviour for the ablation study."""
+
+    enable_paradigm_boost: bool = True
+    """Toggle for :attr:`paradigm_boost`. Off ⇒ paradigm-source programs
+    compete on raw UCB priority like everything else (legacy)."""
+
+    paradigm_exploit_window: int = 25
+    """How long the paradigm boost stays active for a given program,
+    measured in evaluations since ``created_at_eval``. After this window
+    the program competes on raw UCB priority. 25 ≈ one paradigm fanout
+    plus enough crossovers to confirm the paradigm's value."""
+
 
 @dataclass
 class Selector:
@@ -93,7 +118,26 @@ class Selector:
             max_sim = max(cosine(p.embedding, q.embedding) for q in already_picked)
         else:
             max_sim = 0.0
-        return score + alpha * novelty + beta * recency - gamma * max_sim
+        base = score + alpha * novelty + beta * recency - gamma * max_sim
+        boost = self._paradigm_boost(p, n_total=n_total)
+        return base + boost
+
+    def _paradigm_boost(self, p: Program, *, n_total: int) -> float:
+        """Additive priority bump for paradigm-source programs inside the
+        exploit window. Decays linearly from full boost at ``age=0`` to
+        zero at ``age=paradigm_exploit_window``. Off when
+        :attr:`SelectorConfig.enable_paradigm_boost` is False."""
+        cfg = self.config
+        if not cfg.enable_paradigm_boost or cfg.paradigm_boost <= 0:
+            return 0.0
+        if p.source not in ("paradigm", "paradigm_variant"):
+            return 0.0
+        window = max(1, cfg.paradigm_exploit_window)
+        age = max(0, n_total - p.created_at_eval)
+        if age >= window:
+            return 0.0
+        decay = 1.0 - (age / window)
+        return cfg.paradigm_boost * decay
 
     # ------------------------------------------------------------------
     # Public selection API

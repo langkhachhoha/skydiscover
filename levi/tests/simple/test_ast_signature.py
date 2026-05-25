@@ -30,8 +30,11 @@ def test_cosine_identical_code_is_one() -> None:
 
 
 def test_cosine_distinct_structures_drops() -> None:
-    # A tight loop with branches vs a one-liner comprehension differ in
-    # loop_count, branch_count, comprehension_count, depth, …
+    # A tight loop with branches vs a one-liner comprehension produce very
+    # different (parent, child) bigram histograms — the loop has For→…,
+    # If→… edges that the comprehension does not, and the comprehension
+    # has GeneratorExp→… edges the loop does not. The bigram signature
+    # should report a clearly sub-similar cosine.
     loop_code = (
         "def f(x):\n"
         "    total = 0\n"
@@ -43,9 +46,11 @@ def test_cosine_distinct_structures_drops() -> None:
     comp_code = "def f(x):\n    return sum(v for v in x if v > 0)\n"
     sig_loop = compute_ast_signature(loop_code)
     sig_comp = compute_ast_signature(comp_code)
-    # Different but not orthogonal — both still look like Python functions.
     sim = ast_cosine(sig_loop, sig_comp)
-    assert 0.5 < sim < 0.97, f"expected meaningful separation, got {sim}"
+    # The bigram signature is much more discriminating than the legacy
+    # count14 vector; cross-paradigm pairs commonly land in [0.2, 0.7].
+    # We only assert the upper bound: they must not look identical.
+    assert sim < 0.85, f"expected clear separation, got {sim}"
 
 
 def test_cosine_handles_zero_vector() -> None:

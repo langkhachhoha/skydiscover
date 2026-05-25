@@ -9,6 +9,7 @@ dist/
 build/
 .eggs/
 log/
+result/
 
 circle_packing_fore_25727558464/
 

@@ -97,8 +97,16 @@ on:
           n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
           pool_k, niche_threshold, structural_threshold, family_threshold,
           max_per_family, repair_disabled, meta_advice_disabled,
-          meta_advice_interval. Example:
-          '{"target_score":0.95,"n_paradigm_variants":6,"paradigm_n_inspirations":5}'
+          meta_advice_interval,
+          ast_mode (bigram|count14),
+          quota_niching_disabled, target_n_families,
+          paradigm_grace_disabled, paradigm_grace_evals,
+          hall_of_fame_disabled, hof_size,
+          paradigm_boost_disabled, paradigm_boost, paradigm_exploit_window,
+          cross_family_anchors_disabled, force_early_on_collapse_disabled,
+          paradigm_temperature, paradigm_temperature_stuck.
+          Example ablation (kill HoF + quota):
+          '{"hall_of_fame_disabled":true,"quota_niching_disabled":true}'
         required: false
         type: string
         default: ""
@@ -232,6 +240,21 @@ jobs:
           [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
           [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"
+          # ---- ablation toggles for the new architectural components ----
+          [ -n "$ADV_AST_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --ast-mode $ADV_AST_MODE"
+          [ "$ADV_QUOTA_NICHING_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-quota-niching"
+          [ -n "$ADV_TARGET_N_FAMILIES" ] && EXTRA_OPTS="$EXTRA_OPTS --target-n-families $ADV_TARGET_N_FAMILIES"
+          [ "$ADV_PARADIGM_GRACE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-paradigm-grace"
+          [ -n "$ADV_PARADIGM_GRACE_EVALS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-grace-evals $ADV_PARADIGM_GRACE_EVALS"
+          [ "$ADV_HALL_OF_FAME_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-hall-of-fame"
+          [ -n "$ADV_HOF_SIZE" ] && EXTRA_OPTS="$EXTRA_OPTS --hof-size $ADV_HOF_SIZE"
+          [ "$ADV_PARADIGM_BOOST_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-paradigm-boost"
+          [ -n "$ADV_PARADIGM_BOOST" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-boost $ADV_PARADIGM_BOOST"
+          [ -n "$ADV_PARADIGM_EXPLOIT_WINDOW" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-exploit-window $ADV_PARADIGM_EXPLOIT_WINDOW"
+          [ "$ADV_CROSS_FAMILY_ANCHORS_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-cross-family-anchors"
+          [ "$ADV_FORCE_EARLY_ON_COLLAPSE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --disable-force-early-on-collapse"
+          [ -n "$ADV_PARADIGM_TEMPERATURE" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-temperature $ADV_PARADIGM_TEMPERATURE"
+          [ -n "$ADV_PARADIGM_TEMPERATURE_STUCK" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-temperature-stuck $ADV_PARADIGM_TEMPERATURE_STUCK"
 
           uv run --active python ../scripts/run_blade.py \
             --example-dir "levi/examples/${{ inputs.benchmark }}" \

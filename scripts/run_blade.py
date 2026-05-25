@@ -196,6 +196,114 @@ def _parse_args() -> argparse.Namespace:
         help="Refresh meta-advice every N evaluations (default: 50).",
     )
 
+    # ----------------------------------------------------------------------
+    # Ablation toggles for the new architectural components. Defaults match
+    # ``BladeConfig`` (= all components ON); pass --disable-* for ablations.
+    # ----------------------------------------------------------------------
+
+    p.add_argument(
+        "--ast-mode",
+        choices=("bigram", "count14"),
+        default=None,
+        help="Structural AST signature implementation. 'bigram' (default) is "
+        "the production node-type bigram histogram; 'count14' reproduces the "
+        "legacy 14-count log-vector for ablation.",
+    )
+    p.add_argument(
+        "--disable-quota-niching",
+        action="store_true",
+        help="Ablate quota niching (component A). When set, the family cap "
+        "only fires after the pool reaches K — the legacy behaviour that "
+        "let the pool collapse into one family during the fill phase.",
+    )
+    p.add_argument(
+        "--target-n-families",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Quota niching: target number of families in the pool. Each "
+        "family gets ceil(K/N) slots (default: 5).",
+    )
+    p.add_argument(
+        "--disable-paradigm-grace",
+        action="store_true",
+        help="Ablate paradigm grace (component D). Paradigm-source programs "
+        "lose their eviction-grace window and can be killed immediately by "
+        "the family/K cap.",
+    )
+    p.add_argument(
+        "--paradigm-grace-evals",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Eviction-grace window length for paradigm-source programs "
+        "(default: 30).",
+    )
+    p.add_argument(
+        "--disable-hall-of-fame",
+        action="store_true",
+        help="Ablate the Hall of Fame (component D). Without HoF, "
+        "paradigm-shift anchor-backfill is unavailable and the snapshot "
+        "carries no hall_of_fame block.",
+    )
+    p.add_argument(
+        "--hof-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Hall of Fame capacity (default: 30).",
+    )
+    p.add_argument(
+        "--disable-paradigm-boost",
+        action="store_true",
+        help="Ablate the selector's paradigm-source priority boost "
+        "(component D). Paradigm programs compete on raw UCB priority.",
+    )
+    p.add_argument(
+        "--paradigm-boost",
+        type=float,
+        default=None,
+        metavar="F",
+        help="Additive priority boost for paradigm-source programs inside "
+        "the exploit window (default: 0.6).",
+    )
+    p.add_argument(
+        "--paradigm-exploit-window",
+        type=int,
+        default=None,
+        metavar="N",
+        help="How long the paradigm boost stays active for a given program "
+        "(default: 25 evaluations).",
+    )
+    p.add_argument(
+        "--disable-cross-family-anchors",
+        action="store_true",
+        help="Ablate cross-family anchor selection (component C). Falls back "
+        "to legacy Pool.representatives(stage) which can return anchors all "
+        "from one family.",
+    )
+    p.add_argument(
+        "--disable-force-early-on-collapse",
+        action="store_true",
+        help="Ablate the stuck/collapse → early-stage routing (component C). "
+        "Lets budget_progress alone choose the paradigm stage.",
+    )
+    p.add_argument(
+        "--paradigm-temperature",
+        type=float,
+        default=None,
+        metavar="F",
+        help="Frontier-model temperature for paradigm shifts in the healthy "
+        "regime (default: 0.7).",
+    )
+    p.add_argument(
+        "--paradigm-temperature-stuck",
+        type=float,
+        default=None,
+        metavar="F",
+        help="Frontier-model temperature when stuck/collapsing (default: 1.0).",
+    )
+
     p.add_argument(
         "--output-dir",
         default=None,
@@ -280,6 +388,7 @@ def main() -> int:
     # Pool/selector overrides.
     overrides: dict = {}
     from levi.simple import PoolConfig
+    from levi.simple.selector import SelectorConfig
 
     pool_kwargs = {}
     if args.pool_k is not None:
@@ -292,8 +401,32 @@ def main() -> int:
         pool_kwargs["family_cosine_threshold"] = args.family_threshold
     if args.max_per_family is not None:
         pool_kwargs["max_per_family"] = args.max_per_family
+    if args.ast_mode is not None:
+        pool_kwargs["ast_mode"] = args.ast_mode
+    if args.disable_quota_niching:
+        pool_kwargs["enable_quota_niching"] = False
+    if args.target_n_families is not None:
+        pool_kwargs["target_n_families"] = args.target_n_families
+    if args.disable_paradigm_grace:
+        pool_kwargs["enable_paradigm_grace"] = False
+    if args.paradigm_grace_evals is not None:
+        pool_kwargs["paradigm_grace_evals"] = args.paradigm_grace_evals
+    if args.disable_hall_of_fame:
+        pool_kwargs["enable_hall_of_fame"] = False
+    if args.hof_size is not None:
+        pool_kwargs["hof_size"] = args.hof_size
     if pool_kwargs:
         overrides["pool_config"] = PoolConfig(**pool_kwargs)
+
+    selector_kwargs = {}
+    if args.disable_paradigm_boost:
+        selector_kwargs["enable_paradigm_boost"] = False
+    if args.paradigm_boost is not None:
+        selector_kwargs["paradigm_boost"] = args.paradigm_boost
+    if args.paradigm_exploit_window is not None:
+        selector_kwargs["paradigm_exploit_window"] = args.paradigm_exploit_window
+    if selector_kwargs:
+        overrides["selector_config"] = SelectorConfig(**selector_kwargs)
 
     if args.no_repair:
         overrides["enable_repair"] = False
@@ -301,6 +434,14 @@ def main() -> int:
         overrides["paradigm_n_anchors"] = args.paradigm_n_anchors
     if args.paradigm_n_inspirations is not None:
         overrides["paradigm_n_inspirations"] = args.paradigm_n_inspirations
+    if args.disable_cross_family_anchors:
+        overrides["paradigm_cross_family_anchors"] = False
+    if args.disable_force_early_on_collapse:
+        overrides["paradigm_force_early_on_collapse"] = False
+    if args.paradigm_temperature is not None:
+        overrides["paradigm_temperature"] = args.paradigm_temperature
+    if args.paradigm_temperature_stuck is not None:
+        overrides["paradigm_temperature_stuck"] = args.paradigm_temperature_stuck
 
     import levi  # imported lazily so import errors surface clearly above
 

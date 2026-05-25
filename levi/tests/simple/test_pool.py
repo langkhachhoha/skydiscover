@@ -30,7 +30,18 @@ def test_admits_distinct_programs() -> None:
 
 
 def test_near_duplicate_replaces_when_better() -> None:
-    pool = Pool(PoolConfig(K=10, niche_cosine_threshold=0.9))
+    # ``_mk`` writes placeholder code (``# desc``) which parses to a
+    # near-empty AST under the bigram signature → structural cosine = 0.
+    # That correctly blocks the second-pass gate, so we explicitly
+    # disable the structural layer here to isolate the niche-embedding
+    # behaviour.
+    pool = Pool(
+        PoolConfig(
+            K=10,
+            niche_cosine_threshold=0.9,
+            structural_cosine_threshold=-1.0,  # disable AST layer
+        )
+    )
     pool.add(_mk(0.5, vec(1, 0, 0), desc="A"))
     # Same direction → cosine ≈ 1.0
     accepted, reason = pool.add(_mk(0.7, vec(1, 0.01, 0), desc="A'"))
@@ -40,23 +51,29 @@ def test_near_duplicate_replaces_when_better() -> None:
 
 
 def test_near_duplicate_drops_when_worse() -> None:
-    pool = Pool(PoolConfig(K=10, niche_cosine_threshold=0.9))
+    pool = Pool(
+        PoolConfig(
+            K=10,
+            niche_cosine_threshold=0.9,
+            structural_cosine_threshold=-1.0,  # disable AST layer
+        )
+    )
     pool.add(_mk(0.5, vec(1, 0, 0)))
     accepted, reason = pool.add(_mk(0.3, vec(1, 0.01, 0)))
     assert not accepted and reason == "dropped_duplicate"
 
 
-def test_family_cap_deferred_until_pool_full() -> None:
-    # While the pool is still filling (len < K) the family cap must NOT
-    # fire — we want to admit as much raw diversity as possible. K=3 so
-    # we can verify the deferred behaviour in a single test.
+def test_family_cap_deferred_until_pool_full_legacy() -> None:
+    # Legacy behaviour (quota niching disabled): family cap is deferred
+    # until ``len(pool) >= K`` so the pool fills with raw diversity first.
     pool = Pool(
         PoolConfig(
             K=3,
             niche_cosine_threshold=0.999,
-            structural_cosine_threshold=1.5,  # disable AST layer for this test
+            structural_cosine_threshold=1.5,  # disable AST layer
             family_cosine_threshold=0.85,
             max_per_family=2,
+            enable_quota_niching=False,  # legacy mode
         )
     )
     fam0 = family(seed=0, jitter=0.10, n=3)
@@ -83,13 +100,40 @@ def test_family_cap_deferred_until_pool_full() -> None:
     assert pytest.approx(0.9) in scores
 
 
+def test_family_cap_eager_with_quota_niching() -> None:
+    # With quota niching ON (default), the family cap fires from the
+    # first admit — exactly the behaviour intended to prevent the empirical
+    # collapse-to-one-family pattern.
+    pool = Pool(
+        PoolConfig(
+            K=10,
+            niche_cosine_threshold=0.999,
+            structural_cosine_threshold=1.5,  # disable AST layer
+            family_cosine_threshold=0.85,
+            max_per_family=2,
+            target_n_families=5,
+            enable_quota_niching=True,
+        )
+    )
+    # 4 members of the same family — the cap allows only 2.
+    fam0 = family(seed=0, jitter=0.10, n=4)
+    pool.add(_mk(0.1, fam0[0], desc="f0-0"))
+    pool.add(_mk(0.2, fam0[1], desc="f0-1"))
+    pool.add(_mk(0.3, fam0[2], desc="f0-2"))  # cap fires here: weakest (0.1) evicted
+    pool.add(_mk(0.4, fam0[3], desc="f0-3"))  # cap fires again: 0.2 evicted
+    assert len(pool) == 2
+    scores = sorted(p.score for p in pool.programs())
+    assert scores == pytest.approx([0.3, 0.4])
+
+
 def test_top_k_eviction_when_full() -> None:
     pool = Pool(
         PoolConfig(
             K=3,
             niche_cosine_threshold=0.99,
-            family_cosine_threshold=0.0,  # no family clustering
+            family_cosine_threshold=0.0,  # all in one family (full graph)
             max_per_family=100,
+            target_n_families=1,  # quota effectively = K (no family pressure)
         )
     )
     # 5 mutually orthogonal vectors so no dedup, no family interference.
@@ -139,6 +183,7 @@ def test_recent_diversity_high_when_same_family() -> None:
             niche_cosine_threshold=0.9999,
             family_cosine_threshold=0.0,
             max_per_family=100,
+            target_n_families=1,  # disable quota pressure
         )
     )
     for i, v in enumerate(family(seed=0, jitter=0.10, n=6)):
@@ -149,7 +194,7 @@ def test_recent_diversity_high_when_same_family() -> None:
 
 
 def test_recent_diversity_low_when_diverse() -> None:
-    pool = Pool(PoolConfig(K=20, niche_cosine_threshold=0.999, family_cosine_threshold=0.0, max_per_family=100))
+    pool = Pool(PoolConfig(K=20, niche_cosine_threshold=0.999, family_cosine_threshold=0.0, max_per_family=100, target_n_families=1))
     # Orthogonal axes ⇒ pairwise cosine ≈ 0
     for axis in range(6):
         comp = [0.0] * 8
