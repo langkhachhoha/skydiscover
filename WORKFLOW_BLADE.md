@@ -2,12 +2,12 @@
 
 > BLADE = **B**ehavior-**L**atent **A**daptive **D**iscovery **E**ngine.
 >
-> A minimal evolutionary code-search engine built on top of a two-model
+> A minimal evolutionary code-search engine built around a two-model
 > pipeline (frontier + mutation) with one architectural contribution:
 > **adaptive MAP-Elites whose cells are built from a hybrid AST +
 > description-embedding behavior signature and re-clustered as the search
-> progresses**, plus a small ensemble of analysis-driven mutation /
-> paradigm-shift prompts.
+> progresses**, plus an ensemble of analysis-driven mutation /
+> paradigm-shift prompts and a structured lessons-learnt advisor.
 
 ---
 
@@ -17,37 +17,44 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │  BLADE Lite                                                           │
 │                                                                        │
-│  (1) ClusterArchive  ◄────  hybrid AST + embedding behavior          │
-│      • k = n_cells = 50, FIXED across the run                        │
-│      • KMeans not fit until ≥ n_cells programs are admitted          │
-│      • after the first fit, all 50 centroids stay alive (empty       │
-│        Voronoi regions are kept open for future admits)              │
-│      • admit iff score > cell incumbent                              │
+│  (1) ClusterArchive  ◄────  hybrid AST + description-embedding        │
+│      • k = n_cells = 50, FIXED across the run                         │
+│      • KMeans not fit until ≥ n_cells programs are admitted           │
+│      • after the first fit all 50 centroids stay alive                │
+│      • admit iff score > cell incumbent                               │
 │                                                                        │
 │  (2) RankSampler                                                       │
-│      • Zipfian over score rank: P(rank=r) ∝ (r+1)^(-β)               │
-│      • β interpolates linearly with stagnation                       │
-│      • crossover: second parent from a different cell when possible  │
+│      • Zipfian over score rank: P(rank=r) ∝ (r+1)^(-β)                │
+│      • β interpolates linearly with stagnation                        │
+│      • crossover: second parent from a different cell when possible   │
 │                                                                        │
 │  (3) Monitor                                                           │
-│      • plateau_steps (evals since last new best)                     │
-│      • admit_gap (evals since last admit)                            │
-│      • stagnation_level() = max(global, local) ∈ [0, 1]              │
+│      • plateau_steps (evals since last NEW BEST)                      │
+│      • admit_gap (evals since last admit)                             │
+│      • stagnation_level() = max(global, local) ∈ [0, 1]               │
 │                                                                        │
 │  (4) PromptSampler                                                     │
-│      • 3 mutate templates: general / focused_fix / mechanism_swap    │
+│      • 3 mutate templates: general / focused_fix / mechanism_swap     │
 │      • 2 crossover templates: structural / component_swap             │
 │      • drawn uniformly per call                                       │
 │                                                                        │
-│  (5) Parent Analyzer (Đề xuất 1)                                       │
-│      • mutation model writes a 250-word review of top-K parents      │
-│      • cached by id(parent), refreshed every analyzer_interval evals │
-│      • when cached, the orchestrator uses TARGETED_MUTATE_PROMPT     │
-│        with probability p_targeted_mutate                             │
+│  (5) Parent Analyzer + Targeted Mutate                                 │
+│      • mutation model writes a short review of top-K parents          │
+│      • cached by id(parent), refreshed every analyzer_interval evals  │
+│      • when cached, TARGETED_MUTATE_PROMPT fires with                 │
+│        probability p_targeted_mutate                                  │
 │                                                                        │
-│  + Orchestrator: standard 2-phase bootstrap + main loop +             │
-│      three-mode paradigm shift (synthesis / shift / surgical)         │
-│      dispatched by stagnation level.                                  │
+│  (6) Structured Meta-Advisor                                           │
+│      • every meta_advice_interval evals, the mutation model writes    │
+│        a short WORKING / TRY NEXT / AVOID note                        │
+│      • input: top-K archive descriptions + recent admits with score   │
+│        delta-vs-parent + typed error taxonomy + previous advice       │
+│      • the note is injected verbatim into future mutate / crossover   │
+│        prompts with probability meta_advice_inject_p                  │
+│                                                                        │
+│  + Orchestrator: 2-phase bootstrap + main loop + three-mode           │
+│      paradigm shift (synthesis / shift / surgical) dispatched by      │
+│      stagnation level.                                                │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,7 +66,7 @@ Source files:
 - [levi/levi/simple/monitor.py](levi/levi/simple/monitor.py) — Monitor
 - [levi/levi/simple/parser.py](levi/levi/simple/parser.py) — OutputParser + `OUTPUT_FORMAT_INSTRUCTION`
 - [levi/levi/blade/orchestrator.py](levi/levi/blade/orchestrator.py) — orchestrator
-- [levi/levi/blade/prompts.py](levi/levi/blade/prompts.py) — prompt builders + PromptSampler
+- [levi/levi/blade/prompts.py](levi/levi/blade/prompts.py) — prompt builders + PromptSampler + `classify_error`
 - [scripts/run_blade.py](scripts/run_blade.py) — CLI
 - [scripts/smoke_blade_prompts.py](scripts/smoke_blade_prompts.py) — live audit of the 3-section prompt contract
 
@@ -76,24 +83,20 @@ behavior_vec(p) = standardise([
 
 Both halves are z-score-standardised online (Welford) before
 concatenation so neither dominates KMeans's Euclidean distance. The PCA
-basis is re-fit from the live population on each re-cluster — i.e. the
-8 principal components evolve with the search.
+basis is re-fit from the live population on each re-cluster — the 8
+principal components evolve with the search.
 
-**Cells.** Previously KMeans was fit with `k = min(n_cells, n)`, which
-combined with the post-recluster coalesce (keep best per cell) caused
-the archive to collapse to ~16 cells for the entire run on
-`circle_packing_rect`. The new contract:
+**Cells.** `n_cells` is held **fixed** across the run (default 50).
 
-- `n_cells` is held **fixed** across the run (default 50).
 - KMeans is not fit until the population reaches `n_cells`. Below that
   threshold each admit gets its own `cell_id` and **no coalescing
   happens**, so the archive grows freely up to `n_cells` programs.
-- Once `n_cells` programs are admitted, KMeans fits with
-  exactly `k = n_cells` clusters. After every fit the centroid grid
-  has `n_cells` slots; some Voronoi regions may be empty but the
-  slots stay alive, so subsequent admits can grow
-  `num_occupied_cells` toward `n_cells` instead of plateauing.
-- `min_admits_before_cluster` (default 16) is now only a sanity floor;
+- Once `n_cells` programs are admitted, KMeans fits with exactly
+  `k = n_cells` clusters. After every fit the centroid grid has
+  `n_cells` slots; some Voronoi regions may be empty but the slots
+  stay alive, so subsequent admits can grow `num_occupied_cells`
+  toward `n_cells` instead of plateauing.
+- `min_admits_before_cluster` (default 16) is only a sanity floor;
   the binding threshold for the first fit is `n_cells`.
 
 The runtime invariant pinned by
@@ -116,18 +119,18 @@ P(rank=r) ∝ (r+1)^(-β(stagnation))
 ```
 
 Three call patterns: `select_parent`, `select_two_parents` (cell-aware
-second parent), `select_inspirations`. The sampler does **not** track
+second parent), `select_inspirations`. The sampler does not track
 per-cell statistics — it reads `cell_id` only inside
-`select_two_parents`, so even a re-cluster that shuffles cell IDs only
-perturbs one tiebreaker. No fix is required; this is documented here
-so future readers do not chase the symptom.
+`select_two_parents`, so a re-cluster that shuffles cell IDs only
+perturbs one tiebreaker.
 
 ### 1.3 Monitor — global + local stagnation
 
 `stagnation_level()` = `max(global_stagnation, local_stagnation)`,
 where the global timer ticks until the best score improves and the
 local timer ticks until any cell incumbent is replaced. The combined
-signal drives the rank sampler's β.
+signal drives the rank sampler's β and the paradigm-shift mode
+selector.
 
 ### 1.4 PromptSampler — five mutate / crossover templates
 
@@ -143,11 +146,10 @@ requires the model to emit **three sections in this exact order**:
 
 Only `## Description` and `## Code` are consumed by the search system.
 `## Analysis` is for the model's own reasoning — the archive does NOT
-embed it, so the rich structured bullets (Components, Strengths,
-Weaknesses, etc.) do not pollute the behavior signature used for cell
-assignment. This contract is pinned by
+embed it, so the rich structured bullets do not pollute the behavior
+signature used for cell assignment. This contract is pinned by
 [test_prompts_keep_analysis_separate_from_description](levi/tests/blade/test_prompts.py)
-and validated end-to-end against the live Qwen-30B model by
+and validated end-to-end against the live mutation model by
 [scripts/smoke_blade_prompts.py](scripts/smoke_blade_prompts.py).
 
 The five templates:
@@ -163,28 +165,28 @@ The five templates:
 - **`crossover/component_swap`** — base skeleton + one transplanted
   component from the donor.
 
-No learned weights — the choice is uniform random — so the mutation
-model gets prompt-level diversity even when the parent pool is narrow.
+Choice is uniform random — no learned weights — so the mutation model
+sees prompt-level diversity even when the parent pool is narrow.
 
-### 1.5 Parent Analyzer + Targeted Mutate (Đề xuất 1)
+### 1.5 Parent Analyzer + Targeted Mutate
 
 A background monitor wakes every `analyzer_interval` evaluations
 (default 30) and asks the mutation model for a short review of the top
-`analyzer_top_k` programs (default 3). Each review is 250 words and
-identifies three bottlenecks plus three suggested changes. Reviews are
-cached by `id(parent)` and dropped when the parent leaves the top-K.
+`analyzer_top_k` programs (default 3). Each review identifies three
+bottlenecks plus three suggested changes. Reviews are cached by
+`id(parent)` and dropped when the parent leaves the top-K.
 
 When a parent with a cached review is selected for mutation, the
 orchestrator picks `TARGETED_MUTATE_PROMPT` with probability
-`p_targeted_mutate` (default 0.5) — otherwise it falls back to the
+`p_targeted_mutate` (default 0.7) — otherwise it falls back to the
 standard `PromptSampler`. The targeted prompt receives the analysis
 verbatim and asks the model to commit to ONE suggested change.
 
-### 1.6 Three-mode paradigm shift (Đề xuất 8)
+### 1.6 Three-mode paradigm shift
 
-The frontier paradigm-shift call now picks one of three prompt
-templates based on the current stagnation level. Each mode receives a
-different anchor / inspiration configuration:
+The frontier paradigm-shift call picks one of three prompt templates
+based on the current stagnation level. Each mode receives a different
+anchor / inspiration configuration:
 
 | Mode | Stagnation range | Anchors (full code) | Inspirations | Asks for |
 | --- | --- | --- | --- | --- |
@@ -194,12 +196,65 @@ different anchor / inspiration configuration:
 
 Surgical mode is the lever for late-run plateaus: when previous
 paradigm trials are not contributing to the best score, the frontier
-is told explicitly to focus on the champion and write a small,
-local, structural improvement — not a new paradigm and not a
-constant-sweep.
+is told explicitly to focus on the champion and write a small, local,
+structural improvement — not a new paradigm and not a constant-sweep.
 
 The mode thresholds are tunable
 (`paradigm_synthesis_max_stagnation`, `paradigm_shift_max_stagnation`).
+
+### 1.7 Structured Meta-Advisor
+
+The advisor is a background monitor that wakes every
+`meta_advice_interval` evaluations and asks the mutation model for a
+short prescriptive note. The note is injected verbatim into the next
+mutate / crossover prompts with probability `meta_advice_inject_p`
+(default 0.7).
+
+**Three-bucket output schema.** The model must emit exactly three
+short paragraphs, in this order, with these literal headers:
+
+```text
+WORKING:  <1-2 sentences naming what the leaders share; cite an
+           operator (e.g. mutate_focused_fix) if one dominates admits>
+TRY NEXT: <2-3 short imperative suggestions building on WORKING>
+AVOID:    <1-2 anti-patterns that actually appear in the window's
+           failure taxonomy>
+```
+
+This is the schema enforced by the prompt — earlier free-form prose
+produced defensive-only advice ("avoid X", "clamp Y") because the only
+signal flowing in was raw failure messages.
+
+**Four signal streams.** The advisor's prompt is built from:
+
+1. **Top-K archived program descriptions** with their scores
+   (`top_descriptions`, K=3). These are the current leaders the
+   advisor must reason about under WORKING / TRY NEXT.
+2. **Recent admits** as `(source, score, delta_vs_parent)` triples
+   (`recent_admits`, rolling window of 8). The orchestrator carries
+   `parent_score` through to `_admit()` so the score-delta is exact,
+   and the source label includes the prompt variant
+   (`mutate_focused_fix`, `crossover_component_swap`, …).
+3. **Typed error taxonomy.** Errors from this window are bucketed by
+   `classify_error` into seven kinds — `timeout`, `syntax`,
+   `constraint`, `shape_mismatch`, `numpy_api`, `name_or_attr`,
+   `type_error`, with `other` as fallback — and rendered with counts
+   plus a per-source breakdown plus one truncated example per bucket.
+   This replaces the old "tail 5 raw messages" feed, which could not
+   distinguish a single epidemic failure from five unrelated ones.
+4. **Previous advice** carried over verbatim so the advisor can refine
+   instead of repeating.
+
+**Mode switch.** `meta_advice_mode` is either `rich` (default — feed
+all four signal streams) or `errors_only` (drop top descriptions and
+recent admits; only the typed error taxonomy + previous advice flow
+in). The latter exists exclusively as a paper ablation; in production
+runs `rich` is the only sensible setting.
+
+Per-window invariant: after each advisor call the per-window error
+queue is cleared so the next cycle sees a fresh taxonomy, while the
+recent-admits queue intentionally rolls across cycles so the advisor
+can spot operators that are *consistently* productive.
 
 ---
 
@@ -209,8 +264,8 @@ The mode thresholds are tunable
 1. Phase 1 (sequential, frontier model)
    for i in 1..n_diverse_seeds:
      prompt = build_diverse_seed_prompt(existing_seeds=…)
-     code  = frontier(prompt)
-     score = evaluate(code)
+     code   = frontier(prompt)
+     score  = evaluate(code)
      archive.add(Program(..., source="init"))
 
 2. Phase 2 (parallel, mutation model)
@@ -222,24 +277,28 @@ The mode thresholds are tunable
 3. Main loop
    while not budget_exhausted:
      for _ in n_workers concurrently:
+       op = "crossover" if rng() < p_crossover else "mutate"
        parent(s) ← sampler.select_parent[_two](archive.programs(), stagnation)
        insps     ← sampler.select_inspirations(...)
        if cached_analysis[parent] and rng() < p_targeted_mutate:
-         prompt = build_targeted_mutate_prompt(...)
+         prompt = build_targeted_mutate_prompt(..., meta_advice=...)
        else:
          label, tmpl = prompt_sampler.pick_mutate(rng) | pick_crossover(rng)
-         prompt = build_mutate_prompt(template=tmpl, ...) | build_crossover_prompt(template=tmpl, ...)
+         prompt = build_mutate_prompt(template=tmpl, ..., meta_advice=...)
+                | build_crossover_prompt(template=tmpl, ..., meta_advice=...)
        code = mutation(prompt)
-       archive.add(Program(...))
-     if error_buffer: _repair_one()    # one-shot
+       archive.add(Program(..., source=op_label))
+     if error_buffer: _repair_one()     # one-shot
 
    parallel:
      • _pe_monitor   fires _paradigm_shift() every pe_cron_interval evals
-     • _meta_advice_monitor refreshes lessons-learnt every meta_advice_interval evals
-     • _analyzer_monitor refreshes top-K parent analyses every analyzer_interval evals
+     • _meta_advice_monitor refreshes the WORKING/TRY/AVOID note every
+       meta_advice_interval evals
+     • _analyzer_monitor refreshes top-K parent analyses every
+       analyzer_interval evals
 
 4. Paradigm shift
-   mode = pick_mode(stagnation)  # synthesis | shift | surgical
+   mode = pick_mode(stagnation)         # synthesis | shift | surgical
    prompt, anchors = _build_paradigm_prompt_for_mode(mode)
    code = frontier(prompt)
    archive.add(Program(..., source="paradigm"))
@@ -248,7 +307,10 @@ The mode thresholds are tunable
 
 The archive's re-clustering happens inside `archive.add(...)` whenever
 enough admits have accumulated. The orchestrator never touches cluster
-bookkeeping directly.
+bookkeeping directly. Admits and errors are simultaneously appended to
+two small rolling queues (`_advisor_admits`, `_advisor_errors`) that
+feed the meta-advisor; these are independent of `error_buffer` (which
+the repair branch drains by `popleft`).
 
 ---
 
@@ -266,8 +328,8 @@ the canonical reference, not the workflow file.
 | Knob | Default | Notes |
 | --- | --- | --- |
 | `mutation_model` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | Small / fast model. Drives mutate, crossover, repair, init variants, paradigm variants, meta-advisor, analyzer. |
-| `paradigm_model` | `openrouter/openai/gpt-5` | Frontier model. Drives the diverse-seed phase and the per-mode paradigm shift. |
-| `embedding_model` | `openrouter/openai/text-embedding-3-small` | Used by `DescriptionEmbedder` for the embedding half of the behavior signature. |
+| `paradigm_model` | `openrouter/openai/gpt-5` | Frontier model. Drives diverse-seed phase and per-mode paradigm shift. |
+| `embedding_model` | `openrouter/openai/text-embedding-3-small` | Description embedder for the second half of the behavior signature. |
 
 ### 3.2 Budget & concurrency
 
@@ -294,7 +356,7 @@ the canonical reference, not the workflow file.
 | `n_variants_per_seed` | `20` | Mutation variants per seed (phase 2, parallel). |
 | `init_diversity_temperature` | `0.8` | Frontier temperature for diverse seeds. |
 | `init_variant_temperature` | `0.9` | Mutation temperature for phase-2 fanout. |
-| `pe_cron_interval` | `50` | Fire paradigm shift every N completed evaluations. |
+| `pe_cron_interval` | `50` | Fire paradigm shift every N completed evaluations (set to 0 to disable). |
 | `paradigm_min_archive_size` | `5` | Skip paradigm shift if `num_occupied_cells <` this. |
 | `paradigm_temperature` | `0.8` | Frontier temperature inside paradigm shift. |
 | `paradigm_variant_temperature` | `0.85` | Mutation temperature for paradigm-fanout variants. |
@@ -304,7 +366,7 @@ the canonical reference, not the workflow file.
 
 | Knob | Default | Notes |
 | --- | --- | --- |
-| `p_crossover` | `0.35` | Probability of crossover (else mutate) per main-loop step. |
+| `p_crossover` | `0.35` | Probability of crossover per main-loop step. Empirically observed admit-rate: mutate operators ~10–17%, crossover operators ~13–16%. |
 | `enable_repair` | `True` | One-shot repair branch for error candidates. |
 
 ### 3.5 Three-mode paradigm shift
@@ -318,12 +380,7 @@ the canonical reference, not the workflow file.
 | `paradigm_surgical_n_inspirations` | `5` | Description-only inspirations in surgical mode (alongside the single champion anchor). |
 | `paradigm_n_inspirations` | `5` | Description-only inspirations in synthesis / shift modes. |
 
-Legacy knob: `paradigm_n_anchors` (default `4`) is still on
-`BladeConfig` for backwards compatibility, but the active code path
-ignores it — each mode now reads its own `paradigm_*_n_anchors`
-field. Future cleanup may remove it.
-
-### 3.6 Targeted-mutate analyzer (Đề xuất 1)
+### 3.6 Targeted-mutate analyzer
 
 | Knob | Default | Notes |
 | --- | --- | --- |
@@ -332,14 +389,15 @@ field. Future cleanup may remove it.
 | `analyzer_top_k` | `3` | Number of top-ranked programs analysed per refresh. |
 | `analyzer_temperature` | `0.3` | Mutation-model temperature for the analysis call. |
 | `analyzer_max_tokens` | `500` | Token cap for one analysis. |
-| `p_targeted_mutate` | `0.5` | When the chosen parent has a cached analysis, probability of using TARGETED_MUTATE_PROMPT (else fall back to PromptSampler). |
+| `p_targeted_mutate` | `0.7` | When the chosen parent has a cached analysis, probability of using TARGETED_MUTATE_PROMPT (else fall back to PromptSampler). |
 
 ### 3.7 Meta-advisor
 
 | Knob | Default | Notes |
 | --- | --- | --- |
-| `enable_meta_advice` | `True` | Toggle the lessons-learnt advisor. |
-| `meta_advice_interval` | `50` | Regenerate the lessons-learnt note every N evaluations. |
+| `enable_meta_advice` | `True` | Master toggle. |
+| `meta_advice_interval` | `50` | Regenerate the WORKING/TRY/AVOID note every N evaluations. |
+| `meta_advice_mode` | `"rich"` | Either `rich` (top descriptions + recent admits with delta + typed error taxonomy + previous advice) or `errors_only` (taxonomy + previous advice only). The latter is the paper ablation flag. |
 | `meta_advice_inject_p` | `0.7` | Probability of injecting the current note into the next mutate / crossover prompt. |
 | `meta_advice_temperature` | `0.4` | Mutation-model temperature for the advisor call. |
 | `meta_advice_max_tokens` | `400` | Token cap for one advisor note. |
@@ -377,7 +435,7 @@ field. Future cleanup may remove it.
 
 The dispatch workflow ([.github/workflows/blade.yml](.github/workflows/blade.yml))
 exposes models, budget, concurrency, `pe_interval`, `n_diverse_seeds`,
-`n_variants_per_seed`, and ablation directly. Everything else goes
+`n_variants_per_seed`, and `ablation` directly. Everything else goes
 through the JSON `advanced_options` input, e.g.
 
 ```json
@@ -385,16 +443,18 @@ through the JSON `advanced_options` input, e.g.
   "n_cells": 64,
   "recluster_every": 30,
   "embedding_dim": 8,
-  "paradigm_n_inspirations": 5,
   "n_paradigm_variants": 4,
-  "meta_advice_interval": 50,
-  "repair_disabled": false,
-  "meta_advice_disabled": false,
 
+  "meta_advice_interval": 50,
+  "meta_advice_mode": "rich",
+  "meta_advice_disabled": false,
   "targeted_mutate_disabled": false,
+  "repair_disabled": false,
+
   "analyzer_interval": 30,
   "analyzer_top_k": 3,
-  "p_targeted_mutate": 0.5,
+  "p_targeted_mutate": 0.7,
+  "p_crossover": 0.35,
 
   "paradigm_synthesis_max_stagnation": 0.4,
   "paradigm_shift_max_stagnation": 0.7,
@@ -405,23 +465,34 @@ through the JSON `advanced_options` input, e.g.
 ```
 
 The CLI exposes the same knobs as `--n-cells`, `--analyzer-interval`,
-`--p-targeted-mutate`, `--paradigm-synthesis-max-stagnation`, etc.
-Run `uv run python scripts/run_blade.py --help` for the full list.
+`--p-targeted-mutate`, `--p-crossover`, `--meta-advice-mode`,
+`--paradigm-synthesis-max-stagnation`, etc. Run
+`uv run python scripts/run_blade.py --help` for the full list.
 
 ---
 
-## 4. Ablation protocol (the *only* paper-facing knobs)
+## 4. Ablation protocol (paper-facing)
 
-Three toggles, unchanged. Each ablation isolates one component of the
-hybrid behavior signature:
+The workflow exposes nine mutually-exclusive ablation choices via the
+`ablation` dropdown. Three target the behavior signature / clustering
+side (A1–A3); five target individual operator / loop components
+(A4–A8); the remaining slot is the un-ablated default (`full`).
 
-| Ablation | Toggle (CLI) | Toggle (workflow) | What is removed |
+| Ablation | Toggle (workflow) | Toggle (CLI) | What is removed |
 | --- | --- | --- | --- |
-| **A1 — emb-only** | `--emb-only` | `ablation: emb_only` | The 14-d AST half. |
-| **A2 — ast-only** | `--ast-only` | `ablation: ast_only` | The PCA description-embedding half. |
-| **A3 — static-cells** | `--static-cells` | `ablation: static_cells` | Adaptive re-clustering. KMeans fit once at `n_cells`, then frozen. |
+| **full** | `ablation: full` | (default) | None — every component on. |
+| **A1 — emb-only** | `ablation: emb_only` | `--emb-only` | The 14-d AST half of the behavior signature. |
+| **A2 — ast-only** | `ablation: ast_only` | `--ast-only` | The PCA description-embedding half. |
+| **A3 — static-cells** | `ablation: static_cells` | `--static-cells` | Adaptive re-clustering. KMeans fit once at `n_cells`, then frozen. |
+| **A4 — no-meta-advice** | `ablation: no_meta_advice` | `--no-meta-advice` | The lessons-learnt advisor entirely. |
+| **A5 — meta-errors-only** | `ablation: meta_errors_only` | `--meta-advice-mode errors_only` | The success-side signals (top descriptions + recent admits). Advisor still runs but sees only the error taxonomy. Isolates the contribution of the success-side feed. |
+| **A6 — no-targeted-mutate** | `ablation: no_targeted_mutate` | `--no-targeted-mutate` | The parent analyzer + `TARGETED_MUTATE_PROMPT`. The PromptSampler still produces the other 5 templates. |
+| **A7 — no-crossover** | `ablation: no_crossover` | `--no-crossover` | The crossover branch (sets `p_crossover = 0`). |
+| **A8 — no-paradigm** | `ablation: no_paradigm` | `--pe-interval 0` | The frontier paradigm-shift loop. |
 
-Default config (the "full" variant) = A1 + A2 + A3 all ON.
+The three behavior-signature toggles (A1, A2, A3) are mutually
+orthogonal to the five operator-side toggles (A4–A8), so reporting
+results as two separate ablation tables is reasonable.
 
 ---
 
@@ -429,16 +500,21 @@ Default config (the "full" variant) = A1 + A2 + A3 all ON.
 
 Per run, `output_dir/`:
 
-- `best.py` — top-scoring program.
-- `summary.json` — run metadata + budget + ablation block.
+- `best.py` — top-scoring program (also written as `best_program.py`).
+- `summary.json` — run metadata + budget + ablation block (records the
+  exact flag combination — `no_meta_advice`, `meta_advice_mode`,
+  `no_targeted_mutate`, `no_repair`, `no_crossover`, `p_crossover`,
+  plus the behavior-signature ablation booleans).
 - `snapshot.json` — full archive dump:
-  - `monitor` (eval_count, best_score, plateau_steps, admit_gap,
-    global_stagnation, local_stagnation, stagnation_level, accept_rate)
-  - `paradigm_trials` (idx, accepted, score, delta, description)
+  - `monitor` — `eval_count, best_score, plateau_steps, admit_gap,
+    global_stagnation, local_stagnation, stagnation_level, accept_rate`
+  - `paradigm_trials` — `idx, accepted, score, delta, description`
   - `cells` — one entry per occupied cell, sorted by score desc
-  - `ablation` — block reflecting the three toggles + low-level
-    parameters
-  - `meta_advice` — current lessons-learnt block + trigger count
+  - `ablation` — block reflecting the three signature toggles + the
+    low-level archive parameters
+  - `meta_advice` — `{enabled, interval, mode, inject_p,
+    trigger_count, current}` (the `current` field carries the
+    WORKING/TRY/AVOID text from the most recent advisor cycle)
   - `analyzer` — `{enabled, interval, top_k, trigger_count,
     targeted_mutate_count, p_targeted_mutate, cache_size}`
   - `paradigm_modes` — `{synthesis_max_stagnation,
@@ -450,13 +526,14 @@ Per run, `output_dir/`:
 ## 6. Logging conventions
 
 - `[Eval #N] {model} {status} | source: ... | score: ... | best: ... | $cost`
-- Sources include the prompt-variant label, e.g.
-  `mutate_focused_fix`, `crossover_component_swap`, `mutate_targeted`,
-  `paradigm_synthesis`, `paradigm_surgical`.
+- Sources include the prompt-variant label, e.g. `mutate_focused_fix`,
+  `crossover_component_swap`, `mutate_targeted`, `paradigm_synthesis`,
+  `paradigm_surgical`.
 - `[Status] Cost: ... | Evals: ... | Archive: N (cells K) | Best: ... | Elapsed: ...s`
 - `[BLADE PE] mode=surgical anchors=1 stagnation=0.82 best=2.2871`
 - `[BLADE PE] fanout: K variants from paradigm seed (score=..., accepted=...)`
 - `[BLADE analyzer] trigger #N at eval=M (refreshing top-K)`
+- `[BLADE advisor] new advice (N chars) at eval=M`
 - `[Archive] recluster: n=... → K/n_cells occupied cells (admits since last recluster=...)`
 
 ---
@@ -464,7 +541,7 @@ Per run, `output_dir/`:
 ## 7. Quick start
 
 ```bash
-# Default run (all components on)
+# Default run (every component on)
 uv run python scripts/run_blade.py \
   --example-dir levi/examples/circle_packing_rect \
   --seconds 10800 --dollars 5
@@ -475,7 +552,7 @@ uv run python scripts/run_blade.py \
   --seconds 10800 --dollars 5 \
   --n-cells 64
 
-# Disable targeted mutate (Đề xuất 1 off)
+# Disable targeted mutate (analyzer + TARGETED_MUTATE_PROMPT off)
 uv run python scripts/run_blade.py \
   --example-dir levi/examples/circle_packing_rect \
   --seconds 10800 --dollars 5 \
@@ -487,7 +564,14 @@ uv run python scripts/run_blade.py \
   --seconds 10800 --dollars 5 \
   --paradigm-shift-max-stagnation 0.5
 
-# Ablation: AST only
+# Paper ablation: errors-only meta-advisor
+uv run python scripts/run_blade.py \
+  --example-dir levi/examples/circle_packing_rect \
+  --seconds 10800 --dollars 5 \
+  --meta-advice-mode errors_only \
+  --output-dir runs/ablation-meta-errors-only
+
+# Paper ablation: AST behavior signature only
 uv run python scripts/run_blade.py \
   --example-dir levi/examples/circle_packing_rect \
   --seconds 10800 --dollars 5 \
@@ -501,12 +585,14 @@ On GitHub Actions: dispatch `.github/workflows/blade.yml` and pick the
 
 ## 8. Verification
 
-Two pre-merge gates pin the contracts that previous runs broke:
+Two pre-merge gates pin the contracts the system relies on:
 
 ```bash
-# Offline unit tests (4 archive invariant + 8 prompts + 4 paradigm modes
-# + 3 orchestrator e2e on fake LLMs = 19 tests, ~30s).
+# Offline unit tests
 cd levi && uv run python -m pytest tests/blade/ --tb=short
+# Coverage: archive invariants (4) + prompt templates (8) + paradigm
+# modes (4) + orchestrator E2E on fake LLMs (3) + meta-advisor signal
+# wiring + error taxonomy (9) = 28 tests, ~35s wall-clock.
 
 # Live audit: one real call per prompt variant against the production
 # mutation model, checks that every response contains

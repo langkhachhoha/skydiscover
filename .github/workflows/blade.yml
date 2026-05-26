@@ -8,7 +8,10 @@ name: BLADE
 # The architecture is intentionally small: ClusterArchive (cells follow the
 # population via periodic KMeans re-clustering), RankSampler (Zipfian over
 # score rank, β adaptive to stagnation), Monitor (plateau + accept-rate).
-# There are exactly three paper-facing ablation toggles, exposed below.
+# Paper-facing ablations are exposed below: three on the behavior-signature /
+# clustering side ("ast_only", "emb_only", "static_cells") and five on the
+# operator / loop side ("no_meta_advice", "meta_errors_only", "no_targeted_mutate",
+# "no_crossover", "no_paradigm").
 #
 # Only knobs that change run-to-run are first-class inputs; everything else
 # (problem module name, eval-processes / timeout, pe-interval, embedding
@@ -86,10 +89,15 @@ on:
       ablation:
         description: >-
           Ablation mode for the paper-facing knobs. One of:
-            "full"          — both halves of the hybrid behavior signature ON, adaptive re-clustering ON (DEFAULT)
-            "ast_only"      — disable the description-embedding half (A2)
-            "emb_only"      — disable the AST half (A1)
-            "static_cells"  — disable adaptive re-clustering (A3)
+            "full"                — every component ON (DEFAULT)
+            "ast_only"            — disable the description-embedding half of the behavior signature (A2)
+            "emb_only"            — disable the AST half (A1)
+            "static_cells"        — disable adaptive KMeans re-clustering (A3)
+            "no_meta_advice"      — disable the lessons-learnt advisor entirely (A4)
+            "meta_errors_only"    — keep the advisor, but feed only failure messages (no success-side signal) (A5)
+            "no_targeted_mutate"  — disable LLM-generated parent analysis + TARGETED_MUTATE_PROMPT (A6)
+            "no_crossover"        — drop crossover, run mutate-only (sets p_crossover=0) (A7)
+            "no_paradigm"         — disable the frontier paradigm-shift loop (sets pe_interval=0) (A8)
         required: false
         type: choice
         default: "full"
@@ -98,6 +106,11 @@ on:
           - ast_only
           - emb_only
           - static_cells
+          - no_meta_advice
+          - meta_errors_only
+          - no_targeted_mutate
+          - no_crossover
+          - no_paradigm
       advanced_options:
         description: >-
           Optional JSON object with low-level overrides. Recognised keys:
@@ -105,12 +118,13 @@ on:
           n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
           n_cells, recluster_every, embedding_dim,
           repair_disabled, meta_advice_disabled, meta_advice_interval,
+          meta_advice_mode (rich|errors_only),
           targeted_mutate_disabled, analyzer_interval, analyzer_top_k,
-          p_targeted_mutate,
+          p_targeted_mutate, p_crossover,
           paradigm_synthesis_max_stagnation, paradigm_shift_max_stagnation,
           paradigm_synthesis_n_anchors, paradigm_shift_n_anchors,
           paradigm_surgical_n_inspirations.
-          Example: '{"n_cells":50,"p_targeted_mutate":0.6}'
+          Example: '{"n_cells":50,"p_targeted_mutate":0.7}'
         required: false
         type: string
         default: ""
@@ -247,18 +261,30 @@ jobs:
           [ -n "$ADV_ANALYZER_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-interval $ADV_ANALYZER_INTERVAL"
           [ -n "$ADV_ANALYZER_TOP_K" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-top-k $ADV_ANALYZER_TOP_K"
           [ -n "$ADV_P_TARGETED_MUTATE" ] && EXTRA_OPTS="$EXTRA_OPTS --p-targeted-mutate $ADV_P_TARGETED_MUTATE"
+          [ -n "$ADV_P_CROSSOVER" ] && EXTRA_OPTS="$EXTRA_OPTS --p-crossover $ADV_P_CROSSOVER"
+          [ -n "$ADV_META_ADVICE_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-mode $ADV_META_ADVICE_MODE"
           [ -n "$ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-max-stagnation $ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION"
           [ -n "$ADV_PARADIGM_SHIFT_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-max-stagnation $ADV_PARADIGM_SHIFT_MAX_STAGNATION"
           [ -n "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-n-anchors $ADV_PARADIGM_SYNTHESIS_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SHIFT_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-n-anchors $ADV_PARADIGM_SHIFT_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-n-inspirations $ADV_PARADIGM_SURGICAL_N_INSPIRATIONS"
 
-          # Ablation toggles (one of: full / ast_only / emb_only / static_cells)
+          # Paper-facing ablation toggles. ``pe_interval`` is set to the
+          # workflow input by default but the ``no_paradigm`` ablation
+          # overrides it to 0 (which disables the PE monitor inside the
+          # orchestrator). Likewise the operator-side ablations append
+          # the matching CLI flag.
+          PE_INTERVAL_EFFECTIVE="${{ inputs.pe_interval }}"
           case "${{ inputs.ablation }}" in
-            ast_only)     EXTRA_OPTS="$EXTRA_OPTS --ast-only" ;;
-            emb_only)     EXTRA_OPTS="$EXTRA_OPTS --emb-only" ;;
-            static_cells) EXTRA_OPTS="$EXTRA_OPTS --static-cells" ;;
-            full|*)       ;;
+            ast_only)            EXTRA_OPTS="$EXTRA_OPTS --ast-only" ;;
+            emb_only)            EXTRA_OPTS="$EXTRA_OPTS --emb-only" ;;
+            static_cells)        EXTRA_OPTS="$EXTRA_OPTS --static-cells" ;;
+            no_meta_advice)      EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice" ;;
+            meta_errors_only)    EXTRA_OPTS="$EXTRA_OPTS --meta-advice-mode errors_only" ;;
+            no_targeted_mutate)  EXTRA_OPTS="$EXTRA_OPTS --no-targeted-mutate" ;;
+            no_crossover)        EXTRA_OPTS="$EXTRA_OPTS --no-crossover" ;;
+            no_paradigm)         PE_INTERVAL_EFFECTIVE="0" ;;
+            full|*)              ;;
           esac
 
           uv run --active python ../scripts/run_blade.py \
@@ -273,7 +299,7 @@ jobs:
             --workers "${{ inputs.workers }}" \
             --eval-processes "$EVAL_PROCESSES" \
             --eval-timeout "${{ inputs.eval_timeout }}" \
-            --pe-interval "${{ inputs.pe_interval }}" \
+            --pe-interval "$PE_INTERVAL_EFFECTIVE" \
             --n-diverse-seeds "${{ inputs.n_diverse_seeds }}" \
             --n-variants-per-seed "${{ inputs.n_variants_per_seed }}" \
             --output-dir "${{ env.OUTPUT_DIR }}" \

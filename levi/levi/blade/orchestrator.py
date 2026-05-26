@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import random
 import time
 from collections import deque
@@ -178,7 +179,7 @@ class BladeConfig:
     analyzer_temperature: float = 0.3
     analyzer_max_tokens: int = 500
 
-    p_targeted_mutate: float = 0.5
+    p_targeted_mutate: float = 0.7
     """Probability of choosing :data:`TARGETED_MUTATE_PROMPT` when the
     chosen parent has a cached analysis. When no cached analysis is
     available the orchestrator falls back to the standard mutate
@@ -208,13 +209,22 @@ class BladeConfig:
     # Repair (one-shot per error candidate)
     enable_repair: bool = True
 
-    # Meta-advisor (LEVI port — short lessons-learnt note injected
-    # into mutation prompts)
+    # Meta-advisor — periodically writes a short prescriptive note that
+    # future mutation prompts include verbatim.
     enable_meta_advice: bool = True
     meta_advice_interval: int = 50
     meta_advice_inject_p: float = 0.7
     meta_advice_temperature: float = 0.4
     meta_advice_max_tokens: int = 400
+    meta_advice_mode: str = "rich"
+    """Either ``"rich"`` (default) or ``"errors_only"``.
+
+    ``rich`` feeds the advisor with the top-K archived descriptions,
+    recent admits with score-delta vs parent, and a typed error
+    taxonomy — so the advice block can name what's working and what to
+    try next. ``errors_only`` deliberately drops the success-side
+    signals and is the ablation flag for "old-style" defensive advice.
+    """
 
     # Output
     output_dir: str | Path = "runs/blade"
@@ -304,6 +314,12 @@ class BladeOrchestrator:
         self.paradigm_trials: list[ParadigmTrial] = []
         self.recent_trials: deque[str] = deque(maxlen=6)
         self.error_buffer: deque[tuple[str, float, str]] = deque(maxlen=64)
+        # Separate signal streams for the meta-advisor. Kept independent of
+        # ``error_buffer`` (which feeds the repair operator and is drained
+        # by ``popleft``) so that the advisor sees a stable rolling window
+        # of recent admits and recent errors with their source operator.
+        self._advisor_admits: deque[tuple[str, float, float | None]] = deque(maxlen=12)
+        self._advisor_errors: deque[tuple[str, str]] = deque(maxlen=64)
 
         self.start_time: float = 0.0
         self.stop_event = asyncio.Event()
@@ -441,6 +457,8 @@ class BladeOrchestrator:
 
     def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None) -> None:
         self.monitor.record_eval(score=score, accepted=False)
+        if error_msg:
+            self._advisor_errors.append((source, error_msg))
         self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg)
 
     def _log_eval(
@@ -495,6 +513,8 @@ class BladeOrchestrator:
         accepted, reason = self.archive.add(program)
         self.monitor.record_eval(score=score, accepted=accepted)
         is_new_best = accepted and score > prev_best
+        if accepted:
+            self._advisor_admits.append((source, score, parent_score))
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best)
         if not accepted and reason == "dropped_worse":
             logger.debug("[BLADE] dropped score=%.4f did not beat cell incumbent", score)
@@ -1265,13 +1285,55 @@ class BladeOrchestrator:
     # ------------------------------------------------------------------
 
     def _recent_error_messages(self, n: int = 5) -> list[str]:
+        """Legacy accessor — kept for backwards compatibility with any
+        caller outside the orchestrator. The advisor itself now consumes
+        ``_advisor_errors`` directly so it sees the ``source`` operator."""
         if not self.error_buffer:
             return []
         items = list(self.error_buffer)[-n:]
         return [msg for (_code, _parent_score, msg) in items]
 
+    def _top_descriptions_for_advisor(self, k: int = 3) -> list[tuple[str, float]]:
+        """Top-K archived programs by score — descriptions + scores only."""
+        programs = list(self.archive.programs())
+        programs.sort(key=lambda p: p.score, reverse=True)
+        out: list[tuple[str, float]] = []
+        for p in programs[:k]:
+            desc = (p.description or "").strip()
+            if desc:
+                out.append((desc, float(p.score)))
+        return out
+
+    def _recent_admits_for_advisor(self, n: int = 8) -> list[tuple[str, float, float | None]]:
+        """Last ``n`` admits as ``(source, score, delta_vs_parent or None)``."""
+        items = list(self._advisor_admits)[-n:]
+        rows: list[tuple[str, float, float | None]] = []
+        for source, score, parent_score in items:
+            if parent_score is None or not math.isfinite(parent_score):
+                delta: float | None = None
+            else:
+                delta = float(score - parent_score)
+            rows.append((source, float(score), delta))
+        return rows
+
+    def _errors_by_source_for_advisor(self, n: int = 20) -> list[tuple[str, str]]:
+        """Last ``n`` ``(source, error_message)`` pairs since the previous
+        advisor trigger, used to build the typed error taxonomy."""
+        return list(self._advisor_errors)[-n:]
+
     async def _generate_meta_advice(self) -> None:
         cfg = self.config
+        # If the advisor mode is "errors_only" we deliberately drop the
+        # success-side signal (top descriptions + recent admits). This
+        # reproduces the pre-improvement behavior and is what the
+        # ``--meta-advice-mode errors_only`` ablation flips on.
+        if getattr(cfg, "meta_advice_mode", "rich") == "errors_only":
+            top_desc: list[tuple[str, float]] = []
+            admits: list[tuple[str, float, float | None]] = []
+        else:
+            top_desc = self._top_descriptions_for_advisor(k=3)
+            admits = self._recent_admits_for_advisor(n=8)
+        errors = self._errors_by_source_for_advisor(n=20)
         prompt = build_meta_advice_prompt(
             problem_description=cfg.problem_description,
             function_signature=cfg.function_signature,
@@ -1279,7 +1341,9 @@ class BladeOrchestrator:
             n_evaluations=self.monitor.eval_count,
             accept_rate=self.monitor.acceptance_rate(),
             stagnation_level=self.monitor.stagnation_level(),
-            recent_errors=self._recent_error_messages(5),
+            top_descriptions=top_desc,
+            recent_admits=admits,
+            errors_by_source=errors,
             previous_advice=self.current_meta_advice,
         )
         try:
@@ -1298,6 +1362,11 @@ class BladeOrchestrator:
         if len(text) > 1200:
             text = text[:1200].rstrip() + "…"
         self.current_meta_advice = text
+        # Clear the per-window error queue so the next advisor cycle sees
+        # a fresh taxonomy. Admits intentionally keep their rolling window
+        # so the advisor can spot operators that are *consistently*
+        # productive across cycles.
+        self._advisor_errors.clear()
         logger.info("[BLADE advisor] new advice (%d chars) at eval=%d", len(text), self.monitor.eval_count)
 
     async def _meta_advice_monitor(self) -> None:
@@ -1358,6 +1427,8 @@ class BladeOrchestrator:
             "meta_advice": {
                 "enabled": self.config.enable_meta_advice,
                 "interval": self.config.meta_advice_interval,
+                "mode": self.config.meta_advice_mode,
+                "inject_p": self.config.meta_advice_inject_p,
                 "trigger_count": self.meta_advice_trigger_count,
                 "current": self.current_meta_advice,
             },

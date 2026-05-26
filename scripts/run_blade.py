@@ -134,6 +134,12 @@ def _parse_args() -> argparse.Namespace:
         "--meta-advice-interval", type=int, default=50, metavar="N",
         help="Refresh meta-advice every N evaluations (default: 50).",
     )
+    p.add_argument(
+        "--meta-advice-mode", choices=("rich", "errors_only"), default="rich",
+        help="`rich` (default) gives the advisor top-K descriptions + recent "
+        "admits with score-delta + typed error taxonomy. `errors_only` is the "
+        "paper ablation — drops the success-side signals.",
+    )
 
     # ------------------------------------------------------------------
     # Targeted-mutate analyzer (Đề xuất 1) — review of top-ranked parents.
@@ -153,7 +159,19 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--p-targeted-mutate", type=float, default=None, metavar="P",
         help="Probability of using TARGETED_MUTATE_PROMPT when an analysis is "
-        "cached for the chosen parent (default 0.5).",
+        "cached for the chosen parent (default 0.7).",
+    )
+
+    # ------------------------------------------------------------------
+    # Operator-mix ablation (paper).
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-crossover", action="store_true",
+        help="Ablation: drop crossover entirely (sets p_crossover=0.0).",
+    )
+    p.add_argument(
+        "--p-crossover", type=float, default=None, metavar="P",
+        help="Override crossover probability (default 0.35).",
     )
 
     # ------------------------------------------------------------------
@@ -321,6 +339,12 @@ def main() -> int:
     if args.p_targeted_mutate is not None:
         overrides["p_targeted_mutate"] = args.p_targeted_mutate
 
+    overrides["meta_advice_mode"] = args.meta_advice_mode
+    if args.no_crossover:
+        overrides["p_crossover"] = 0.0
+    elif args.p_crossover is not None:
+        overrides["p_crossover"] = args.p_crossover
+
     if args.paradigm_synthesis_max_stagnation is not None:
         overrides["paradigm_synthesis_max_stagnation"] = args.paradigm_synthesis_max_stagnation
     if args.paradigm_shift_max_stagnation is not None:
@@ -393,6 +417,12 @@ def main() -> int:
             "ast_only": args.ast_only,
             "emb_only": args.emb_only,
             "static_cells": args.static_cells,
+            "no_meta_advice": args.no_meta_advice,
+            "meta_advice_mode": args.meta_advice_mode,
+            "no_targeted_mutate": args.no_targeted_mutate,
+            "no_repair": args.no_repair,
+            "no_crossover": args.no_crossover,
+            "p_crossover": args.p_crossover,
         },
         "budget": {
             "evaluations": evals,

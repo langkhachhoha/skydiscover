@@ -56,7 +56,13 @@ __all__ = [
     "build_init_variant_prompt",
     "build_paradigm_variant_prompt",
     "build_meta_advice_prompt",
+    "classify_error",
 ]
+
+
+def classify_error(msg: str) -> str:
+    """Public wrapper around :func:`_classify_error`. See module docs."""
+    return _classify_error(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -814,17 +820,30 @@ def build_init_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Meta-advisor — unchanged.
+# Meta-advisor
+#
+# The advisor periodically writes a short prescriptive note that future
+# mutation prompts include verbatim. The prompt is split into three
+# sections by design (What's working / What to try next / What to avoid)
+# because earlier versions that only fed in raw failure messages produced
+# defensive-only output ("avoid X", "clamp Y") and never told the model
+# which existing approach to amplify. By forcing a "what's working"
+# bucket and feeding in (a) descriptions of the top archived programs,
+# (b) recent admits with their parent-delta and source operator, and
+# (c) a small typed error taxonomy, the advisor sees both success and
+# failure signal and can issue actionable forward-looking guidance.
 # ---------------------------------------------------------------------------
 
 
 META_ADVICE_PROMPT = """\
 # Lessons-Learned Advisor
 
-You are reviewing the last batch of attempts on this optimisation problem.
-Output a SHORT (3-5 sentences) note that future mutation prompts will
-include verbatim. Focus on what to AVOID and what to TRY next — concrete,
-prescriptive, code-shaped.
+You are reviewing the search trajectory on this optimisation problem and
+writing a short prescriptive note that the mutation model will read
+verbatim before each future attempt. Your job is NOT to restate the
+problem or repeat constraints the grader already enforces — it is to
+amplify what is working, point at the next concrete thing to try, and
+call out the few anti-patterns that are actually costing evaluations.
 
 ## Problem
 {problem_description}
@@ -840,32 +859,120 @@ prescriptive, code-shaped.
 - Accept rate (last window): {accept_rate}
 - Stagnation level: {stagnation_level} (0=fresh, 1=plateaued)
 
-## Recent failure modes (top error messages, tail-truncated)
-{error_block}
+## Top archived programs (descriptions only — these are the leaders)
+{top_descriptions_block}
+
+## Recent admits (which operators are paying off, with score delta vs parent)
+{recent_admits_block}
+
+## Recent failure taxonomy (errors grouped by type, this window)
+{error_taxonomy_block}
 
 ## Previous advice (carried over so you can refine, not repeat)
 {previous_advice_block}
 
 ## Your task
-Write the new advice block. No preamble, no markdown headers — just the
-prescriptive prose. Examples of the kind of advice that's useful:
-"Avoid recursion that can exceed Python's default depth on inputs > 1k;
-prefer an explicit stack." or "Several attempts crashed on empty input;
-add a guard for `n == 0` returning the trivial solution."
+Write the new advice block using EXACTLY these three short sections, in
+this order, with these literal headers and no other markdown:
 
-Keep it under 100 words. Do NOT restate the problem.
+WORKING: <1-2 sentences naming the concrete approach / structure / trick
+that the leaders share. Cite the operator (mutate_focused_fix,
+crossover_component_swap, …) when one is clearly dominating admits. If
+nothing is clearly working yet, say so plainly.>
+
+TRY NEXT: <2-3 short imperative suggestions, ordered by priority. Be
+code-shaped (mention specific data structures, algorithms, numerical
+ranges, library calls). Build on WORKING — do NOT propose a tangent.>
+
+AVOID: <1-2 anti-patterns that have actually shown up in this window's
+failures, referencing the taxonomy. Skip generic defensive advice
+(constraint checks that the grader already enforces, type validations,
+etc.) unless they appear repeatedly here.>
+
+Total length: under 120 words. No preamble. No extra headers. No bullet
+characters — write each section as a single short paragraph after its
+header.
 """
 
 
-def _error_block(recent_errors: Sequence[str]) -> str:
-    if not recent_errors:
-        return "(none in this period)"
+_ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("timeout", ("timeout", "exceeded", "timed out")),
+    ("syntax", ("syntaxerror", "invalid syntax", "invalid character", "unexpected eof")),
+    ("constraint", ("overlap", "not contained", "negative radius", "infeasible", "violat")),
+    ("shape_mismatch", ("broadcast", "shape", "dimension", "size mismatch", "too many indices", "at least 2-d")),
+    ("numpy_api", ("minimum() takes", "minimum() got", "unexpected keyword", "positional argument", "ufunc")),
+    ("name_or_attr", ("not defined", "has no attribute", "is not associated", "nonetype")),
+    ("type_error", ("unsupported operand", "must be", "expected", "argument", "cannot")),
+)
+
+
+def _classify_error(msg: str) -> str:
+    low = msg.lower()
+    for label, keys in _ERROR_PATTERNS:
+        for k in keys:
+            if k in low:
+                return label
+    return "other"
+
+
+def _error_taxonomy_block(errors_by_source: Sequence[tuple[str, str]]) -> str:
+    """Group errors into (kind, source) buckets with counts + one example.
+
+    ``errors_by_source`` is a sequence of ``(source, error_message)`` tuples
+    from the current window. We aggregate counts per error kind and remember
+    the most-recent message of each kind as the human-readable example.
+    """
+    if not errors_by_source:
+        return "(no failures in this window)"
+    buckets: dict[str, dict[str, object]] = {}
+    for src, msg in errors_by_source:
+        kind = _classify_error(msg or "")
+        b = buckets.setdefault(kind, {"count": 0, "sources": {}, "example": ""})
+        b["count"] = int(b["count"]) + 1
+        srcs = b["sources"]
+        assert isinstance(srcs, dict)
+        srcs[src] = int(srcs.get(src, 0)) + 1
+        clean = (msg or "").strip().replace("\n", " ")
+        if len(clean) > 160:
+            clean = clean[:160].rstrip() + "…"
+        b["example"] = clean
+    rows = sorted(buckets.items(), key=lambda kv: -int(kv[1]["count"]))
+    lines: list[str] = []
+    for kind, b in rows:
+        srcs = b["sources"]
+        assert isinstance(srcs, dict)
+        src_str = ", ".join(f"{s}×{c}" for s, c in sorted(srcs.items(), key=lambda kv: -kv[1]))
+        lines.append(f"- {kind} ×{b['count']}  [{src_str}]  e.g.: {b['example']}")
+    return "\n".join(lines)
+
+
+def _top_descriptions_block(top_descriptions: Sequence[tuple[str, float]]) -> str:
+    """Render top-K archived programs by score, descriptions only."""
+    if not top_descriptions:
+        return "(archive empty)"
     parts: list[str] = []
-    for i, e in enumerate(recent_errors[:5], start=1):
-        s = (e or "").strip().replace("\n", " ")
-        if len(s) > 200:
-            s = s[:200] + "…"
-        parts.append(f"{i}. {s}")
+    for i, (desc, score) in enumerate(top_descriptions, start=1):
+        d = (desc or "").strip().replace("\n", " ")
+        if len(d) > 280:
+            d = d[:280].rstrip() + "…"
+        parts.append(f"{i}. (score={score:.4f}) {d}")
+    return "\n".join(parts)
+
+
+def _recent_admits_block(
+    recent_admits: Sequence[tuple[str, float, float | None]],
+) -> str:
+    """Render recent admits as ``source | score | Δ vs parent``."""
+    if not recent_admits:
+        return "(no admits in this window)"
+    parts: list[str] = []
+    for source, score, delta in recent_admits:
+        if delta is None or not math.isfinite(delta):
+            delta_str = "Δ=n/a"
+        else:
+            sign = "+" if delta >= 0 else ""
+            delta_str = f"Δ={sign}{delta:.4f}"
+        parts.append(f"- {source:<26}  score={score:.4f}  {delta_str}")
     return "\n".join(parts)
 
 
@@ -877,9 +984,20 @@ def build_meta_advice_prompt(
     n_evaluations: int,
     accept_rate: float,
     stagnation_level: float,
-    recent_errors: Sequence[str],
-    previous_advice: str | None,
+    top_descriptions: Sequence[tuple[str, float]] = (),
+    recent_admits: Sequence[tuple[str, float, float | None]] = (),
+    errors_by_source: Sequence[tuple[str, str]] = (),
+    previous_advice: str | None = None,
 ) -> str:
+    """Build the advisor prompt.
+
+    ``top_descriptions``  -- ``[(description, score), ...]`` for the top-K
+                              archived programs (typically K=3).
+    ``recent_admits``     -- ``[(source, score, delta_vs_parent or None),
+                              ...]`` for the last few admits in this window.
+    ``errors_by_source``  -- ``[(source, error_message), ...]`` from this
+                              window; will be classified and aggregated.
+    """
     if best_score == float("-inf") or not math.isfinite(best_score):
         best_score_str = "n/a"
     else:
@@ -893,7 +1011,9 @@ def build_meta_advice_prompt(
         n_evaluations=n_evaluations,
         accept_rate=f"{accept_rate:.2f}",
         stagnation_level=f"{stagnation_level:.2f}",
-        error_block=_error_block(recent_errors),
+        top_descriptions_block=_top_descriptions_block(top_descriptions),
+        recent_admits_block=_recent_admits_block(recent_admits),
+        error_taxonomy_block=_error_taxonomy_block(errors_by_source),
         previous_advice_block=previous_block,
     )
 
