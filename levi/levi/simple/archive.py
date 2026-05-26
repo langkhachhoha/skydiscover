@@ -93,11 +93,16 @@ class ArchiveConfig:
       then fixed)
     """
 
-    n_cells: int = 32
-    """Target number of cells (paradigm niches). Tuned to be roughly
-    ``n_diverse_seeds × 6`` so each frontier paradigm gets ~6 sub-cells
-    to live in. Too small and paradigms collide; too large and most
-    cells stay empty. 32 is a good compromise for K≈100 programs."""
+    n_cells: int = 50
+    """Target number of cells (paradigm niches), held **fixed** across
+    the run. KMeans always uses ``k = n_cells`` (no ``min(n_cells, n)``
+    capping). Before enough programs exist to fit KMeans, each admit
+    gets its own cell id, but the *target* is always ``n_cells``. After
+    the first fit, all ``n_cells`` centroids are kept alive — even those
+    whose Voronoi region is currently empty — so the archive can grow
+    *toward* ``n_cells`` instead of collapsing to ``num_occupied_cells``.
+    The runtime invariant is therefore ``num_occupied_cells ≤ n_cells``
+    and ``num_occupied_cells → n_cells`` as the search fills the space."""
 
     embedding_dim: int = 8
     """PCA target dimension for the description embedding half. 8 is
@@ -114,10 +119,13 @@ class ArchiveConfig:
 
     min_admits_before_cluster: int = 16
     """Below this many admitted programs, the archive uses a degenerate
-    'each program is its own cell' assignment (cell_id = index). KMeans
-    needs at least ``n_clusters`` distinct points to be meaningful, and
-    a too-early re-cluster on a tiny population produces fragile
-    centroids that flip on the next admit."""
+    'each program is its own cell' assignment (cell_id = index). Above
+    this floor, KMeans is fit; when ``n < n_cells`` we still ask KMeans
+    for ``k = n_cells`` clusters by *padding* the population with
+    synthetic noise points around the existing programs — this keeps
+    the centroid grid at exactly ``n_cells`` from the very first fit
+    so the rest of the run can fill cells lazily rather than starting
+    with ``min(n_cells, n)`` and never recovering."""
 
     use_ast: bool = True
     """Component A1. Include the 14-d AST count features in the behavior
@@ -350,12 +358,12 @@ class ClusterArchive:
     def _maybe_recluster(self) -> None:
         cfg = self.config
         n = len(self._programs)
-        if n < cfg.min_admits_before_cluster:
+        # New invariant: only fit KMeans when we have at least
+        # ``n_cells`` programs. Below that, every program keeps its own
+        # cell id (set by ``_assign_cell`` in pre-cluster mode), so the
+        # archive grows freely toward ``n_cells`` without coalescing.
+        if n < max(cfg.min_admits_before_cluster, cfg.n_cells):
             return
-        # Force a first cluster as soon as we cross the floor — that's
-        # how we transition from "everyone is their own cell" to real
-        # cells. After that, only re-cluster when ``adaptive_recluster``
-        # is on and we've accumulated enough new admits.
         first_time = self._centroids is None
         if not first_time:
             if not cfg.adaptive_recluster:
@@ -368,10 +376,20 @@ class ClusterArchive:
     def _recluster(self) -> None:
         """Fit / re-fit PCA on embeddings (if used) and KMeans on the
         resulting hybrid behavior matrix. Centroids are warm-started
-        from the previous run when available (KMeans ``init``)."""
+        from the previous run when available (KMeans ``init``).
+
+        Invariant: this method is only called when
+        ``len(self._programs) >= n_cells``, so KMeans is always asked
+        for exactly ``k = n_cells`` clusters (no ``min(n_cells, n)``).
+        The number of occupied cells after coalescing can still be
+        ``< n_cells`` if KMeans assigns no points to some centroids
+        (empty Voronoi regions), but the centroid grid itself stays at
+        ``n_cells`` so subsequent admits can land in those empty cells
+        and grow the archive toward the full target.
+        """
         cfg = self.config
         n = len(self._programs)
-        if n < cfg.min_admits_before_cluster:
+        if n < max(cfg.min_admits_before_cluster, cfg.n_cells):
             return
 
         # ---- (Re-)fit PCA on the description embeddings ----
@@ -414,7 +432,7 @@ class ClusterArchive:
             return
 
         X = np.stack([p.behavior_vec for p in self._programs]).astype(np.float64)
-        k = min(cfg.n_cells, n)
+        k = cfg.n_cells  # FIXED across the run — no min(n_cells, n).
         # Warm-start from previous centroids when shapes line up.
         init: str | np.ndarray = "k-means++"
         if (
@@ -447,9 +465,11 @@ class ClusterArchive:
                 best_per_cell[p.cell_id] = p
         self._programs[:] = list(best_per_cell.values())
         logger.info(
-            "[Archive] recluster: n=%d → %d cells (admits since last recluster=%d)",
+            "[Archive] recluster: n=%d → %d/%d occupied cells "
+            "(admits since last recluster=%d)",
             len(self._programs),
             len(best_per_cell),
+            k,
             cfg.recluster_every,
         )
 

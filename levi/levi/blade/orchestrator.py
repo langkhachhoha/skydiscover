@@ -61,14 +61,19 @@ from ..simple.parser import fallback_summarize
 from ..utils.evaluation import evaluate_code
 from ..utils.resilient_pool import ResilientProcessPool
 from .prompts import (
+    PromptSampler,
+    build_analysis_prompt,
     build_crossover_prompt,
     build_diverse_seed_prompt,
     build_init_variant_prompt,
     build_meta_advice_prompt,
     build_mutate_prompt,
-    build_paradigm_prompt,
+    build_paradigm_shift_prompt,
     build_paradigm_variant_prompt,
     build_repair_prompt,
+    build_surgical_exploit_prompt,
+    build_synthesis_prompt,
+    build_targeted_mutate_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,6 +156,54 @@ class BladeConfig:
     loop. The rank sampler already adapts its β to stagnation, which
     covers the explore/exploit trade-off; an extra 'healthy vs stuck'
     switch produced no measurable benefit in prior versions."""
+
+    # Targeted-mutate analyzer (Đề xuất 1 — analyse-then-mutate)
+    enable_targeted_mutate: bool = True
+    """Master toggle for the LLM-generated parent analysis pipeline.
+    When on, the orchestrator periodically asks the mutation model for
+    a short 'strengths / weaknesses / suggested changes' review of the
+    top-ranked programs, caches it, and (with probability
+    ``p_targeted_mutate``) injects it into a separate
+    :data:`TARGETED_MUTATE_PROMPT` instead of the standard mutate
+    prompt."""
+
+    analyzer_interval: int = 30
+    """Refresh cached analyses every N evaluations."""
+
+    analyzer_top_k: int = 3
+    """How many top-ranked (by score) programs to analyse each refresh.
+    Analyses are keyed by ``id(program)`` and reused across many
+    mutations of the same parent until the parent leaves the top-K."""
+
+    analyzer_temperature: float = 0.3
+    analyzer_max_tokens: int = 500
+
+    p_targeted_mutate: float = 0.5
+    """Probability of choosing :data:`TARGETED_MUTATE_PROMPT` when the
+    chosen parent has a cached analysis. When no cached analysis is
+    available the orchestrator falls back to the standard mutate
+    sampler regardless of this probability."""
+
+    # Paradigm-shift mode thresholds (Đề xuất 8 — three-mode shift)
+    paradigm_synthesis_max_stagnation: float = 0.4
+    """At or below this stagnation level the paradigm shift picks the
+    ``synthesis`` mode (combine 2-3 close-in-score anchors)."""
+
+    paradigm_shift_max_stagnation: float = 0.7
+    """Above ``paradigm_synthesis_max_stagnation`` and at or below this
+    threshold the paradigm shift picks the ``shift`` mode (propose a
+    fundamentally new paradigm class). Above this threshold the shift
+    flips to ``surgical`` mode (focus on the champion alone)."""
+
+    paradigm_synthesis_n_anchors: int = 3
+    """Number of anchors surfaced in synthesis mode (2 or 3)."""
+
+    paradigm_shift_n_anchors: int = 2
+    """Number of anchors surfaced in shift mode."""
+
+    paradigm_surgical_n_inspirations: int = 5
+    """Description-only inspirations passed to surgical mode in
+    addition to the single (champion) anchor."""
 
     # Repair (one-shot per error candidate)
     enable_repair: bool = True
@@ -264,6 +317,14 @@ class BladeOrchestrator:
         self.meta_advice_trigger_count: int = 0
         self._meta_advice_lock = asyncio.Lock()
 
+        # Targeted-mutate analyzer state (Đề xuất 1).
+        self.prompt_sampler = PromptSampler()
+        self._analysis_cache: dict[int, str] = {}
+        self._analysis_lock = asyncio.Lock()
+        self.last_analyzer_eval_count: int = 0
+        self.analyzer_trigger_count: int = 0
+        self.targeted_mutate_count: int = 0
+
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -364,9 +425,17 @@ class BladeOrchestrator:
         return score, result, None
 
     def _model_label(self, source: str) -> str:
-        paradigm_sources = {"paradigm"}
+        # Anything that came out of the frontier paradigm call uses the
+        # paradigm model. Currently those sources are: "paradigm" (the
+        # canonical Program.source for an admitted paradigm seed) and
+        # "paradigm_<mode>" (the per-mode label we record on rejects so
+        # the run log keeps each mode's failure rate separable).
+        is_paradigm = source == "paradigm" or source.startswith("paradigm_")
+        # Variant fanout runs on the mutation model — exclude that path.
+        if source.startswith("paradigm_variant"):
+            is_paradigm = False
         model_id = (
-            self.config.paradigm_model if source in paradigm_sources else self.config.mutation_model
+            self.config.paradigm_model if is_paradigm else self.config.mutation_model
         )
         return model_id.rsplit("/", 1)[-1]
 
@@ -476,6 +545,8 @@ class BladeOrchestrator:
                     self.archive.mark_used(p_a)
                     self.archive.mark_used(p_b)
                     insps = self._pick_inspirations([p_a, p_b])
+                    _label, template = self.prompt_sampler.pick_crossover(self._rng)
+                    op = f"crossover_{_label}"
                     prompt = build_crossover_prompt(
                         problem_description=self.config.problem_description,
                         function_signature=self.config.function_signature,
@@ -483,6 +554,7 @@ class BladeOrchestrator:
                         parent_b_code=p_b.code, parent_b_score=p_b.score,
                         inspirations=insps,
                         meta_advice=self._pick_meta_advice(),
+                        template=template,
                     )
                     parent_score = max(p_a.score, p_b.score)
                 else:
@@ -490,13 +562,36 @@ class BladeOrchestrator:
                     assert parent is not None
                     self.archive.mark_used(parent)
                     insps = self._pick_inspirations([parent])
-                    prompt = build_mutate_prompt(
-                        problem_description=self.config.problem_description,
-                        function_signature=self.config.function_signature,
-                        parent_code=parent.code, parent_score=parent.score,
-                        inspirations=insps,
-                        meta_advice=self._pick_meta_advice(),
+                    # Targeted-mutate path: only if we have a cached
+                    # analysis for this parent AND the coin flip lands.
+                    cached_analysis = self._analysis_cache.get(id(parent))
+                    use_targeted = (
+                        self.config.enable_targeted_mutate
+                        and cached_analysis is not None
+                        and self._rng.random() < self.config.p_targeted_mutate
                     )
+                    if use_targeted:
+                        self.targeted_mutate_count += 1
+                        op = "mutate_targeted"
+                        prompt = build_targeted_mutate_prompt(
+                            problem_description=self.config.problem_description,
+                            function_signature=self.config.function_signature,
+                            parent_code=parent.code, parent_score=parent.score,
+                            analysis=cached_analysis,
+                            inspirations=insps,
+                            meta_advice=self._pick_meta_advice(),
+                        )
+                    else:
+                        _label, template = self.prompt_sampler.pick_mutate(self._rng)
+                        op = f"mutate_{_label}"
+                        prompt = build_mutate_prompt(
+                            problem_description=self.config.problem_description,
+                            function_signature=self.config.function_signature,
+                            parent_code=parent.code, parent_score=parent.score,
+                            inspirations=insps,
+                            meta_advice=self._pick_meta_advice(),
+                            template=template,
+                        )
                     parent_score = parent.score
 
                 raw = await self._call(self.mutation_lm, prompt, temperature=self.config.llm_temperature)
@@ -550,53 +645,214 @@ class BladeOrchestrator:
         )
 
     # ------------------------------------------------------------------
+    # Analyzer (Đề xuất 1 — review of top-ranked parents)
+    # ------------------------------------------------------------------
+
+    async def _analyze_parent(self, parent: Program) -> str | None:
+        """Generate (or fetch from cache) a short LLM review of *parent*.
+
+        Cached by ``id(parent)`` — re-runs the analysis only when the
+        parent object is brand new in memory. Failed calls return
+        ``None`` and are not cached so a future refresh can retry."""
+        key = id(parent)
+        async with self._analysis_lock:
+            cached = self._analysis_cache.get(key)
+            if cached is not None:
+                return cached
+        prompt = build_analysis_prompt(
+            problem_description=self.config.problem_description,
+            function_signature=self.config.function_signature,
+            parent_code=parent.code,
+            parent_score=parent.score,
+            parent_description=parent.description,
+        )
+        try:
+            text = await self._call(
+                self.mutation_lm, prompt,
+                temperature=self.config.analyzer_temperature,
+                max_tokens=self.config.analyzer_max_tokens,
+            )
+        except Exception:
+            logger.exception("[BLADE analyzer] LLM call failed; skipping this parent")
+            return None
+        text = (text or "").strip()
+        if not text:
+            return None
+        async with self._analysis_lock:
+            self._analysis_cache[key] = text
+            # Evict oldest entries when the cache grows past a sensible
+            # cap. id() reuse is fine here — stale ids simply get
+            # overwritten on the next analysis call.
+            if len(self._analysis_cache) > 64:
+                oldest = next(iter(self._analysis_cache))
+                self._analysis_cache.pop(oldest, None)
+        return text
+
+    async def _refresh_analyses(self) -> None:
+        """Refresh cached analyses for the current top-K programs.
+
+        Drops cache entries whose ``id()`` no longer corresponds to a
+        top-K parent (so the cache doesn't accumulate forever as the
+        archive churns)."""
+        cfg = self.config
+        if not cfg.enable_targeted_mutate:
+            return
+        programs = self.archive.programs()
+        if not programs:
+            return
+        top_k = sorted(programs, key=lambda p: -p.score)[: cfg.analyzer_top_k]
+        top_ids = {id(p) for p in top_k}
+
+        # Drop analyses for parents no longer in top-K.
+        async with self._analysis_lock:
+            stale = [k for k in self._analysis_cache if k not in top_ids]
+            for k in stale:
+                self._analysis_cache.pop(k, None)
+
+        await asyncio.gather(*(self._analyze_parent(p) for p in top_k))
+
+    async def _analyzer_monitor(self) -> None:
+        cfg = self.config
+        if not cfg.enable_targeted_mutate or cfg.analyzer_interval <= 0:
+            logger.info(
+                "[BLADE analyzer] disabled (enable=%s, interval=%d)",
+                cfg.enable_targeted_mutate, cfg.analyzer_interval,
+            )
+            return
+        try:
+            while not self.stop_event.is_set() and not self._budget_exhausted():
+                await asyncio.sleep(2.0)
+                if self.stop_event.is_set() or self._budget_exhausted():
+                    break
+                ec = self.monitor.eval_count
+                if ec > 0 and ec >= self.last_analyzer_eval_count + cfg.analyzer_interval:
+                    self.last_analyzer_eval_count = ec
+                    self.analyzer_trigger_count += 1
+                    logger.info(
+                        "[BLADE analyzer] trigger #%d at eval=%d (refreshing top-%d)",
+                        self.analyzer_trigger_count, ec, cfg.analyzer_top_k,
+                    )
+                    try:
+                        await self._refresh_analyses()
+                    except Exception:
+                        logger.exception("[BLADE analyzer] refresh errored")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("[BLADE analyzer] monitor crashed")
+
+    # ------------------------------------------------------------------
     # Paradigm shift
     # ------------------------------------------------------------------
 
-    def _paradigm_anchors(self) -> list[Program]:
-        """One representative per occupied cell, sorted by score desc,
-        capped at ``paradigm_n_anchors``.
-
-        Cells are already the niche structure of the archive; picking
-        one per cell gives the frontier model exactly the paradigm
-        diversity it needs to synthesise from. No Hall-of-Fame backfill,
-        no cosine threshold, no MMR — those layers dragged in
-        low-quality paradigm seeds and confused the frontier.
-        """
+    def _paradigm_anchors(self, n: int) -> list[Program]:
+        """Top-*n* cell representatives by score, descending."""
         cells = self.archive.cells()
-        return sorted(cells.values(), key=lambda p: -p.score)[: self.config.paradigm_n_anchors]
+        return sorted(cells.values(), key=lambda p: -p.score)[: max(0, n)]
+
+    def _pick_paradigm_mode(self) -> str:
+        """Decide which paradigm-shift mode to fire.
+
+        - synthesis: low stagnation, many close-in-score anchors.
+        - shift:     mid stagnation, search needs a fresh paradigm.
+        - surgical:  high stagnation, exploit the champion further.
+        """
+        cfg = self.config
+        s = self.monitor.stagnation_level()
+        if s <= cfg.paradigm_synthesis_max_stagnation:
+            return "synthesis"
+        if s <= cfg.paradigm_shift_max_stagnation:
+            return "shift"
+        return "surgical"
+
+    def _build_paradigm_prompt_for_mode(
+        self, mode: str
+    ) -> tuple[str, list[Program], list[tuple[str, float]]]:
+        """Assemble (prompt, anchors_used, inspiration_pairs) for *mode*."""
+        cfg = self.config
+        all_cells = list(self.archive.cells().values())
+        all_cells.sort(key=lambda p: -p.score)
+
+        if mode == "synthesis":
+            n_anchors = cfg.paradigm_synthesis_n_anchors
+            anchors = all_cells[:n_anchors]
+            anchor_triples = [(p.code, p.description, p.score) for p in anchors]
+            anchor_ids = {id(p) for p in anchors}
+            insps = [
+                (p.description, p.score)
+                for p in all_cells if id(p) not in anchor_ids
+            ][: cfg.paradigm_n_inspirations]
+            prompt = build_synthesis_prompt(
+                problem_description=cfg.problem_description,
+                function_signature=cfg.function_signature,
+                n_evaluations=self.monitor.eval_count,
+                n_cells=self.archive.num_occupied_cells(),
+                anchors=anchor_triples,
+                inspirations=insps,
+                recent_trials=list(self.recent_trials),
+                stagnation=self.monitor.stagnation_level(),
+            )
+            return prompt, anchors, insps
+
+        if mode == "shift":
+            n_anchors = cfg.paradigm_shift_n_anchors
+            anchors = all_cells[:n_anchors]
+            anchor_triples = [(p.code, p.description, p.score) for p in anchors]
+            anchor_ids = {id(p) for p in anchors}
+            insps = [
+                (p.description, p.score)
+                for p in all_cells if id(p) not in anchor_ids
+            ][: cfg.paradigm_n_inspirations]
+            prompt = build_paradigm_shift_prompt(
+                problem_description=cfg.problem_description,
+                function_signature=cfg.function_signature,
+                n_evaluations=self.monitor.eval_count,
+                n_cells=self.archive.num_occupied_cells(),
+                anchors=anchor_triples,
+                inspirations=insps,
+                recent_trials=list(self.recent_trials),
+                stagnation=self.monitor.stagnation_level(),
+            )
+            return prompt, anchors, insps
+
+        # surgical: 1 anchor (champion), top descriptions as inspiration.
+        anchors = all_cells[:1]
+        anchor_triples = [(p.code, p.description, p.score) for p in anchors]
+        anchor_ids = {id(p) for p in anchors}
+        insps = [
+            (p.description, p.score)
+            for p in all_cells if id(p) not in anchor_ids
+        ][: cfg.paradigm_surgical_n_inspirations]
+        prompt = build_surgical_exploit_prompt(
+            problem_description=cfg.problem_description,
+            function_signature=cfg.function_signature,
+            n_evaluations=self.monitor.eval_count,
+            n_cells=self.archive.num_occupied_cells(),
+            anchors=anchor_triples,
+            inspirations=insps,
+            recent_trials=list(self.recent_trials),
+            stagnation=self.monitor.stagnation_level(),
+        )
+        return prompt, anchors, insps
 
     async def _paradigm_shift(self) -> None:
         cfg = self.config
         if self.archive.num_occupied_cells() < cfg.paradigm_min_archive_size:
             return
 
-        anchors = self._paradigm_anchors()
-        anchor_triples = [(p.code, p.description, p.score) for p in anchors]
+        mode = self._pick_paradigm_mode()
+        prompt, anchors, _insps = self._build_paradigm_prompt_for_mode(mode)
         for p in anchors:
             self.archive.mark_used(p)
 
-        # Inspirations: top-K (by score) cell representatives not in
-        # the anchor set.
-        inspiration_pairs: list[tuple[str, float]] = []
-        if cfg.paradigm_n_inspirations > 0:
-            anchor_ids = {id(p) for p in anchors}
-            others = [p for p in self.archive.cells().values() if id(p) not in anchor_ids]
-            others.sort(key=lambda p: -p.score)
-            for p in others[: cfg.paradigm_n_inspirations]:
-                inspiration_pairs.append((p.description, p.score))
-
         prev_best = self.monitor.best_score
-        prompt = build_paradigm_prompt(
-            problem_description=cfg.problem_description,
-            function_signature=cfg.function_signature,
-            n_evaluations=self.monitor.eval_count,
-            n_cells=self.archive.num_occupied_cells(),
-            anchors=anchor_triples,
-            inspirations=inspiration_pairs,
-            recent_trials=list(self.recent_trials),
-            stagnation=self.monitor.stagnation_level(),
+        logger.info(
+            "[BLADE PE] mode=%s anchors=%d stagnation=%.2f best=%.4f",
+            mode, len(anchors), self.monitor.stagnation_level(),
+            prev_best if prev_best != float("-inf") else float("nan"),
         )
+
+        source_label = f"paradigm_{mode}"
 
         # ---- frontier paradigm seed ----
         try:
@@ -607,7 +863,7 @@ class BladeOrchestrator:
             )
         except Exception as e:
             logger.exception("[BLADE PE] frontier call failed; counting as reject")
-            self._record_reject(source="paradigm", error_msg=f"LLM error: {e}")
+            self._record_reject(source=source_label, error_msg=f"LLM error: {e}")
             return
 
         parsed = self.parser.parse(raw)
@@ -619,7 +875,7 @@ class BladeOrchestrator:
             )
             self.paradigm_trials.append(trial)
             self.recent_trials.append(trial.render())
-            self._record_reject(source="paradigm", error_msg="parse_miss (no code in output)")
+            self._record_reject(source=source_label, error_msg="parse_miss (no code in output)")
             return
 
         score, _scores, err = await self._evaluate_code(parsed.code)
@@ -633,7 +889,7 @@ class BladeOrchestrator:
             )
         else:
             self.error_buffer.append((parsed.code, prev_best, err))
-            self._record_reject(source="paradigm", score=score, error_msg=err)
+            self._record_reject(source=source_label, score=score, error_msg=err)
 
         delta = None
         if accepted and prev_best != float("-inf"):
@@ -855,12 +1111,16 @@ class BladeOrchestrator:
                         self.cost.cost, self.monitor.eval_count)
             pe_monitor_task = asyncio.create_task(self._pe_monitor())
             advisor_task = asyncio.create_task(self._meta_advice_monitor())
+            analyzer_task = asyncio.create_task(self._analyzer_monitor())
             try:
                 logger.info("[BLADE] entering evolutionary main loop (n_workers=%d)", cfg.n_workers)
                 await self._main_loop()
             finally:
                 self.stop_event.set()
-                await self._cancel_with_grace([pe_monitor_task, advisor_task], label="pe/advisor")
+                await self._cancel_with_grace(
+                    [pe_monitor_task, advisor_task, analyzer_task],
+                    label="pe/advisor/analyzer",
+                )
         finally:
             self.stop_event.set()
             await self._cancel_with_grace([status_task], label="status")
@@ -1100,6 +1360,22 @@ class BladeOrchestrator:
                 "interval": self.config.meta_advice_interval,
                 "trigger_count": self.meta_advice_trigger_count,
                 "current": self.current_meta_advice,
+            },
+            "analyzer": {
+                "enabled": self.config.enable_targeted_mutate,
+                "interval": self.config.analyzer_interval,
+                "top_k": self.config.analyzer_top_k,
+                "trigger_count": self.analyzer_trigger_count,
+                "targeted_mutate_count": self.targeted_mutate_count,
+                "p_targeted_mutate": self.config.p_targeted_mutate,
+                "cache_size": len(self._analysis_cache),
+            },
+            "paradigm_modes": {
+                "synthesis_max_stagnation": self.config.paradigm_synthesis_max_stagnation,
+                "shift_max_stagnation": self.config.paradigm_shift_max_stagnation,
+                "synthesis_n_anchors": self.config.paradigm_synthesis_n_anchors,
+                "shift_n_anchors": self.config.paradigm_shift_n_anchors,
+                "surgical_n_inspirations": self.config.paradigm_surgical_n_inspirations,
             },
             "paradigm_trials": [
                 {

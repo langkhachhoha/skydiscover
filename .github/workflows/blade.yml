@@ -104,8 +104,13 @@ on:
           problem_module, target_score, embedding_model, eval_processes,
           n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
           n_cells, recluster_every, embedding_dim,
-          repair_disabled, meta_advice_disabled, meta_advice_interval.
-          Example: '{"n_cells":48,"paradigm_n_anchors":5}'
+          repair_disabled, meta_advice_disabled, meta_advice_interval,
+          targeted_mutate_disabled, analyzer_interval, analyzer_top_k,
+          p_targeted_mutate,
+          paradigm_synthesis_max_stagnation, paradigm_shift_max_stagnation,
+          paradigm_synthesis_n_anchors, paradigm_shift_n_anchors,
+          paradigm_surgical_n_inspirations.
+          Example: '{"n_cells":50,"p_targeted_mutate":0.6}'
         required: false
         type: string
         default: ""
@@ -238,6 +243,15 @@ jobs:
           [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
           [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
           [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"
+          [ "$ADV_TARGETED_MUTATE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-targeted-mutate"
+          [ -n "$ADV_ANALYZER_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-interval $ADV_ANALYZER_INTERVAL"
+          [ -n "$ADV_ANALYZER_TOP_K" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-top-k $ADV_ANALYZER_TOP_K"
+          [ -n "$ADV_P_TARGETED_MUTATE" ] && EXTRA_OPTS="$EXTRA_OPTS --p-targeted-mutate $ADV_P_TARGETED_MUTATE"
+          [ -n "$ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-max-stagnation $ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION"
+          [ -n "$ADV_PARADIGM_SHIFT_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-max-stagnation $ADV_PARADIGM_SHIFT_MAX_STAGNATION"
+          [ -n "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-n-anchors $ADV_PARADIGM_SYNTHESIS_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_SHIFT_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-n-anchors $ADV_PARADIGM_SHIFT_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-n-inspirations $ADV_PARADIGM_SURGICAL_N_INSPIRATIONS"
 
           # Ablation toggles (one of: full / ast_only / emb_only / static_cells)
           case "${{ inputs.ablation }}" in

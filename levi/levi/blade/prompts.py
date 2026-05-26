@@ -1,26 +1,56 @@
 """BLADE prompt templates.
 
-Operator prompts (mutate, crossover, repair) used by the small/mutation
-workers, plus thin wrappers around LEVI's :mod:`levi.equilibrium.prompts`
-and :mod:`levi.artifacts.code` strings so the bootstrap and paradigm-shift
-phases reuse LEVI's hard-won prompt engineering.
+Operator prompts used by the mutation / paradigm workers, plus thin
+wrappers around LEVI's :mod:`levi.equilibrium.prompts` and
+:mod:`levi.artifacts.code` strings for the bootstrap phase.
+
+Compared to the previous version, three things changed:
+
+1. **Mutate / crossover prompts ask for explicit analysis first.** The
+   model writes a short ``# Analysis`` section (strengths, weaknesses,
+   chosen target) *before* the code, so it commits to a hypothesis
+   rather than randomly rewriting whatever it sees.
+
+2. **Multiple prompt templates per operator.** Three mutate templates
+   (general improvement, focused weakness fix, mechanism swap) and two
+   crossover templates (structural hybrid, targeted component swap)
+   are exposed via :class:`PromptSampler`. Every call draws one
+   template uniformly at random — no learned weights — so the
+   mutation model sees prompt-level diversity even when the parent
+   pool is narrow. The :data:`TARGETED_MUTATE_PROMPT` is a separate
+   template only used when a cached LLM-generated analysis is
+   available.
+
+3. **Three paradigm-shift modes.** ``build_synthesis_prompt`` (2-3
+   anchors, hybridise close contenders), ``build_paradigm_shift_prompt``
+   (2 anchors, propose a genuinely new paradigm class), and
+   ``build_surgical_exploit_prompt`` (1 anchor = best, top descriptions
+   as inspiration, deep micro-improvement of the current champion).
 """
 
 from __future__ import annotations
 
 import math
+import random
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 
 from ..artifacts.code import DIVERSITY_SEED_PROMPT
 from ..equilibrium.prompts import VARIANT_GENERATION_PROMPT
 from ..simple.parser import OUTPUT_FORMAT_INSTRUCTION
 
 __all__ = [
-    "MUTATE_PROMPT",
-    "CROSSOVER_PROMPT",
+    "MUTATE_PROMPTS",
+    "CROSSOVER_PROMPTS",
+    "TARGETED_MUTATE_PROMPT",
+    "PromptSampler",
     "build_mutate_prompt",
     "build_crossover_prompt",
-    "build_paradigm_prompt",
+    "build_targeted_mutate_prompt",
+    "build_analysis_prompt",
+    "build_synthesis_prompt",
+    "build_paradigm_shift_prompt",
+    "build_surgical_exploit_prompt",
     "build_repair_prompt",
     "build_diverse_seed_prompt",
     "build_init_variant_prompt",
@@ -29,8 +59,82 @@ __all__ = [
 ]
 
 
-MUTATE_PROMPT = """\
-# Mutate
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _inspiration_block(inspirations: Sequence[tuple[str, float]]) -> str:
+    """Render inspirations as ``description + score`` only (no code)."""
+    if not inspirations:
+        return "(no inspirations available yet)"
+    parts: list[str] = []
+    for i, (desc, score) in enumerate(inspirations, start=1):
+        d = (desc or "").strip().replace("\n", " ")
+        if len(d) > 400:
+            d = d[:400].rstrip() + "…"
+        parts.append(f"{i}. (score={score:.3f}) {d}")
+    return "\n".join(parts)
+
+
+def _meta_advice_block(meta_advice: str | None) -> str:
+    """Format the optional meta-advisor lesson block."""
+    if not meta_advice:
+        return ""
+    return f"## Lessons learnt so far\n{meta_advice.strip()}\n\n"
+
+
+# Reminder injected immediately AFTER OUTPUT_FORMAT_INSTRUCTION in every
+# analysis-augmented prompt. The base instruction says "output must
+# contain `## Description` and `## Code` in order" — we extend that
+# contract with an extra `## Analysis` section that comes FIRST and is
+# ignored by the parser (so the embedded description stays a clean
+# 2-4 sentence paragraph). Without this reminder the model tends to
+# either fold the analysis bullets into `## Description` (which then
+# corrupts the embedding used for cell assignment) or skip them
+# entirely.
+ANALYSIS_OUTPUT_ORDER_HINT = """\
+
+## Output sections (final reminder)
+Your output MUST contain THREE sections, in this exact order:
+
+1. ``## Analysis`` — the structured reasoning requested above. This
+   section is read by the model on subsequent passes but is NOT used
+   to embed the program into the search archive.
+2. ``## Description`` — the short paragraph defined by the output
+   format spec above (2-4 sentences, ≤ 80 words, plain prose, no
+   bullet points). This IS what the archive embeds, so do not paste
+   the analysis bullets here.
+3. ``## Code`` — the fenced ```python``` program block.
+
+Do not merge sections. Do not skip ``## Description``.
+"""
+
+
+def _anchor_block(anchors: Sequence[tuple[str, str, float]]) -> str:
+    """Render anchor representatives with full code + description."""
+    if not anchors:
+        return "(no anchors available yet)"
+    parts: list[str] = []
+    for i, (code, desc, score) in enumerate(anchors, start=1):
+        d = (desc or "").strip().replace("\n", " ")
+        if len(d) > 400:
+            d = d[:400].rstrip() + "…"
+        parts.append(
+            f"#### Anchor {i} (score={score:.4f})\n"
+            f"_Description_: {d or '(no description)'}\n"
+            f"```python\n{code}\n```"
+        )
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Mutate prompt templates — three variants, all ask for explicit analysis.
+# ---------------------------------------------------------------------------
+
+
+MUTATE_PROMPT_GENERAL = """\
+# Mutate — Improvement Pass
 
 ## Problem
 {problem_description}
@@ -51,22 +155,217 @@ Score: {parent_score:.4f}
 
 {meta_advice_block}\
 ## Your task
-Write an improved version of the parent.
-Treat the inspirations as ideas to draw from — do NOT copy their code (you
-do not have it). Keep what works in the parent, change what doesn't.
+
+Write an **improved** version of the parent. Before producing the
+final output, write a ``## Analysis`` section (it is for your own
+reasoning — the search system ignores it for archiving but reads it
+back to you on future passes). It must have these four short
+sub-sections:
+
+1. **Components.** List the 3-5 main components / phases of the
+   parent program (e.g. "initialisation grid", "outer SA loop",
+   "neighbour move", "feasibility repair", "shrink step"). One line
+   each.
+2. **Strengths.** Which of those components are clearly working —
+   i.e. you would NOT change them?
+3. **Weaknesses.** Which component is most likely the reason the
+   score is not higher? Cite the specific variable, constant, or
+   routine.
+4. **Plan.** One sentence: what concrete change you will make in the
+   new program (e.g. "replace the linear cooling schedule in
+   `cool()` with a geometric one, leave the rest unchanged").
+
+Then write the improved program. Keep what works in the parent,
+change what doesn't. Treat the inspirations as ideas only — you do
+not have their code, so do not copy.
 
 ### Critical requirements
-1  Function signature MUST match exactly: `{function_signature}`
+1. Function signature MUST match exactly: `{function_signature}`
 2. Include ALL necessary imports at the top of your code
-3. The function signature must match exactly what is specified
-4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
+3. No syntax errors (matching parentheses, quotes, indentation)
+4. The complete, self-contained program goes inside one ```python``` fence
 
 {format_instruction}
+{analysis_output_order_hint}\
 """
 
 
-CROSSOVER_PROMPT = """\
-# Crossover
+MUTATE_PROMPT_FOCUSED_FIX = """\
+# Mutate — Focused Weakness Fix
+
+## Problem
+{problem_description}
+
+## Function signature
+```python
+{function_signature}
+```
+
+## Parent solution
+Score: {parent_score:.4f}
+```python
+{parent_code}
+```
+
+## Inspirations (paradigm sketches from the archive — descriptions only)
+{inspirations_block}
+
+{meta_advice_block}\
+## Your task
+
+The parent is mostly working. Your job is to **pick exactly ONE
+weakness** and fix it surgically — leave everything else untouched.
+
+First, write a ``## Analysis`` section with exactly these three
+sub-sections:
+
+1. **Tightest constraint.** What is the single most limiting factor
+   in the parent's score? Be specific: name the variable / loop /
+   constant. Examples: "the SA cooling rate decays too fast at
+   step≈5000, premature freeze", "the perimeter-projection step
+   shrinks all circles uniformly, wasting slack", "the initial hex
+   grid leaves a triangular gap at the top-right corner".
+2. **Fix.** The minimum change that addresses (1). One sentence.
+3. **Preserved.** A 1-line confirmation of which top-level routines
+   remain byte-for-byte identical to the parent.
+
+Then output the program implementing exactly that one change. Do NOT
+also retune unrelated constants. Do NOT also add new helper functions
+unless they are the fix itself.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. No syntax errors
+4. The complete, self-contained program goes inside one ```python``` fence
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
+
+
+MUTATE_PROMPT_MECHANISM_SWAP = """\
+# Mutate — Mechanism Swap
+
+## Problem
+{problem_description}
+
+## Function signature
+```python
+{function_signature}
+```
+
+## Parent solution
+Score: {parent_score:.4f}
+```python
+{parent_code}
+```
+
+## Inspirations (paradigm sketches from the archive — descriptions only)
+{inspirations_block}
+
+{meta_advice_block}\
+## Your task
+
+The parent has one or more **interchangeable mechanisms** — places
+where a different algorithmic choice could fit the same slot. Identify
+one such mechanism and **swap it** for a better alternative. The
+overall algorithm class stays the same; one sub-mechanism changes.
+
+Examples of valid mechanism swaps:
+- replace random uniform initialisation with a quasi-random sequence
+- swap fixed step size for line search
+- replace greedy neighbour acceptance with Metropolis acceptance
+- swap a `while` convergence test for a `for` budgeted loop
+
+First, write a ``## Analysis`` section with exactly these three
+sub-sections:
+
+1. **Mechanism identified.** Which slot in the parent are you
+   targeting? Quote the function / block name.
+2. **Old vs new.** "Currently uses X; replacing with Y because Z."
+3. **Risk.** One sentence on what could go wrong with the swap and
+   how the new code guards against it.
+
+Then write the program. The signature, the I/O contract, and the rest
+of the parent's structure must remain stable — only the swapped
+mechanism changes.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. No syntax errors
+4. The complete, self-contained program goes inside one ```python``` fence
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
+
+
+# Targeted mutation — only fired when an LLM-generated analysis already
+# exists for this parent (see :meth:`BladeOrchestrator._analyze_parent`).
+TARGETED_MUTATE_PROMPT = """\
+# Targeted Mutate (analysis-guided)
+
+## Problem
+{problem_description}
+
+## Function signature
+```python
+{function_signature}
+```
+
+## Parent solution
+Score: {parent_score:.4f}
+```python
+{parent_code}
+```
+
+## Analysis of this parent (produced earlier by a review pass)
+{analysis}
+
+## Inspirations (paradigm sketches from the archive — descriptions only)
+{inspirations_block}
+
+{meta_advice_block}\
+## Your task
+
+Read the analysis above and pick **one** of the suggested changes —
+the one you judge most likely to actually increase the score on this
+problem. Implement exactly that change.
+
+First, write a ``## Analysis`` section with exactly these three
+sub-sections:
+
+1. **Chosen bottleneck.** Quote the bottleneck from the analysis
+   above that you are targeting.
+2. **Implementation plan.** One sentence describing the concrete
+   code change.
+3. **What stays unchanged.** A short list of routines / constants
+   you are keeping byte-for-byte identical to the parent.
+
+Then write the improved program. Do NOT change everything — make
+exactly ONE structural change. The rest of the parent is, by
+assumption, already doing its job.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. No syntax errors
+4. The complete, self-contained program goes inside one ```python``` fence
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
+
+
+# ---------------------------------------------------------------------------
+# Crossover prompt templates — two variants.
+# ---------------------------------------------------------------------------
+
+
+CROSSOVER_PROMPT_STRUCTURAL = """\
+# Crossover — Structural Hybrid
 
 ## Problem
 {problem_description}
@@ -93,18 +392,298 @@ Score: {parent_b_score:.4f}
 
 {meta_advice_block}\
 ## Your task
-Produce a **hybrid solution** that combines the strongest mechanisms of
-both parents while fixing at least one weakness. Be structural, not
-stitched: do not paste A's branch into B's branch.
+
+Produce a **structural hybrid** that takes the strongest mechanism
+from each parent and re-integrates them into one coherent program.
+Stitching (paste a block from A inside a loop from B) is NOT what we
+want — every routine in your output must make sense in the context of
+the others.
+
+First, write a ``## Analysis`` section with exactly these three
+sub-sections:
+
+1. **Component table.** A 3-row mapping like:
+   - Initialisation: from A — reason …
+   - Optimisation core: from B — reason …
+   - Constraint handling: hybrid — reason …
+2. **Compatibility note.** One sentence on how you reconciled any
+   interface mismatch between the components (e.g. "A uses (x, y, r)
+   tuples; B uses an Nx3 array — I converted A's output to the array
+   form before passing into B's loop").
+3. **Expected improvement.** One sentence on why this combination
+   should beat both parents.
+
+Then write the program. It must be self-contained: every helper
+function used inside must be defined here. Do NOT reference
+function names from A or B without re-defining them.
 
 ### Critical requirements
-1  Function signature MUST match exactly: `{function_signature}`
+1. Function signature MUST match exactly: `{function_signature}`
 2. Include ALL necessary imports at the top of your code
-3. The function signature must match exactly what is specified
-4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
+3. No syntax errors
+4. The complete, self-contained program goes inside one ```python``` fence
 
 {format_instruction}
+{analysis_output_order_hint}\
 """
+
+
+CROSSOVER_PROMPT_COMPONENT_SWAP = """\
+# Crossover — Targeted Component Swap
+
+## Problem
+{problem_description}
+
+## Function signature
+```python
+{function_signature}
+```
+
+## Base parent (we keep this skeleton)
+Score: {parent_a_score:.4f}
+```python
+{parent_a_code}
+```
+
+## Donor parent (we steal ONE component from this)
+Score: {parent_b_score:.4f}
+```python
+{parent_b_code}
+```
+
+## Inspirations (paradigm sketches from the archive — descriptions only)
+{inspirations_block}
+
+{meta_advice_block}\
+## Your task
+
+Treat the base parent as the **skeleton** — keep its overall control
+flow. Identify ONE component in the donor parent that is clearly
+better than the base parent's equivalent, and **transplant it**.
+Adapt the surrounding glue minimally so the transplanted component
+fits.
+
+First, write a ``## Analysis`` section with exactly these three
+sub-sections:
+
+1. **Donor component chosen.** What did you take from the donor
+   (name the routine / block / constant) and why is it better than
+   the base parent's equivalent?
+2. **Glue work.** What did you have to change in the base parent to
+   make the donor component fit? (Variable names, data layout, call
+   sites.)
+3. **What is NOT changed.** Confirm that the base parent's
+   initialisation, optimisation loop body, and termination condition
+   are otherwise untouched (or explain the one place where they had
+   to change).
+
+Then write the resulting program.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. No syntax errors
+4. The complete, self-contained program goes inside one ```python``` fence
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
+
+
+# ---------------------------------------------------------------------------
+# Prompt sampler — uniform random over the variant templates above.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PromptSampler:
+    """Picks one mutate / crossover prompt variant uniformly at random.
+
+    No learning, no Thompson sampling — the variants are roughly
+    equally useful and the mutation model benefits from prompt-level
+    diversity regardless of which template wins on a given parent.
+    """
+
+    mutate_templates: list[str] = field(
+        default_factory=lambda: [
+            MUTATE_PROMPT_GENERAL,
+            MUTATE_PROMPT_FOCUSED_FIX,
+            MUTATE_PROMPT_MECHANISM_SWAP,
+        ]
+    )
+    crossover_templates: list[str] = field(
+        default_factory=lambda: [
+            CROSSOVER_PROMPT_STRUCTURAL,
+            CROSSOVER_PROMPT_COMPONENT_SWAP,
+        ]
+    )
+
+    def pick_mutate(self, rng: random.Random) -> tuple[str, str]:
+        """Return (label, template) for one mutate variant."""
+        labels = ["general", "focused_fix", "mechanism_swap"]
+        idx = rng.randrange(len(self.mutate_templates))
+        return labels[idx], self.mutate_templates[idx]
+
+    def pick_crossover(self, rng: random.Random) -> tuple[str, str]:
+        """Return (label, template) for one crossover variant."""
+        labels = ["structural", "component_swap"]
+        idx = rng.randrange(len(self.crossover_templates))
+        return labels[idx], self.crossover_templates[idx]
+
+
+# Public aliases so callers can introspect / extend the variant set.
+MUTATE_PROMPTS = {
+    "general": MUTATE_PROMPT_GENERAL,
+    "focused_fix": MUTATE_PROMPT_FOCUSED_FIX,
+    "mechanism_swap": MUTATE_PROMPT_MECHANISM_SWAP,
+}
+CROSSOVER_PROMPTS = {
+    "structural": CROSSOVER_PROMPT_STRUCTURAL,
+    "component_swap": CROSSOVER_PROMPT_COMPONENT_SWAP,
+}
+
+
+def build_mutate_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    parent_code: str,
+    parent_score: float,
+    inspirations: Sequence[tuple[str, float]],
+    meta_advice: str | None = None,
+    template: str | None = None,
+) -> str:
+    tmpl = template if template is not None else MUTATE_PROMPT_GENERAL
+    return tmpl.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        parent_code=parent_code,
+        parent_score=parent_score,
+        inspirations_block=_inspiration_block(inspirations),
+        meta_advice_block=_meta_advice_block(meta_advice),
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
+    )
+
+
+def build_crossover_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    parent_a_code: str,
+    parent_a_score: float,
+    parent_b_code: str,
+    parent_b_score: float,
+    inspirations: Sequence[tuple[str, float]],
+    meta_advice: str | None = None,
+    template: str | None = None,
+) -> str:
+    tmpl = template if template is not None else CROSSOVER_PROMPT_STRUCTURAL
+    return tmpl.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        parent_a_code=parent_a_code,
+        parent_a_score=parent_a_score,
+        parent_b_code=parent_b_code,
+        parent_b_score=parent_b_score,
+        inspirations_block=_inspiration_block(inspirations),
+        meta_advice_block=_meta_advice_block(meta_advice),
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
+    )
+
+
+def build_targeted_mutate_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    parent_code: str,
+    parent_score: float,
+    analysis: str,
+    inspirations: Sequence[tuple[str, float]],
+    meta_advice: str | None = None,
+) -> str:
+    return TARGETED_MUTATE_PROMPT.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        parent_code=parent_code,
+        parent_score=parent_score,
+        analysis=analysis.strip(),
+        inspirations_block=_inspiration_block(inspirations),
+        meta_advice_block=_meta_advice_block(meta_advice),
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Analysis prompt — produced by the mutation model and cached per parent.
+# ---------------------------------------------------------------------------
+
+
+ANALYSIS_PROMPT = """\
+# Code Review — Bottleneck Identification
+
+## Problem
+{problem_description}
+
+## Function signature
+```python
+{function_signature}
+```
+
+## Program under review (score={parent_score:.4f})
+_Description_: {parent_description}
+```python
+{parent_code}
+```
+
+## Your task
+
+Review this program and write **three** short sections. Be concrete:
+cite variable names, line ranges, and magic constants. Do NOT propose
+code — only analysis text.
+
+### Algorithm summary
+One or two sentences naming the algorithmic class and the key data
+structures.
+
+### Top 3 bottlenecks (ranked by expected impact)
+What are the 3 most plausible reasons this program does NOT score
+higher? For each, name the specific component (function, loop,
+constant) responsible.
+
+### Suggested changes
+Three concrete, actionable changes — one per bottleneck. Each must be
+specific enough that a competent programmer could implement it in
+under 10 minutes without further questions. The three changes should
+differ in *kind* (don't list three constant-tweaks).
+
+Keep the whole review under 250 words. No code blocks.
+"""
+
+
+def build_analysis_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    parent_code: str,
+    parent_score: float,
+    parent_description: str,
+) -> str:
+    desc = (parent_description or "").strip() or "(no description)"
+    return ANALYSIS_PROMPT.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        parent_code=parent_code,
+        parent_score=parent_score,
+        parent_description=desc,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Repair prompt — unchanged.
+# ---------------------------------------------------------------------------
 
 
 REPAIR_PROMPT = """\
@@ -136,74 +715,6 @@ above. Keep the algorithmic intent intact — only patch what's broken.
 """
 
 
-def _inspiration_block(inspirations: Sequence[tuple[str, float]]) -> str:
-    """Render inspirations as ``description + score`` only (no code).
-
-    Each element is ``(description, score)``. Returns an empty block when
-    the sequence is empty so the prompt stays clean.
-    """
-    if not inspirations:
-        return "(no inspirations available yet)"
-    parts: list[str] = []
-    for i, (desc, score) in enumerate(inspirations, start=1):
-        d = (desc or "").strip().replace("\n", " ")
-        if len(d) > 400:
-            d = d[:400].rstrip() + "…"
-        parts.append(f"{i}. (score={score:.3f}) {d}")
-    return "\n".join(parts)
-
-
-def _meta_advice_block(meta_advice: str | None) -> str:
-    """Format the optional meta-advisor lesson block."""
-    if not meta_advice:
-        return ""
-    return f"## Lessons learnt so far\n{meta_advice.strip()}\n\n"
-
-
-def build_mutate_prompt(
-    *,
-    problem_description: str,
-    function_signature: str,
-    parent_code: str,
-    parent_score: float,
-    inspirations: Sequence[tuple[str, float]],
-    meta_advice: str | None = None,
-) -> str:
-    return MUTATE_PROMPT.format(
-        problem_description=problem_description,
-        function_signature=function_signature,
-        parent_code=parent_code,
-        parent_score=parent_score,
-        inspirations_block=_inspiration_block(inspirations),
-        meta_advice_block=_meta_advice_block(meta_advice),
-        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
-    )
-
-
-def build_crossover_prompt(
-    *,
-    problem_description: str,
-    function_signature: str,
-    parent_a_code: str,
-    parent_a_score: float,
-    parent_b_code: str,
-    parent_b_score: float,
-    inspirations: Sequence[tuple[str, float]],
-    meta_advice: str | None = None,
-) -> str:
-    return CROSSOVER_PROMPT.format(
-        problem_description=problem_description,
-        function_signature=function_signature,
-        parent_a_code=parent_a_code,
-        parent_a_score=parent_a_score,
-        parent_b_code=parent_b_code,
-        parent_b_score=parent_b_score,
-        inspirations_block=_inspiration_block(inspirations),
-        meta_advice_block=_meta_advice_block(meta_advice),
-        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
-    )
-
-
 def build_repair_prompt(
     *,
     problem_description: str,
@@ -221,7 +732,7 @@ def build_repair_prompt(
         function_signature=function_signature,
         broken_code=broken_code,
         parent_score=parent_score_str,
-        error_msg=error_msg[-1500:],  # tail is where the actual exception lives
+        error_msg=error_msg[-1500:],
         format_instruction=OUTPUT_FORMAT_INSTRUCTION,
     )
 
@@ -249,7 +760,7 @@ INIT_VARIANT_PROMPT = """\
 Write an improved version of the function.
 
 ### Critical requirements
-1  Function signature MUST match exactly: `{function_signature}`
+1. Function signature MUST match exactly: `{function_signature}`
 2. Include ALL necessary imports at the top of your code
 3. The function signature must match exactly what is specified
 4. Ensure there are no syntax errors (matching parentheses, quotes, indentation)
@@ -259,8 +770,6 @@ Write an improved version of the function.
 
 
 def _seed_block(seeds: Sequence[tuple[str, float]]) -> str:
-    """Render existing diverse seeds (code + score) — used as inspirations for
-    init-variant prompts, NOT for paradigm-shift representatives."""
     if not seeds:
         return "(no seeds available yet)"
     parts: list[str] = []
@@ -277,13 +786,6 @@ def build_diverse_seed_prompt(
     function_signature: str,
     existing_seeds: Sequence[tuple[str, float]],
 ) -> str:
-    """Frontier-model prompt for sequential diverse-seed generation.
-
-    Mirrors LEVI's :data:`DIVERSITY_SEED_PROMPT` so the heavy model is
-    pushed toward algorithmic diversity — each call sees all previously
-    accepted seeds and is asked to design something *fundamentally
-    different*. Appends BLADE's description-required format instruction.
-    """
     existing_seeds_text = "\n\n---\n\n".join(
         f"### Seed {i + 1} (Score: {score:.17g}):\n```python\n{code}\n```"
         for i, (code, score) in enumerate(existing_seeds)
@@ -303,13 +805,6 @@ def build_init_variant_prompt(
     function_signature: str,
     inspirations: Sequence[tuple[str, float]],
 ) -> str:
-    """Mutation-model prompt for init-phase variant fanout.
-
-    Each variant sees a small random sample of existing seeds (code+score)
-    to nudge it toward *exploring around* one of the diverse paradigms.
-    Mirrors LEVI's :meth:`build_init_variant_prompt`, adapted to BLADE's
-    description-required output format.
-    """
     return INIT_VARIANT_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
@@ -319,8 +814,7 @@ def build_init_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Meta-advisor — periodic short "lessons learnt" summary the mutation prompts
-# can quote back to the model. Direct port of LEVI's cron-based advisor.
+# Meta-advisor — unchanged.
 # ---------------------------------------------------------------------------
 
 
@@ -386,13 +880,6 @@ def build_meta_advice_prompt(
     recent_errors: Sequence[str],
     previous_advice: str | None,
 ) -> str:
-    """Render the meta-advisor prompt for the small (mutation) model.
-
-    The mutation model is asked to compress the last period of attempts
-    into a few sentences of prescriptive advice. The string this produces
-    is then injected verbatim into the next batch of mutate / crossover
-    prompts (via :func:`build_mutate_prompt`'s ``meta_advice`` slot).
-    """
     if best_score == float("-inf") or not math.isfinite(best_score):
         best_score_str = "n/a"
     else:
@@ -418,12 +905,6 @@ def build_paradigm_variant_prompt(
     base_code: str,
     base_score: float,
 ) -> str:
-    """Mutation-model prompt for paradigm-shift variant fanout.
-
-    Wraps LEVI's :data:`VARIANT_GENERATION_PROMPT` so the small model
-    explores nearby regions around a fresh paradigm-shift solution.
-    Appends BLADE's description-required format instruction.
-    """
     rendered = VARIANT_GENERATION_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
@@ -434,25 +915,24 @@ def build_paradigm_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Paradigm-shift prompt (BLADE Lite — one prompt, stagnation-aware framing)
+# Paradigm-shift prompts — three modes, dispatched by the orchestrator.
 # ---------------------------------------------------------------------------
 #
-# The previous version had three separate stage prompts (early/mid/late)
-# routed by a budget/stagnation heuristic. Live runs showed the late-stage
-# template ("surgical fix on best anchor") starved exploration exactly when
-# the search needed it most, and the budget routing made the prompt depend
-# on a value the model cannot see.
+# Each mode receives a different ANCHOR configuration and asks the
+# frontier model for a different kind of move:
 #
-# This module exposes a single ``build_paradigm_prompt`` that always asks
-# the frontier to *either* synthesise a stronger hybrid from the anchors,
-# *or* propose a fundamentally different paradigm if synthesis is no longer
-# productive. The frontier itself picks. A short numeric context block
-# (best score, evaluations, stagnation level) is included so the model can
-# calibrate without us hard-coding stage routing.
+#   • synthesis  — 2-3 anchors, hybridise close contenders.
+#   • shift      — 2 anchors, design a fundamentally new paradigm.
+#   • surgical   — 1 anchor = best, top descriptions as inspiration;
+#                  deep tuning of the current champion.
+#
+# The orchestrator picks the mode based on stagnation level (low →
+# synthesis, mid → shift, high → surgical) and supplies the right
+# number of anchors.
 
 
-_PARADIGM_PROMPT = """\
-# Algorithmic Paradigm Shift Challenge
+SYNTHESIS_PROMPT = """\
+# Paradigm Synthesis Challenge
 
 ## Problem
 {problem_description}
@@ -464,68 +944,197 @@ _PARADIGM_PROMPT = """\
 
 ## Archive Snapshot
 The archive has run {n_evaluations} evaluations and currently occupies
-{n_cells} behavioural cells (one cell ≈ one algorithmic paradigm — cells
-are recomputed periodically from program AST features + description
-embeddings, so each anchor below is the strongest representative of a
-distinct paradigm).
+{n_cells} behavioural cells. Stagnation level is {stagnation:.2f}
+(0 = just improved, 1 = stuck). The search is **mildly stalled**:
+several anchors are close in score but no single mutation has
+combined their strengths.
 
-Stagnation level (0 = just improved, 1 = stuck): {stagnation:.2f}.
-
-### Anchor representatives (full code + description + score)
+### Top anchors (close-in-score, full code)
 {anchor_block}
 
-### Additional inspirations (description + score only — different paradigms whose code is withheld)
+### Other paradigm inspirations (description + score only)
 {inspiration_block}
 {strategy_log_block}
 ## Your Task
 
-Read the anchors above and decide *which* of the two moves is the better
-bet, given the stagnation level:
+Your job is **synthesis**, not invention. Read the anchors and write
+ONE new program that combines 2-3 concrete mechanisms drawn from
+different anchors into a structurally coherent whole, beating each of
+them individually.
 
-**(A) SYNTHESISE** — combine 2-3 concrete mechanisms drawn from
-different anchors into one structurally coherent program that beats each
-of them individually. Prefer this when several anchors are close in
-score (the archive has good ingredients; the missing piece is the
-combination).
+First, write a ``## Analysis`` section. Its first line MUST be
+``MOVE: SYNTHESIS``. After that line, include exactly these three
+sub-sections:
 
-**(B) PARADIGM SHIFT** — design a fundamentally different algorithmic
-approach (a paradigm class that does NOT appear in any anchor or
-inspiration). Internal data structures, control flow, and termination
-condition must all reflect the new paradigm. Prefer this when
-synthesis would only produce a marginal mix.
+1. **Component table.** A mapping like:
+   - Initialisation: from Anchor X (reason …)
+   - Optimisation core: from Anchor Y (reason …)
+   - Constraint repair: hybrid (reason …)
+2. **Coherence note.** A sentence describing how the borrowed
+   components share data — variable layout, units, call ordering.
+   This is the hard part of synthesis: avoid Frankenstein code.
+3. **Why this should beat all anchors.** One sentence per anchor:
+   "beats anchor X because …".
 
-Make the choice explicit in your description (start with "MOVE: A" or
-"MOVE: B" on the first line of `## Description`). Whatever you pick:
+Then write the program. Avoid any strategy whose Strategy-Log entry
+has delta ≤ 0 — that approach has already failed. Do NOT just retune
+constants in one anchor (the mutation worker is already doing that).
 
-- Match the function signature exactly.
-- Include all imports.
-- Avoid any strategy whose Strategy-Log entry already has delta ≤ 0 —
-  that approach has been tried and did not improve over the best.
-- Do NOT just retune constants in an anchor — that is not a paradigm
-  shift, it is mutation, and the mutation worker is already doing it.
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. Every helper function must be defined here (don't reference functions
+   from the anchors by name unless you copy their definition)
 
 {format_instruction}
+{analysis_output_order_hint}\
 """
 
 
-def _anchor_block(anchors: Sequence[tuple[str, str, float]]) -> str:
-    """Render anchor representatives with full code."""
-    if not anchors:
-        return "(archive too small — no anchors yet)"
-    parts: list[str] = []
-    for i, (code, desc, score) in enumerate(anchors, start=1):
-        d = (desc or "").strip().replace("\n", " ")
-        if len(d) > 400:
-            d = d[:400].rstrip() + "…"
-        parts.append(
-            f"#### Anchor {i} (score={score:.4f})\n"
-            f"_Description_: {d or '(no description)'}\n"
-            f"```python\n{code}\n```"
-        )
-    return "\n\n".join(parts)
+PARADIGM_SHIFT_PROMPT = """\
+# Paradigm Shift Challenge — Genuinely New Approach
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Archive Snapshot
+The archive has run {n_evaluations} evaluations and currently occupies
+{n_cells} behavioural cells. Stagnation level is {stagnation:.2f} —
+the search is **moderately stalled**, suggesting the current paradigm
+family has been mined out.
+
+### Strongest paradigms currently in the archive (full code)
+{anchor_block}
+
+### Other paradigm inspirations (description + score only)
+{inspiration_block}
+{strategy_log_block}
+## Your Task
+
+Design a **fundamentally different algorithmic approach** — a
+paradigm class that does NOT appear in any anchor or inspiration
+above. The new program's internal data structures, control flow, and
+termination condition must all reflect the new paradigm.
+
+Concrete forbidden moves:
+- Re-running the same algorithm with new constants.
+- Stitching a sub-routine from one anchor onto another (that is
+  synthesis, not a shift).
+- Renaming variables in an existing anchor.
+
+First, write a ``## Analysis`` section. Its first line MUST be
+``MOVE: SHIFT``. After that line, include exactly these four
+sub-sections:
+
+1. **Paradigm name.** The textbook name of the algorithm class you
+   are proposing (e.g. "Lloyd relaxation", "Power diagram packing",
+   "Lagrangian relaxation with subgradient ascent", "Branch-and-cut
+   over a conflict graph").
+2. **Why this paradigm fits the problem.** Two sentences. Cite the
+   specific problem feature that the paradigm exploits.
+3. **Why current anchors miss it.** One sentence: what assumption
+   the anchors share that the new paradigm drops.
+4. **Risk.** One sentence on the most likely implementation pitfall
+   and how your code avoids it.
+
+Then write the complete, runnable program. Avoid any strategy whose
+Strategy-Log entry has delta ≤ 0 — that approach has been tried.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. Implement the paradigm yourself — do not assume any non-stdlib
+   exotic library is available beyond numpy / scipy.
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
 
 
-def build_paradigm_prompt(
+SURGICAL_EXPLOIT_PROMPT = """\
+# Surgical Exploit Challenge — Tune the Champion
+
+## Problem
+{problem_description}
+
+## Function Signature
+```python
+{function_signature}
+```
+
+## Archive Snapshot
+The archive has run {n_evaluations} evaluations and currently occupies
+{n_cells} behavioural cells. Stagnation level is {stagnation:.2f} —
+the search is **deeply stalled**. The same family of solutions has
+dominated for many evaluations, and previous paradigm attempts have
+not produced improvements (see Strategy Log).
+
+### Current champion (the ONLY anchor you target)
+{anchor_block}
+
+### Top-ranked paradigm descriptions (for context only — code withheld)
+{inspiration_block}
+{strategy_log_block}
+## Your Task
+
+A new paradigm will NOT help here — previous paradigm trials confirm
+that. What WILL help is a **precise, structural improvement to the
+champion**. Be the careful surgeon, not the wild inventor.
+
+First, write a ``## Analysis`` section. Its first line MUST be
+``MOVE: SURGICAL``. After that line, include exactly these four
+sub-sections:
+
+1. **Tightest constraint.** What is the single binding constraint
+   limiting the champion's score *right now*? Cite the exact
+   mechanism in the champion's code (function name, loop variable,
+   magic constant). Examples: "the SA cooling schedule freezes at
+   step≈6000, before the perimeter constraint fully relaxes", "the
+   feasibility-repair step in `project()` shrinks circles uniformly,
+   wasting per-circle slack".
+2. **Structural fix.** Propose ONE structural change — not a
+   constant tweak — that loosens that constraint. Examples: "add a
+   per-circle slack budget before the global perimeter projection",
+   "interleave a hex-grid restart every 5000 SA steps when no move
+   was accepted in the last 500", "introduce a local Lloyd polish
+   after every 1000 SA accepts".
+3. **Preservation list.** A bullet list of all routines / constants
+   that stay byte-for-byte identical. The fix must be local.
+4. **Expected delta.** Your honest guess at how much score the fix
+   buys, and why.
+
+Then write the complete program. The overall algorithm class MUST
+remain the champion's. Do not propose a fundamentally different
+algorithm — synthesis and paradigm-shift modes exist for that. Do not
+just retune constants — the mutation worker is doing that. The fix
+must be **structural** and **local**.
+
+### Critical requirements
+1. Function signature MUST match exactly: `{function_signature}`
+2. Include ALL necessary imports at the top of your code
+3. Keep the champion's overall control flow and naming intact
+
+{format_instruction}
+{analysis_output_order_hint}\
+"""
+
+
+def _strategy_log_block(recent_trials: Sequence[str]) -> str:
+    if not recent_trials:
+        return ""
+    return (
+        "\n## Strategy Log (recent paradigm attempts)\n"
+        + "\n".join(f"- {line}" for line in recent_trials)
+        + "\n"
+    )
+
+
+def build_synthesis_prompt(
     *,
     problem_description: str,
     function_signature: str,
@@ -536,22 +1145,8 @@ def build_paradigm_prompt(
     recent_trials: Sequence[str] = (),
     stagnation: float = 0.0,
 ) -> str:
-    """Build the BLADE Lite paradigm-shift prompt.
-
-    One prompt, no stage routing. ``stagnation`` and ``n_cells`` are
-    surfaced in the prompt header so the frontier model can calibrate
-    its own choice between synthesis (A) and paradigm shift (B).
-    """
-    if recent_trials:
-        strategy_log_block = (
-            "\n## Strategy Log (recent paradigm attempts)\n"
-            + "\n".join(f"- {line}" for line in recent_trials)
-            + "\n"
-        )
-    else:
-        strategy_log_block = ""
-
-    return _PARADIGM_PROMPT.format(
+    """Synthesis mode: 2-3 anchors close in score, hybridise them."""
+    return SYNTHESIS_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
         n_evaluations=n_evaluations,
@@ -559,6 +1154,60 @@ def build_paradigm_prompt(
         stagnation=stagnation,
         anchor_block=_anchor_block(anchors),
         inspiration_block=_inspiration_block(inspirations),
-        strategy_log_block=strategy_log_block,
+        strategy_log_block=_strategy_log_block(recent_trials),
         format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
+    )
+
+
+def build_paradigm_shift_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    n_evaluations: int,
+    n_cells: int,
+    anchors: Sequence[tuple[str, str, float]],
+    inspirations: Sequence[tuple[str, float]] = (),
+    recent_trials: Sequence[str] = (),
+    stagnation: float = 0.0,
+) -> str:
+    """Shift mode: 2 anchors, propose a genuinely new paradigm class."""
+    return PARADIGM_SHIFT_PROMPT.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        n_evaluations=n_evaluations,
+        n_cells=n_cells,
+        stagnation=stagnation,
+        anchor_block=_anchor_block(anchors),
+        inspiration_block=_inspiration_block(inspirations),
+        strategy_log_block=_strategy_log_block(recent_trials),
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
+    )
+
+
+def build_surgical_exploit_prompt(
+    *,
+    problem_description: str,
+    function_signature: str,
+    n_evaluations: int,
+    n_cells: int,
+    anchors: Sequence[tuple[str, str, float]],
+    inspirations: Sequence[tuple[str, float]] = (),
+    recent_trials: Sequence[str] = (),
+    stagnation: float = 0.0,
+) -> str:
+    """Surgical mode: 1 anchor (the champion), top descriptions as
+    inspiration only. Frontier writes a structural local fix."""
+    return SURGICAL_EXPLOIT_PROMPT.format(
+        problem_description=problem_description,
+        function_signature=function_signature,
+        n_evaluations=n_evaluations,
+        n_cells=n_cells,
+        stagnation=stagnation,
+        anchor_block=_anchor_block(anchors[:1]),
+        inspiration_block=_inspiration_block(inspirations),
+        strategy_log_block=_strategy_log_block(recent_trials),
+        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
+        analysis_output_order_hint=ANALYSIS_OUTPUT_ORDER_HINT,
     )

@@ -136,6 +136,52 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # ------------------------------------------------------------------
+    # Targeted-mutate analyzer (Đề xuất 1) — review of top-ranked parents.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--no-targeted-mutate", action="store_true",
+        help="Disable the LLM-generated parent analysis + TARGETED_MUTATE_PROMPT.",
+    )
+    p.add_argument(
+        "--analyzer-interval", type=int, default=None, metavar="N",
+        help="Refresh cached parent analyses every N evaluations (default 30).",
+    )
+    p.add_argument(
+        "--analyzer-top-k", type=int, default=None, metavar="K",
+        help="How many top-ranked programs to analyse each refresh (default 3).",
+    )
+    p.add_argument(
+        "--p-targeted-mutate", type=float, default=None, metavar="P",
+        help="Probability of using TARGETED_MUTATE_PROMPT when an analysis is "
+        "cached for the chosen parent (default 0.5).",
+    )
+
+    # ------------------------------------------------------------------
+    # Three-mode paradigm-shift thresholds (Đề xuất 8).
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--paradigm-synthesis-max-stagnation", type=float, default=None, metavar="S",
+        help="At or below this stagnation level the shift uses synthesis mode (default 0.4).",
+    )
+    p.add_argument(
+        "--paradigm-shift-max-stagnation", type=float, default=None, metavar="S",
+        help="Below this stagnation level (and above synthesis cap) the shift "
+        "uses the 'new paradigm' mode (default 0.7); above this it goes surgical.",
+    )
+    p.add_argument(
+        "--paradigm-synthesis-n-anchors", type=int, default=None, metavar="N",
+        help="Number of anchors surfaced in synthesis mode (default 3).",
+    )
+    p.add_argument(
+        "--paradigm-shift-n-anchors", type=int, default=None, metavar="N",
+        help="Number of anchors surfaced in shift mode (default 2).",
+    )
+    p.add_argument(
+        "--paradigm-surgical-n-inspirations", type=int, default=None, metavar="N",
+        help="Description-only inspirations passed to surgical mode (default 5).",
+    )
+
+    # ------------------------------------------------------------------
     # Ablation toggles (the three paper-facing knobs)
     # ------------------------------------------------------------------
     p.add_argument(
@@ -265,6 +311,26 @@ def main() -> int:
         overrides["paradigm_n_anchors"] = args.paradigm_n_anchors
     if args.paradigm_n_inspirations is not None:
         overrides["paradigm_n_inspirations"] = args.paradigm_n_inspirations
+
+    if args.no_targeted_mutate:
+        overrides["enable_targeted_mutate"] = False
+    if args.analyzer_interval is not None:
+        overrides["analyzer_interval"] = args.analyzer_interval
+    if args.analyzer_top_k is not None:
+        overrides["analyzer_top_k"] = args.analyzer_top_k
+    if args.p_targeted_mutate is not None:
+        overrides["p_targeted_mutate"] = args.p_targeted_mutate
+
+    if args.paradigm_synthesis_max_stagnation is not None:
+        overrides["paradigm_synthesis_max_stagnation"] = args.paradigm_synthesis_max_stagnation
+    if args.paradigm_shift_max_stagnation is not None:
+        overrides["paradigm_shift_max_stagnation"] = args.paradigm_shift_max_stagnation
+    if args.paradigm_synthesis_n_anchors is not None:
+        overrides["paradigm_synthesis_n_anchors"] = args.paradigm_synthesis_n_anchors
+    if args.paradigm_shift_n_anchors is not None:
+        overrides["paradigm_shift_n_anchors"] = args.paradigm_shift_n_anchors
+    if args.paradigm_surgical_n_inspirations is not None:
+        overrides["paradigm_surgical_n_inspirations"] = args.paradigm_surgical_n_inspirations
 
     import levi
 

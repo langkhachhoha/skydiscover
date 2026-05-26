@@ -52,9 +52,11 @@ from levi.blade.prompts import (  # noqa: E402
     build_diverse_seed_prompt,
     build_init_variant_prompt,
     build_mutate_prompt,
-    build_paradigm_prompt,
+    build_paradigm_shift_prompt,
     build_paradigm_variant_prompt,
     build_repair_prompt,
+    build_surgical_exploit_prompt,
+    build_synthesis_prompt,
 )
 from levi.simple.parser import OutputParser  # noqa: E402
 
@@ -218,13 +220,21 @@ def build_cases() -> list[dict]:
     #    audit all three because the templates differ). Reasoning-heavy
     #    paradigm models (e.g. GPT-5) burn most of a 1200-token budget on
     #    internal thinking, so we mirror the orchestrator's higher cap.
-    for stage in ("early", "mid", "late"):
-        para_prompt = build_paradigm_prompt(
-            stage=stage,
+    # Three paradigm modes; the orchestrator dispatches based on
+    # stagnation level but we audit all three so the templates can be
+    # regression-tested.
+    mode_builders = {
+        "synthesis": build_synthesis_prompt,
+        "shift": build_paradigm_shift_prompt,
+        "surgical": build_surgical_exploit_prompt,
+    }
+    for stage, builder in mode_builders.items():
+        para_prompt = builder(
             problem_description=PROBLEM,
             function_signature=SIGNATURE,
             n_evaluations=42,
-            n_families=3,
+            n_cells=3,
+            stagnation=0.5,
             anchors=[
                 (
                     "def make_change(amount, coins):\n"
