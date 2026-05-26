@@ -162,28 +162,29 @@ Score: {parent_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-Write an **improved** version of the parent. Before producing the
-final output, write a ``## Analysis`` section (it is for your own
-reasoning — the search system ignores it for archiving but reads it
-back to you on future passes). It must have these four short
-sub-sections:
+Write an **improved** version of the parent. This is a mutation pass:
+preserve the parent`s useful structure, but make a concrete change that
+is likely to improve the score.
 
-1. **Components.** List the 3-5 main components / phases of the
-   parent program (e.g. "initialisation grid", "outer SA loop",
-   "neighbour move", "feasibility repair", "shrink step"). One line
-   each.
-2. **Strengths.** Which of those components are clearly working —
-   i.e. you would NOT change them?
-3. **Weaknesses.** Which component is most likely the reason the
-   score is not higher? Cite the specific variable, constant, or
-   routine.
-4. **Plan.** One sentence: what concrete change you will make in the
-   new program (e.g. "replace the linear cooling schedule in
-   `cool()` with a geometric one, leave the rest unchanged").
+Before the final code, write a short ``## Analysis`` section. The search
+system ignores it for archiving, but may reuse it in future passes. It
+must contain exactly four sub-sections:
 
-Then write the improved program. Keep what works in the parent,
-change what doesn't. Treat the inspirations as ideas only — you do
-not have their code, so do not copy.
+1. **Components.** List the 3-5 main components/phases of the parent
+   program, using concrete code names when possible.
+2. **Strengths.** State which components are working well and should be
+   preserved.
+3. **Weaknesses.** Identify the most likely bottleneck. Cite the exact
+   routine, loop, variable, constant, update rule, repair step, or
+   acceptance rule.
+4. **Plan.** In one sentence, state the concrete mutation you will make
+   and why it should improve the score.
+
+Then write the improved program. Keep what works, change what does not.
+The new code must contain at least one real algorithmic improvement, not
+only renaming, reformatting, comment changes, seed changes, or isolated
+constant retuning. Treat the inspirations as high-level ideas only — you
+do not have their code, so do not copy or assume hidden details.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -219,25 +220,29 @@ Score: {parent_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-The parent is mostly working. Your job is to **pick exactly ONE
-weakness** and fix it surgically — leave everything else untouched.
+The parent is already mostly working. Your job is to pick exactly **ONE**
+weakness and fix it surgically. Preserve the parent`s algorithmic
+identity and leave all unrelated components untouched.
 
-First, write a ``## Analysis`` section with exactly these three
+First, write a short ``## Analysis`` section with exactly three
 sub-sections:
 
-1. **Tightest constraint.** What is the single most limiting factor
-   in the parent's score? Be specific: name the variable / loop /
-   constant. Examples: "the SA cooling rate decays too fast at
-   step≈5000, premature freeze", "the perimeter-projection step
-   shrinks all circles uniformly, wasting slack", "the initial hex
-   grid leaves a triangular gap at the top-right corner".
-2. **Fix.** The minimum change that addresses (1). One sentence.
-3. **Preserved.** A 1-line confirmation of which top-level routines
-   remain byte-for-byte identical to the parent.
+1. **Tightest constraint.** Identify the single most limiting factor in
+   the parent`s score. Be specific: cite the exact routine, loop,
+   variable, constant, update rule, repair step, or acceptance rule.
+   Prefer a real algorithmic bottleneck over seed changes, formatting,
+   or isolated constant tuning.
+2. **Fix.** State the minimum code change that addresses this constraint
+   and why it should improve the score. One sentence only.
+3. **Preserved.** State which top-level routines/components remain
+   unchanged.
 
-Then output the program implementing exactly that one change. Do NOT
-also retune unrelated constants. Do NOT also add new helper functions
-unless they are the fix itself.
+Then output the complete program implementing exactly that one surgical
+change. The change must affect the algorithm`s behavior in a meaningful
+way. Do not retune unrelated constants, rename variables, reformat code,
+change comments, change only the random seed, or add extra improvements.
+Do not add new helper functions unless the helper is directly required by
+the surgical fix.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -273,29 +278,33 @@ Score: {parent_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-The parent has one or more **interchangeable mechanisms** — places
-where a different algorithmic choice could fit the same slot. Identify
-one such mechanism and **swap it** for a better alternative. The
-overall algorithm class stays the same; one sub-mechanism changes.
+The parent contains one or more **interchangeable mechanisms**: local
+slots where another algorithmic choice can fit without changing the
+overall algorithm. Identify one such slot and **swap only that
+mechanism** for a stronger alternative.
 
-Examples of valid mechanism swaps:
-- replace random uniform initialisation with a quasi-random sequence
-- swap fixed step size for line search
-- replace greedy neighbour acceptance with Metropolis acceptance
-- swap a `while` convergence test for a `for` budgeted loop
+Examples of valid swaps:
+- random uniform initialisation → quasi-random / stratified initialisation
+- fixed step size → adaptive step size or line search
+- greedy acceptance → Metropolis or score-aware acceptance
+- fixed restart schedule → stagnation-triggered restart
+- simple repair rule → slack-aware repair rule
 
-First, write a ``## Analysis`` section with exactly these three
+First, write a short ``## Analysis`` section with exactly three
 sub-sections:
 
-1. **Mechanism identified.** Which slot in the parent are you
-   targeting? Quote the function / block name.
-2. **Old vs new.** "Currently uses X; replacing with Y because Z."
-3. **Risk.** One sentence on what could go wrong with the swap and
-   how the new code guards against it.
+1. **Mechanism identified.** Name the exact slot being replaced. Cite
+   the function, loop, block, variable, or update rule.
+2. **Old vs new.** State: “Currently uses X; replacing it with Y because
+   Z.” The replacement must fit the same role and preserve the parent`s
+   overall algorithm.
+3. **Risk.** One sentence on what could go wrong with the swap and how
+   the new code guards against it.
 
-Then write the program. The signature, the I/O contract, and the rest
-of the parent's structure must remain stable — only the swapped
-mechanism changes.
+Then write the complete program. Keep the signature, I/O contract, and
+parent structure stable. Only the selected mechanism should change. Do
+not add unrelated improvements, retune unrelated constants, rename
+variables, reformat code, or rewrite the algorithm into a new paradigm.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -336,23 +345,26 @@ Score: {parent_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-Read the analysis above and pick **one** of the suggested changes —
-the one you judge most likely to actually increase the score on this
-problem. Implement exactly that change.
+Read the analysis above and choose exactly **ONE** suggested change —
+the one most likely to improve the score on this problem. Do not invent
+a new direction; select from the existing analysis and implement it
+cleanly.
 
-First, write a ``## Analysis`` section with exactly these three
+First, write a short ``## Analysis`` section with exactly three
 sub-sections:
 
-1. **Chosen bottleneck.** Quote the bottleneck from the analysis
-   above that you are targeting.
-2. **Implementation plan.** One sentence describing the concrete
-   code change.
-3. **What stays unchanged.** A short list of routines / constants
-   you are keeping byte-for-byte identical to the parent.
+1. **Chosen bottleneck.** Quote or precisely restate the bottleneck from
+   the analysis above that you are targeting.
+2. **Implementation plan.** In one sentence, describe the exact
+   structural code change you will make.
+3. **What stays unchanged.** List the main routines, constants, or
+   control-flow blocks that will remain unchanged.
 
-Then write the improved program. Do NOT change everything — make
-exactly ONE structural change. The rest of the parent is, by
-assumption, already doing its job.
+Then write the complete improved program. Make exactly **ONE** structural
+change. Do not rewrite the algorithm, add unrelated improvements, retune
+unrelated constants, rename variables, reformat code, or change only the
+random seed. The rest of the parent is assumed to be working and should
+remain stable.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -399,29 +411,29 @@ Score: {parent_b_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-Produce a **structural hybrid** that takes the strongest mechanism
-from each parent and re-integrates them into one coherent program.
-Stitching (paste a block from A inside a loop from B) is NOT what we
-want — every routine in your output must make sense in the context of
-the others.
+Produce a **structural hybrid** from the two parents. Select the
+strongest compatible mechanism from each parent and re-integrate them
+into one coherent program. Do not simply paste a block from A into B;
+every routine in the output must fit the same data flow, objective, and
+constraint logic.
 
-First, write a ``## Analysis`` section with exactly these three
+First, write a short ``## Analysis`` section with exactly three
 sub-sections:
 
-1. **Component table.** A 3-row mapping like:
-   - Initialisation: from A — reason …
-   - Optimisation core: from B — reason …
-   - Constraint handling: hybrid — reason …
-2. **Compatibility note.** One sentence on how you reconciled any
-   interface mismatch between the components (e.g. "A uses (x, y, r)
-   tuples; B uses an Nx3 array — I converted A's output to the array
-   form before passing into B's loop").
-3. **Expected improvement.** One sentence on why this combination
-   should beat both parents.
+1. **Component table.** Give a 3-row mapping:
+   - Initialisation: from A/B/hybrid — reason
+   - Optimisation core: from A/B/hybrid — reason
+   - Constraint handling: from A/B/hybrid — reason
+2. **Compatibility note.** One sentence explaining how you reconciled
+   interface or representation differences between the selected
+   components.
+3. **Expected improvement.** One sentence explaining why this hybrid
+   should plausibly outperform both parents.
 
-Then write the program. It must be self-contained: every helper
-function used inside must be defined here. Do NOT reference
-function names from A or B without re-defining them.
+Then write the complete program. It must be self-contained: every helper
+function used in the output must be defined in the output. Do not
+reference functions, variables, or hidden state from either parent unless
+you re-define them. Preserve the required signature and I/O contract.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -463,27 +475,32 @@ Score: {parent_b_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-Treat the base parent as the **skeleton** — keep its overall control
-flow. Identify ONE component in the donor parent that is clearly
-better than the base parent's equivalent, and **transplant it**.
-Adapt the surrounding glue minimally so the transplanted component
-fits.
+Treat the base parent as the **skeleton**: preserve its overall control
+flow, data flow, and termination logic. Identify exactly **ONE**
+component in the donor parent that is clearly better than the base
+parent`s equivalent, and transplant only that component. Adapt the
+surrounding glue minimally so it fits.
 
-First, write a ``## Analysis`` section with exactly these three
+First, write a short ``## Analysis`` section with exactly three
 sub-sections:
 
-1. **Donor component chosen.** What did you take from the donor
-   (name the routine / block / constant) and why is it better than
-   the base parent's equivalent?
-2. **Glue work.** What did you have to change in the base parent to
-   make the donor component fit? (Variable names, data layout, call
-   sites.)
-3. **What is NOT changed.** Confirm that the base parent's
-   initialisation, optimisation loop body, and termination condition
-   are otherwise untouched (or explain the one place where they had
-   to change).
+1. **Donor component chosen.** Name the donor routine, block, update
+   rule, repair step, constant schedule, or data structure being
+   transplanted, and explain why it is better than the base equivalent.
+2. **Glue work.** State the minimal changes needed to integrate it into
+   the base parent, such as variable names, data layout, helper calls,
+   or call sites.
+3. **What is NOT changed.** Confirm which parts of the base parent remain
+   unchanged, especially initialisation, main optimisation loop,
+   termination condition, and I/O contract. If one of these must change,
+   explain the exact reason.
 
-Then write the resulting program.
+Then write the complete resulting program. Keep the base parent
+recognisable. The output must contain one real donor-derived component,
+but the base parent must still determine the program`s overall
+structure. Do not import unrelated mechanisms from the donor, do not
+rewrite the base algorithm, and do not make extra improvements beyond
+the single transplant.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -646,26 +663,41 @@ _Description_: {parent_description}
 
 ## Your task
 
-Review this program and write **three** short sections. Be concrete:
-cite variable names, line ranges, and magic constants. Do NOT propose
-code — only analysis text.
+Review the program and identify why it likely does not score higher.
+Write exactly **three** short sections using the headings below. Write
+analysis text only — do NOT write code, pseudocode, code blocks, or
+extra sections.
+
+Be specific, score-oriented, and implementation-oriented. Cite concrete
+code elements: function names, loops, variables, update rules, repair
+steps, acceptance rules, data structures, and magic constants. If line
+numbers are unavailable, refer to the nearest function/block name and
+the relevant variable or constant.
 
 ### Algorithm summary
-One or two sentences naming the algorithmic class and the key data
-structures.
+In 1-2 sentences, describe the algorithmic class, its main search or
+construction strategy, and the key data structures it relies on.
 
-### Top 3 bottlenecks (ranked by expected impact)
-What are the 3 most plausible reasons this program does NOT score
-higher? For each, name the specific component (function, loop,
-constant) responsible.
+### Top 3 bottlenecks, ranked by expected impact
+List exactly three distinct bottlenecks. For each one, include:
+- **Component:** the exact routine, block, variable, constant, update
+  rule, repair step, acceptance rule, or data structure involved.
+- **Why it hurts:** how this mechanism limits score, feasibility,
+  exploration, exploitation, runtime, or objective alignment.
+- **Impact:** High / Medium / Low expected improvement if fixed.
+
+Prefer real algorithmic bottlenecks over cosmetic issues or isolated
+constant tuning. The three bottlenecks must differ in kind.
 
 ### Suggested changes
-Three concrete, actionable changes — one per bottleneck. Each must be
-specific enough that a competent programmer could implement it in
-under 10 minutes without further questions. The three changes should
-differ in *kind* (don't list three constant-tweaks).
+Give exactly three actionable changes, one per bottleneck and in the
+same order. Each change must state what to replace, add, or remove, and
+where. Each should be specific enough to implement directly in a
+mutation pass without further clarification.
 
-Keep the whole review under 250 words. No code blocks.
+Avoid vague advice such as "improve optimization", "tune parameters",
+"make it faster", or "use a better heuristic". Keep the whole review
+under 250 words.
 """
 
 
@@ -763,7 +795,8 @@ INIT_VARIANT_PROMPT = """\
 {inspirations_block}
 
 ## Your task
-Write an improved version of the function.
+Write an improved, complete, self-contained implementation of the function. Use the inspirations to identify useful patterns, 
+but produce a meaningfully different seed rather than copying one. Aim for a variant that is both feasible and competitive.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -1203,36 +1236,41 @@ not produced improvements (see Strategy Log).
 ## Your Task
 
 A new paradigm will NOT help here — previous paradigm trials confirm
-that. What WILL help is a **precise, structural improvement to the
-champion**. Be the careful surgeon, not the wild inventor.
+that. What WILL help is a **precise structural improvement** to the
+champion. Be the careful surgeon, not the wild inventor.
 
-First, write a ``## Analysis`` section. Its first line MUST be
-``MOVE: SURGICAL``. After that line, include exactly these four
-sub-sections:
+First, write a ``## Analysis`` section. Its first line MUST be:
+``MOVE: SURGICAL``.After that line, include exactly these four sub-sections:
 
-1. **Tightest constraint.** What is the single binding constraint
-   limiting the champion's score *right now*? Cite the exact
-   mechanism in the champion's code (function name, loop variable,
-   magic constant). Examples: "the SA cooling schedule freezes at
-   step≈6000, before the perimeter constraint fully relaxes", "the
-   feasibility-repair step in `project()` shrinks circles uniformly,
-   wasting per-circle slack".
-2. **Structural fix.** Propose ONE structural change — not a
-   constant tweak — that loosens that constraint. Examples: "add a
-   per-circle slack budget before the global perimeter projection",
-   "interleave a hex-grid restart every 5000 SA steps when no move
-   was accepted in the last 500", "introduce a local Lloyd polish
-   after every 1000 SA accepts".
-3. **Preservation list.** A bullet list of all routines / constants
-   that stay byte-for-byte identical. The fix must be local.
-4. **Expected delta.** Your honest guess at how much score the fix
-   buys, and why.
+1. **Tightest constraint.** Identify the single mechanism most likely
+   limiting the champion`s score right now. Cite the exact function,
+   loop, variable, update rule, repair step, acceptance rule, objective
+   calculation, or magic constant. Prefer a bottleneck where the current
+   algorithm wastes useful signal, accepts poor moves, loses feasibility,
+   converges too early, or leaves exploitable slack.
 
-Then write the complete program. The overall algorithm class MUST
-remain the champion's. Do not propose a fundamentally different
-algorithm — synthesis and paradigm-shift modes exist for that. Do not
-just retune constants — the mutation worker is doing that. The fix
-must be **structural** and **local**.
+2. **Structural fix.** Propose exactly ONE local structural change that
+   directly addresses this constraint. The fix must change the algorithm`s
+   behaviour in a meaningful way, such as adding score-aware acceptance,
+   improving repair, using existing slack/objective information, adding a
+   targeted local polish, or replacing a weak update rule. Do not merely
+   rename variables, reformat code, change comments, change the random
+   seed, or retune an isolated constant.
+
+3. **Preservation list.** List the routines, constants, and control-flow
+   blocks that will remain unchanged. The champion's overall algorithm
+   class, I/O contract, and working components must stay intact.
+
+4. **Expected delta.** Briefly explain why this specific fix should
+   improve the score, and name the main risk. State how the implementation
+   guards against that risk, e.g. fallback to the old state, feasibility
+   check, bounded step size, deterministic randomness, or NaN/Inf guard.
+
+Then write the complete program. Implement exactly ONE structural, local
+fix. Do not add unrelated improvements. Do not introduce a fundamentally
+different paradigm. If the champion already computes a score, feasibility,
+slack, loss, or quality signal internally, prefer using that signal to
+guide the fix rather than adding a blind heuristic.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
