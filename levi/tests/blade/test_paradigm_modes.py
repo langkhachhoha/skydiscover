@@ -46,6 +46,15 @@ def _add(orch: BladeOrchestrator, n: int) -> None:
 
 
 def test_mode_dispatch_by_stagnation() -> None:
+    """Mode order is synthesis (low) → surgical (mid) → shift (high).
+
+    The high-stagnation case is routed to ``shift`` rather than
+    ``surgical``: when the search is deeply stuck, jumping to a fresh
+    paradigm is more likely to break the plateau than sanding the same
+    local optimum further. This matches the empirical pattern from
+    earlier runs where ``surgical`` calls at stagnation=1.0 produced
+    only same-score admits while a single ``shift`` call broke through.
+    """
     orch = _stub_orch()
     cfg = orch.config
 
@@ -55,22 +64,22 @@ def test_mode_dispatch_by_stagnation() -> None:
     orch.monitor.last_admit_eval = 10
     assert orch._pick_paradigm_mode() == "synthesis"
 
-    # shift at mid stagnation: push the admit gap so local stagnation is
-    # mid-range. admit_gap_max default is 20; we want stagnation around
-    # 0.5-0.6 → admit_gap=12.
+    # surgical at mid stagnation: push the admit gap so local stagnation
+    # is mid-range. admit_gap_max default is 20; we want stagnation
+    # around 0.5-0.6 → admit_gap=12.
     orch.monitor.eval_count = 22
     orch.monitor.last_admit_eval = 10
     orch.monitor.last_best_eval = 22
     s = orch.monitor.stagnation_level()
-    assert cfg.paradigm_synthesis_max_stagnation < s <= cfg.paradigm_shift_max_stagnation
-    assert orch._pick_paradigm_mode() == "shift"
+    assert cfg.paradigm_synthesis_max_stagnation < s <= cfg.paradigm_surgical_max_stagnation
+    assert orch._pick_paradigm_mode() == "surgical"
 
-    # surgical at high stagnation: admit_gap >> admit_gap_max.
+    # shift at high stagnation: admit_gap >> admit_gap_max.
     orch.monitor.eval_count = 200
     orch.monitor.last_admit_eval = 10
     orch.monitor.last_best_eval = 10
-    assert orch.monitor.stagnation_level() > cfg.paradigm_shift_max_stagnation
-    assert orch._pick_paradigm_mode() == "surgical"
+    assert orch.monitor.stagnation_level() > cfg.paradigm_surgical_max_stagnation
+    assert orch._pick_paradigm_mode() == "shift"
 
 
 def test_synthesis_mode_surfaces_top_3_anchors() -> None:

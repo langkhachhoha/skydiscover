@@ -123,10 +123,6 @@ def _parse_args() -> argparse.Namespace:
         help="Description-only inspirations alongside the anchors (default 5).",
     )
     p.add_argument(
-        "--no-repair", action="store_true",
-        help="Disable the one-shot self-repair branch.",
-    )
-    p.add_argument(
         "--no-meta-advice", action="store_true",
         help="Disable the LEVI-style lessons-learnt advisor.",
     )
@@ -136,9 +132,15 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--meta-advice-mode", choices=("rich", "errors_only"), default="rich",
-        help="`rich` (default) gives the advisor top-K descriptions + recent "
-        "admits with score-delta + typed error taxonomy. `errors_only` is the "
-        "paper ablation — drops the success-side signals.",
+        help="`rich` (default) feeds the advisor top-K descriptions + recent "
+        "admits split into IMPROVING / SATURATED buckets + typed error "
+        "taxonomy. `errors_only` is the paper ablation — drops the "
+        "success-side signals.",
+    )
+    p.add_argument(
+        "--meta-advice-inject-p", type=float, default=None, metavar="P",
+        help="Probability that any given mutate / crossover prompt is "
+        "prefixed with the current advice block (default 0.35).",
     )
 
     # ------------------------------------------------------------------
@@ -159,7 +161,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--p-targeted-mutate", type=float, default=None, metavar="P",
         help="Probability of using TARGETED_MUTATE_PROMPT when an analysis is "
-        "cached for the chosen parent (default 0.7).",
+        "cached for the chosen parent (default 0.5).",
     )
 
     # ------------------------------------------------------------------
@@ -182,9 +184,10 @@ def _parse_args() -> argparse.Namespace:
         help="At or below this stagnation level the shift uses synthesis mode (default 0.4).",
     )
     p.add_argument(
-        "--paradigm-shift-max-stagnation", type=float, default=None, metavar="S",
+        "--paradigm-surgical-max-stagnation", type=float, default=None, metavar="S",
         help="Below this stagnation level (and above synthesis cap) the shift "
-        "uses the 'new paradigm' mode (default 0.7); above this it goes surgical.",
+        "uses surgical mode (default 0.7); above this it flips to the "
+        "'new paradigm' (shift) mode.",
     )
     p.add_argument(
         "--paradigm-synthesis-n-anchors", type=int, default=None, metavar="N",
@@ -323,8 +326,6 @@ def main() -> int:
     if arch_kwargs:
         overrides["archive_config"] = ArchiveConfig(**arch_kwargs)
 
-    if args.no_repair:
-        overrides["enable_repair"] = False
     if args.paradigm_n_anchors is not None:
         overrides["paradigm_n_anchors"] = args.paradigm_n_anchors
     if args.paradigm_n_inspirations is not None:
@@ -340,6 +341,8 @@ def main() -> int:
         overrides["p_targeted_mutate"] = args.p_targeted_mutate
 
     overrides["meta_advice_mode"] = args.meta_advice_mode
+    if args.meta_advice_inject_p is not None:
+        overrides["meta_advice_inject_p"] = args.meta_advice_inject_p
     if args.no_crossover:
         overrides["p_crossover"] = 0.0
     elif args.p_crossover is not None:
@@ -347,8 +350,8 @@ def main() -> int:
 
     if args.paradigm_synthesis_max_stagnation is not None:
         overrides["paradigm_synthesis_max_stagnation"] = args.paradigm_synthesis_max_stagnation
-    if args.paradigm_shift_max_stagnation is not None:
-        overrides["paradigm_shift_max_stagnation"] = args.paradigm_shift_max_stagnation
+    if args.paradigm_surgical_max_stagnation is not None:
+        overrides["paradigm_surgical_max_stagnation"] = args.paradigm_surgical_max_stagnation
     if args.paradigm_synthesis_n_anchors is not None:
         overrides["paradigm_synthesis_n_anchors"] = args.paradigm_synthesis_n_anchors
     if args.paradigm_shift_n_anchors is not None:
@@ -420,7 +423,6 @@ def main() -> int:
             "no_meta_advice": args.no_meta_advice,
             "meta_advice_mode": args.meta_advice_mode,
             "no_targeted_mutate": args.no_targeted_mutate,
-            "no_repair": args.no_repair,
             "no_crossover": args.no_crossover,
             "p_crossover": args.p_crossover,
         },

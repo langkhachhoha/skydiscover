@@ -51,7 +51,6 @@ __all__ = [
     "build_synthesis_prompt",
     "build_paradigm_shift_prompt",
     "build_surgical_exploit_prompt",
-    "build_repair_prompt",
     "build_diverse_seed_prompt",
     "build_init_variant_prompt",
     "build_paradigm_variant_prompt",
@@ -720,62 +719,6 @@ def build_analysis_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Repair prompt — unchanged.
-# ---------------------------------------------------------------------------
-
-
-REPAIR_PROMPT = """\
-# Repair
-
-## Problem
-{problem_description}
-
-## Function signature
-```python
-{function_signature}
-```
-
-## Broken candidate (parent score was {parent_score})
-```python
-{broken_code}
-```
-
-## Error
-```
-{error_msg}
-```
-
-## Your task
-Produce a **corrected version** of the candidate that addresses the error
-above. Keep the algorithmic intent intact — only patch what's broken.
-
-{format_instruction}
-"""
-
-
-def build_repair_prompt(
-    *,
-    problem_description: str,
-    function_signature: str,
-    broken_code: str,
-    parent_score: float | None,
-    error_msg: str,
-) -> str:
-    if parent_score is None or not math.isfinite(parent_score):
-        parent_score_str = "n/a"
-    else:
-        parent_score_str = f"{parent_score:.4f}"
-    return REPAIR_PROMPT.format(
-        problem_description=problem_description,
-        function_signature=function_signature,
-        broken_code=broken_code,
-        parent_score=parent_score_str,
-        error_msg=error_msg[-1500:],
-        format_instruction=OUTPUT_FORMAT_INSTRUCTION,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Bootstrap-phase prompt builders — mirror LEVI's Diversifier.
 # ---------------------------------------------------------------------------
 
@@ -873,10 +816,12 @@ META_ADVICE_PROMPT = """\
 
 You are reviewing the search trajectory on this optimisation problem and
 writing a short prescriptive note that the mutation model will read
-verbatim before each future attempt. Your job is NOT to restate the
-problem or repeat constraints the grader already enforces — it is to
-amplify what is working, point at the next concrete thing to try, and
-call out the few anti-patterns that are actually costing evaluations.
+verbatim before SOME future attempts (roughly one in three). Your job is
+NOT to restate the problem or repeat constraints the grader already
+enforces — it is to amplify what is working, name strategy families
+that have *saturated* (admit but no longer improve), point at the next
+concrete thing to try, and call out anti-patterns that are actually
+costing evaluations.
 
 ## Problem
 {problem_description}
@@ -895,8 +840,11 @@ call out the few anti-patterns that are actually costing evaluations.
 ## Top archived programs (descriptions only — these are the leaders)
 {top_descriptions_block}
 
-## Recent admits (which operators are paying off, with score delta vs parent)
-{recent_admits_block}
+## Recent admits, IMPROVING (Δ vs parent > 0; what is actually paying off)
+{improving_admits_block}
+
+## Recent admits, SATURATED (Δ vs parent ≈ 0; same family, no progress)
+{saturated_admits_block}
 
 ## Recent failure taxonomy (errors grouped by type, this window)
 {error_taxonomy_block}
@@ -905,24 +853,31 @@ call out the few anti-patterns that are actually costing evaluations.
 {previous_advice_block}
 
 ## Your task
-Write the new advice block using EXACTLY these three short sections, in
+Write the new advice block using EXACTLY these four short sections, in
 this order, with these literal headers and no other markdown:
 
 WORKING: <1-2 sentences naming the concrete approach / structure / trick
-that the leaders share. Cite the operator (mutate_focused_fix,
-crossover_component_swap, …) when one is clearly dominating admits. If
-nothing is clearly working yet, say so plainly.>
+that the IMPROVING admits and leaders share. Cite the operator
+(mutate_focused_fix, crossover_component_swap, …) when one is clearly
+dominating improving admits. If nothing is clearly working yet, say so
+plainly.>
+
+SATURATED: <1-2 sentences naming any strategy family / operator that is
+producing admits but no longer producing IMPROVEMENT — i.e. the
+SATURATED admits list above. Future prompts should de-emphasise this
+direction. If no clear saturation, write "none".>
 
 TRY NEXT: <2-3 short imperative suggestions, ordered by priority. Be
 code-shaped (mention specific data structures, algorithms, numerical
-ranges, library calls). Build on WORKING — do NOT propose a tangent.>
+ranges, library calls). Build on WORKING and EXPLICITLY move away from
+SATURATED — do NOT propose more of the same.>
 
 AVOID: <1-2 anti-patterns that have actually shown up in this window's
 failures, referencing the taxonomy. Skip generic defensive advice
 (constraint checks that the grader already enforces, type validations,
 etc.) unless they appear repeatedly here.>
 
-Total length: under 120 words. No preamble. No extra headers. No bullet
+Total length: under 140 words. No preamble. No extra headers. No bullet
 characters — write each section as a single short paragraph after its
 header.
 """
@@ -992,12 +947,56 @@ def _top_descriptions_block(top_descriptions: Sequence[tuple[str, float]]) -> st
     return "\n".join(parts)
 
 
+# Δ-vs-parent values whose absolute magnitude falls inside this tolerance
+# are treated as "saturated" — the operator admitted (i.e. beat its
+# cell's incumbent in at least the secondary archive sense) but did not
+# meaningfully improve over its own parent. We deliberately use an
+# absolute, score-scale tolerance rather than a relative one so this
+# threshold is interpretable across benchmarks. 1e-3 is small enough to
+# rule out actual breakthroughs on the benchmarks we care about (circle
+# packing deltas at the breakthroughs were ≥ 0.01) while still catching
+# the long tails of "+0.0001" admits that signal a family is mined out.
+_SATURATED_DELTA_TOL: float = 1e-3
+
+
+def _split_admits_by_progress(
+    recent_admits: Sequence[tuple[str, float, float | None]],
+) -> tuple[
+    list[tuple[str, float, float | None]],
+    list[tuple[str, float, float | None]],
+]:
+    """Partition admits into (improving, saturated) lists.
+
+    Improving := Δ vs parent > _SATURATED_DELTA_TOL.
+    Saturated := Δ vs parent is finite AND |Δ| ≤ _SATURATED_DELTA_TOL.
+    Admits with Δ = None (no parent score / non-finite parent score)
+    fall into ``improving`` — we cannot judge them and would rather
+    over-report progress than over-report saturation.
+    """
+    improving: list[tuple[str, float, float | None]] = []
+    saturated: list[tuple[str, float, float | None]] = []
+    for src, score, delta in recent_admits:
+        if delta is None or not math.isfinite(delta):
+            improving.append((src, score, delta))
+            continue
+        if abs(delta) <= _SATURATED_DELTA_TOL:
+            saturated.append((src, score, delta))
+        elif delta > 0:
+            improving.append((src, score, delta))
+        else:
+            # delta < -tol: the admit was a regression (cell-replace
+            # case). Treat as saturated for the advisor's purposes —
+            # the family is producing accepted-but-not-better moves.
+            saturated.append((src, score, delta))
+    return improving, saturated
+
+
 def _recent_admits_block(
     recent_admits: Sequence[tuple[str, float, float | None]],
 ) -> str:
     """Render recent admits as ``source | score | Δ vs parent``."""
     if not recent_admits:
-        return "(no admits in this window)"
+        return "(none in this window)"
     parts: list[str] = []
     for source, score, delta in recent_admits:
         if delta is None or not math.isfinite(delta):
@@ -1037,6 +1036,7 @@ def build_meta_advice_prompt(
         best_score_str = f"{best_score:.4f}"
     previous = (previous_advice or "").strip()
     previous_block = previous if previous else "(none yet — this is the first cycle)"
+    improving, saturated = _split_admits_by_progress(recent_admits)
     return META_ADVICE_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
@@ -1045,7 +1045,8 @@ def build_meta_advice_prompt(
         accept_rate=f"{accept_rate:.2f}",
         stagnation_level=f"{stagnation_level:.2f}",
         top_descriptions_block=_top_descriptions_block(top_descriptions),
-        recent_admits_block=_recent_admits_block(recent_admits),
+        improving_admits_block=_recent_admits_block(improving),
+        saturated_admits_block=_recent_admits_block(saturated),
         error_taxonomy_block=_error_taxonomy_block(errors_by_source),
         previous_advice_block=previous_block,
     )

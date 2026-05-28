@@ -54,7 +54,6 @@ from levi.blade.prompts import (  # noqa: E402
     build_mutate_prompt,
     build_paradigm_shift_prompt,
     build_paradigm_variant_prompt,
-    build_repair_prompt,
     build_surgical_exploit_prompt,
     build_synthesis_prompt,
 )
@@ -101,11 +100,6 @@ PARENT_BFS = (
     "                seen.add(ns)\n"
     "                q.append((ns, depth + 1))\n"
     "    return -1\n"
-)
-
-BROKEN_CODE = (
-    "def solve(coins, target):\n"
-    "    return 1 / 0  # bug: division by zero\n"
 )
 
 INSP_PAIRS_HEALTHY: list[tuple[str, float]] = [
@@ -206,17 +200,7 @@ def build_cases() -> list[dict]:
     for t in (0.4, 0.9):
         cases.append({"shape": "crossover", "temperature": t, "model": MUTATION_MODEL, "prompt": cross_prompt})
 
-    # 3) Repair (single, deterministic temperature like orchestrator)
-    repair_prompt = build_repair_prompt(
-        problem_description=PROBLEM,
-        function_signature=SIGNATURE,
-        broken_code=BROKEN_CODE,
-        parent_score=0.95,
-        error_msg="ZeroDivisionError: division by zero\n  at solve, line 2",
-    )
-    cases.append({"shape": "repair", "temperature": 0.4, "model": MUTATION_MODEL, "prompt": repair_prompt})
-
-    # 4) Paradigm × 3 stages (orchestrator picks one per call, but we
+    # 3) Paradigm × 3 stages (orchestrator picks one per call, but we
     #    audit all three because the templates differ). Reasoning-heavy
     #    paradigm models (e.g. GPT-5) burn most of a 1200-token budget on
     #    internal thinking, so we mirror the orchestrator's higher cap.

@@ -5,18 +5,28 @@ name: BLADE
 # ./levi/examples/<name>/ (problem.py exports PROBLEM_DESCRIPTION,
 # FUNCTION_SIGNATURE, score_fn, optionally SEED_PROGRAM and INPUTS).
 #
-# The architecture is intentionally small: ClusterArchive (cells follow the
-# population via periodic KMeans re-clustering), RankSampler (Zipfian over
-# score rank, β adaptive to stagnation), Monitor (plateau + accept-rate).
-# Paper-facing ablations are exposed below: three on the behavior-signature /
-# clustering side ("ast_only", "emb_only", "static_cells") and five on the
-# operator / loop side ("no_meta_advice", "meta_errors_only", "no_targeted_mutate",
-# "no_crossover", "no_paradigm").
+# The architecture is intentionally small:
+#   - ClusterArchive (cells follow the population via periodic KMeans
+#     re-clustering)
+#   - RankSampler (Zipfian over score rank, β adaptive to stagnation)
+#   - Monitor (plateau + accept-rate)
+#   - PromptSampler over 5 mutate/crossover templates
+#   - Parent Analyzer with accumulating cache + TARGETED_MUTATE_PROMPT
+#   - Three-mode paradigm shift (synthesis ≤0.4 < surgical ≤0.7 < shift)
+#   - 4-bucket Meta-Advisor (WORKING / SATURATED / TRY NEXT / AVOID)
 #
-# Only knobs that change run-to-run are first-class inputs; everything else
-# (problem module name, eval-processes / timeout, pe-interval, embedding
-# model, archive low-level parameters, repair toggle) is funnelled through a
-# single JSON ``advanced_options`` input — keeps the dispatch UI usable.
+# Paper-facing ablations exposed below: three on the behavior-signature /
+# clustering side ("ast_only", "emb_only", "static_cells") and four on the
+# operator / loop side ("no_meta_advice", "meta_errors_only",
+# "no_targeted_mutate", "no_crossover"), plus "no_paradigm" which
+# zeroes ``pe_interval``. The previous ``no_repair`` slot is gone — the
+# repair branch was removed unconditionally.
+#
+# Only knobs that change run-to-run are first-class inputs; everything
+# else (problem module name, eval-processes / timeout, pe-interval,
+# embedding model, archive low-level parameters, advice inject
+# probability, mode thresholds) is funnelled through a single JSON
+# ``advanced_options`` input — keeps the dispatch UI usable.
 
 on:
   workflow_dispatch:
@@ -93,7 +103,7 @@ on:
             "ast_only"            — disable the description-embedding half of the behavior signature (A2)
             "emb_only"            — disable the AST half (A1)
             "static_cells"        — disable adaptive KMeans re-clustering (A3)
-            "no_meta_advice"      — disable the lessons-learnt advisor entirely (A4)
+            "no_meta_advice"      — disable the 4-bucket lessons-learnt advisor entirely (A4)
             "meta_errors_only"    — keep the advisor, but feed only failure messages (no success-side signal) (A5)
             "no_targeted_mutate"  — disable LLM-generated parent analysis + TARGETED_MUTATE_PROMPT (A6)
             "no_crossover"        — drop crossover, run mutate-only (sets p_crossover=0) (A7)
@@ -117,14 +127,15 @@ on:
           problem_module, target_score, embedding_model, eval_processes,
           n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
           n_cells, recluster_every, embedding_dim,
-          repair_disabled, meta_advice_disabled, meta_advice_interval,
-          meta_advice_mode (rich|errors_only),
+          meta_advice_disabled, meta_advice_interval,
+          meta_advice_mode (rich|errors_only), meta_advice_inject_p,
           targeted_mutate_disabled, analyzer_interval, analyzer_top_k,
           p_targeted_mutate, p_crossover,
-          paradigm_synthesis_max_stagnation, paradigm_shift_max_stagnation,
+          paradigm_synthesis_max_stagnation,
+          paradigm_surgical_max_stagnation,
           paradigm_synthesis_n_anchors, paradigm_shift_n_anchors,
           paradigm_surgical_n_inspirations.
-          Example: '{"n_cells":50,"p_targeted_mutate":0.7}'
+          Example: '{"n_cells":50,"p_targeted_mutate":0.5,"meta_advice_inject_p":0.35}'
         required: false
         type: string
         default: ""
@@ -255,7 +266,7 @@ jobs:
           [ -n "$ADV_RECLUSTER_EVERY" ] && EXTRA_OPTS="$EXTRA_OPTS --recluster-every $ADV_RECLUSTER_EVERY"
           [ -n "$ADV_EMBEDDING_DIM" ]   && EXTRA_OPTS="$EXTRA_OPTS --embedding-dim $ADV_EMBEDDING_DIM"
           [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
-          [ "$ADV_REPAIR_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-repair"
+          [ -n "$ADV_META_ADVICE_INJECT_P" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-inject-p $ADV_META_ADVICE_INJECT_P"
           [ "$ADV_META_ADVICE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice"
           [ "$ADV_TARGETED_MUTATE_DISABLED" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --no-targeted-mutate"
           [ -n "$ADV_ANALYZER_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-interval $ADV_ANALYZER_INTERVAL"
@@ -264,7 +275,7 @@ jobs:
           [ -n "$ADV_P_CROSSOVER" ] && EXTRA_OPTS="$EXTRA_OPTS --p-crossover $ADV_P_CROSSOVER"
           [ -n "$ADV_META_ADVICE_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-mode $ADV_META_ADVICE_MODE"
           [ -n "$ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-max-stagnation $ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION"
-          [ -n "$ADV_PARADIGM_SHIFT_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-max-stagnation $ADV_PARADIGM_SHIFT_MAX_STAGNATION"
+          [ -n "$ADV_PARADIGM_SURGICAL_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-max-stagnation $ADV_PARADIGM_SURGICAL_MAX_STAGNATION"
           [ -n "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-n-anchors $ADV_PARADIGM_SYNTHESIS_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SHIFT_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-n-anchors $ADV_PARADIGM_SHIFT_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-n-inspirations $ADV_PARADIGM_SURGICAL_N_INSPIRATIONS"
@@ -272,8 +283,8 @@ jobs:
           # Paper-facing ablation toggles. ``pe_interval`` is set to the
           # workflow input by default but the ``no_paradigm`` ablation
           # overrides it to 0 (which disables the PE monitor inside the
-          # orchestrator). Likewise the operator-side ablations append
-          # the matching CLI flag.
+          # orchestrator). The operator-side ablations append the
+          # matching CLI flag.
           PE_INTERVAL_EFFECTIVE="${{ inputs.pe_interval }}"
           case "${{ inputs.ablation }}" in
             ast_only)            EXTRA_OPTS="$EXTRA_OPTS --ast-only" ;;

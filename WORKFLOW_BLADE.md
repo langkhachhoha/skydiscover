@@ -38,23 +38,27 @@
 │      • 2 crossover templates: structural / component_swap             │
 │      • drawn uniformly per call                                       │
 │                                                                        │
-│  (5) Parent Analyzer + Targeted Mutate                                 │
-│      • mutation model writes a short review of top-K parents          │
-│      • cached by id(parent), refreshed every analyzer_interval evals  │
-│      • when cached, TARGETED_MUTATE_PROMPT fires with                 │
-│        probability p_targeted_mutate                                  │
+│  (5) Parent Analyzer + Targeted Mutate (accumulating cache)            │
+│      • each refresh analyses the first ``analyzer_top_k`` programs    │
+│        that do NOT yet have a cached analysis (descending rank)       │
+│      • cache entries survive across cycles; only evicted when the     │
+│        program leaves the archive (cell incumbent kicked it out)      │
+│      • when the chosen parent has a cached analysis,                  │
+│        TARGETED_MUTATE_PROMPT fires with probability                  │
+│        ``p_targeted_mutate``                                          │
 │                                                                        │
-│  (6) Structured Meta-Advisor                                           │
-│      • every meta_advice_interval evals, the mutation model writes    │
-│        a short WORKING / TRY NEXT / AVOID note                        │
-│      • input: top-K archive descriptions + recent admits with score   │
-│        delta-vs-parent + typed error taxonomy + previous advice       │
-│      • the note is injected verbatim into future mutate / crossover   │
-│        prompts with probability meta_advice_inject_p                  │
+│  (6) Structured Meta-Advisor (4-bucket, SeaEvo-style)                  │
+│      • every ``meta_advice_interval`` evals, the mutation model       │
+│        writes a short WORKING / SATURATED / TRY NEXT / AVOID note     │
+│      • input: top-K descriptions, recent admits split into IMPROVING  │
+│        (|Δ| > 1e-3 above parent) and SATURATED (|Δ| ≈ 0 or regression)│
+│        buckets, typed error taxonomy, previous advice                 │
+│      • note is injected verbatim into future mutate / crossover       │
+│        prompts with probability ``meta_advice_inject_p``              │
 │                                                                        │
 │  + Orchestrator: 2-phase bootstrap + main loop + three-mode           │
-│      paradigm shift (synthesis / shift / surgical) dispatched by      │
-│      stagnation level.                                                │
+│      paradigm shift (synthesis / surgical / shift) dispatched by      │
+│      stagnation level (low → synthesis, mid → surgical, high → shift)│
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -168,21 +172,48 @@ The five templates:
 Choice is uniform random — no learned weights — so the mutation model
 sees prompt-level diversity even when the parent pool is narrow.
 
-### 1.5 Parent Analyzer + Targeted Mutate
+### 1.5 Parent Analyzer + Targeted Mutate (accumulating cache)
 
 A background monitor wakes every `analyzer_interval` evaluations
-(default 30) and asks the mutation model for a short review of the top
-`analyzer_top_k` programs (default 3). Each review identifies three
-bottlenecks plus three suggested changes. Reviews are cached by
-`id(parent)` and dropped when the parent leaves the top-K.
+(default 30) and asks the mutation model for a short review of
+**uncached** top-ranked programs. Each review identifies three
+bottlenecks plus three suggested changes.
 
-When a parent with a cached review is selected for mutation, the
-orchestrator picks `TARGETED_MUTATE_PROMPT` with probability
-`p_targeted_mutate` (default 0.7) — otherwise it falls back to the
-standard `PromptSampler`. The targeted prompt receives the analysis
-verbatim and asks the model to commit to ONE suggested change.
+**Cache policy — accumulate, then churn.** On each refresh:
 
-### 1.6 Three-mode paradigm shift
+1. Cache entries for programs that no longer live in the archive
+   (kicked out by a better cell incumbent, dropped by re-cluster)
+   are evicted.
+2. The archive is walked in score-descending order; the first
+   `analyzer_top_k` programs that do **not yet** have a cache entry
+   get analysed. Already-cached programs are skipped — their analysis
+   is untouched.
+
+With `analyzer_top_k = 3` and a frozen top-3, refresh #1 covers ranks
+1-3, refresh #2 covers ranks 4-6, refresh #3 covers ranks 7-9, …
+until the entire archive has been analysed. From then on refreshes
+are no-ops until cell churn injects a new program, at which point
+exactly the displaced entry is evicted and the newcomer is analysed.
+
+This replaces an earlier "top-K only, evict everything else" policy
+that re-analysed the same three frozen parents every cycle and
+starved targeted-mutate of analysis-level diversity. The
+accumulating policy means cache size is bounded by `len(archive)`
+(at most `n_cells`) and no explicit per-entry cap is needed. The
+property is pinned by
+[test_analyzer_cache.py](levi/tests/blade/test_analyzer_cache.py).
+
+**Targeted mutate.** When a parent with a cached review is selected
+for mutation, the orchestrator picks `TARGETED_MUTATE_PROMPT` with
+probability `p_targeted_mutate` (default 0.5) — otherwise it falls
+back to the standard `PromptSampler`. The targeted prompt receives
+the analysis verbatim and asks the model to commit to ONE suggested
+change. The default of 0.5 (down from an earlier 0.7) leaves room
+for the `PromptSampler`'s template-level diversity to surface even
+when the chosen parent has cached analysis, which it does most of
+the time under the Zipfian sampler.
+
+### 1.6 Three-mode paradigm shift (stagnation-routed)
 
 The frontier paradigm-shift call picks one of three prompt templates
 based on the current stagnation level. Each mode receives a different
@@ -191,70 +222,106 @@ anchor / inspiration configuration:
 | Mode | Stagnation range | Anchors (full code) | Inspirations | Asks for |
 | --- | --- | --- | --- | --- |
 | `synthesis` | `s ≤ 0.4` | 3 (close-in-score) | `paradigm_n_inspirations` | combine 2-3 anchors into one program (`MOVE: SYNTHESIS`) |
-| `shift` | `0.4 < s ≤ 0.7` | 2 | `paradigm_n_inspirations` | propose a genuinely new paradigm class (`MOVE: SHIFT`) |
-| `surgical` | `s > 0.7` | 1 (champion only) | `paradigm_surgical_n_inspirations` (descriptions only) | one local structural fix to the champion (`MOVE: SURGICAL`) |
+| `surgical` | `0.4 < s ≤ 0.7` | 1 (champion only) | `paradigm_surgical_n_inspirations` | one local structural fix to the champion (`MOVE: SURGICAL`) |
+| `shift` | `s > 0.7` | 2 | `paradigm_n_inspirations` | propose a genuinely new paradigm class (`MOVE: SHIFT`) |
 
-Surgical mode is the lever for late-run plateaus: when previous
-paradigm trials are not contributing to the best score, the frontier
-is told explicitly to focus on the champion and write a small, local,
-structural improvement — not a new paradigm and not a constant-sweep.
+**Rationale.** The earlier mapping routed *high* stagnation to
+`surgical` and mid stagnation to `shift`. Empirically that left the
+search trapped: when the champion has plateaued and the same family of
+solutions has dominated for many evaluations, asking the frontier for
+*another* local fix to the same code rarely escapes the optimum. The
+mode that actually broke prior plateaus in our runs was `shift` — a
+genuinely new paradigm class. We therefore route the deepest stagnation
+to `shift` and reserve `surgical` for the mid-stagnation band, where
+the champion still has momentum and a careful local polish can
+compound into measurable progress.
 
 The mode thresholds are tunable
-(`paradigm_synthesis_max_stagnation`, `paradigm_shift_max_stagnation`).
+(`paradigm_synthesis_max_stagnation`, `paradigm_surgical_max_stagnation`).
 
-### 1.7 Structured Meta-Advisor
+### 1.7 Structured Meta-Advisor (4-bucket, SeaEvo-style)
 
 The advisor is a background monitor that wakes every
 `meta_advice_interval` evaluations and asks the mutation model for a
 short prescriptive note. The note is injected verbatim into the next
 mutate / crossover prompts with probability `meta_advice_inject_p`
-(default 0.7).
+(default 0.35).
 
-**Three-bucket output schema.** The model must emit exactly three
-short paragraphs, in this order, with these literal headers:
+**Four-bucket output schema.** The model must emit exactly four short
+paragraphs, in this order, with these literal headers:
 
 ```text
-WORKING:  <1-2 sentences naming what the leaders share; cite an
-           operator (e.g. mutate_focused_fix) if one dominates admits>
-TRY NEXT: <2-3 short imperative suggestions building on WORKING>
-AVOID:    <1-2 anti-patterns that actually appear in the window's
-           failure taxonomy>
+WORKING:   <1-2 sentences naming what the IMPROVING admits and leaders
+            share; cite an operator (e.g. mutate_focused_fix) if one
+            dominates improving admits>
+SATURATED: <1-2 sentences naming any strategy family / operator that
+            is producing admits but no longer producing IMPROVEMENT.
+            Future prompts should de-emphasise this direction. If no
+            clear saturation, write "none".>
+TRY NEXT:  <2-3 short imperative suggestions building on WORKING and
+            EXPLICITLY moving away from SATURATED>
+AVOID:     <1-2 anti-patterns that actually appear in the window's
+            failure taxonomy>
 ```
 
-This is the schema enforced by the prompt — earlier free-form prose
-produced defensive-only advice ("avoid X", "clamp Y") because the only
-signal flowing in was raw failure messages.
+The `SATURATED` bucket is the SeaEvo-style addition. SeaEvo's
+Strategic Landscape Navigation tracks effective / saturated /
+underexplored strategy *families* at the population level rather than
+reasoning about individual programs in isolation. We mirror that
+signal by splitting recent admits into `IMPROVING` (real progress
+vs parent) and `SATURATED` (accepted-but-not-better, or admitted with
+a regression) before they reach the advisor's prompt — see §1.7.1.
 
-**Four signal streams.** The advisor's prompt is built from:
+**Inject probability.** Lowered from an earlier 0.7 → 0.35. At 0.7
+nearly every mutation prompt saw the same advice text, which heavily
+biased the mutation model toward whichever direction the last advisor
+cycle endorsed and blunted the diversity provided by `PromptSampler`.
+0.35 means ~1 in 3 prompts is advice-guided, which still gives the
+advisor a meaningful nudge across a paradigm-shift window (50 evals ×
+0.35 ≈ 17 advice-guided attempts) without saturating it.
+
+**Five signal streams.** The advisor's prompt is built from:
 
 1. **Top-K archived program descriptions** with their scores
    (`top_descriptions`, K=3). These are the current leaders the
    advisor must reason about under WORKING / TRY NEXT.
-2. **Recent admits** as `(source, score, delta_vs_parent)` triples
-   (`recent_admits`, rolling window of 8). The orchestrator carries
-   `parent_score` through to `_admit()` so the score-delta is exact,
-   and the source label includes the prompt variant
-   (`mutate_focused_fix`, `crossover_component_swap`, …).
-3. **Typed error taxonomy.** Errors from this window are bucketed by
+2. **Recent admits — IMPROVING bucket.** Admits with
+   `Δ vs parent > 1e-3`. These are the ones to amplify.
+3. **Recent admits — SATURATED bucket.** Admits with
+   `|Δ| ≤ 1e-3` or `Δ < -1e-3`. The operator family is converting
+   but no longer making progress — the advisor must call this out
+   under SATURATED.
+4. **Typed error taxonomy.** Errors from this window are bucketed by
    `classify_error` into seven kinds — `timeout`, `syntax`,
    `constraint`, `shape_mismatch`, `numpy_api`, `name_or_attr`,
    `type_error`, with `other` as fallback — and rendered with counts
    plus a per-source breakdown plus one truncated example per bucket.
-   This replaces the old "tail 5 raw messages" feed, which could not
-   distinguish a single epidemic failure from five unrelated ones.
-4. **Previous advice** carried over verbatim so the advisor can refine
+5. **Previous advice** carried over verbatim so the advisor can refine
    instead of repeating.
 
 **Mode switch.** `meta_advice_mode` is either `rich` (default — feed
-all four signal streams) or `errors_only` (drop top descriptions and
-recent admits; only the typed error taxonomy + previous advice flow
-in). The latter exists exclusively as a paper ablation; in production
-runs `rich` is the only sensible setting.
+all five signal streams) or `errors_only` (drop top descriptions and
+both admit buckets; only the typed error taxonomy + previous advice
+flow in). The latter exists exclusively as a paper ablation; in
+production runs `rich` is the only sensible setting.
 
 Per-window invariant: after each advisor call the per-window error
 queue is cleared so the next cycle sees a fresh taxonomy, while the
 recent-admits queue intentionally rolls across cycles so the advisor
 can spot operators that are *consistently* productive.
+
+#### 1.7.1 Saturation split — absolute Δ tolerance
+
+The IMPROVING / SATURATED split uses an absolute tolerance of
+`1e-3` on the score delta vs parent. We use an absolute, score-scale
+tolerance rather than a relative one so the threshold is interpretable
+across benchmarks. 1e-3 is small enough to rule out actual
+breakthroughs on the benchmarks we care about (circle-packing
+breakthroughs were ≥ 0.01) while still catching the long tail of
+"+0.0001" admits that signal a family is mined out. Admits with
+`Δ = None` (no parent score / non-finite parent score) fall into
+IMPROVING — we cannot judge them and would rather over-report
+progress than over-report saturation.
 
 ---
 
@@ -288,17 +355,18 @@ can spot operators that are *consistently* productive.
                 | build_crossover_prompt(template=tmpl, ..., meta_advice=...)
        code = mutation(prompt)
        archive.add(Program(..., source=op_label))
-     if error_buffer: _repair_one()     # one-shot
+     # No repair branch: failed candidates count as rejects and feed
+     # the advisor's error taxonomy via _advisor_errors.
 
    parallel:
      • _pe_monitor   fires _paradigm_shift() every pe_cron_interval evals
-     • _meta_advice_monitor refreshes the WORKING/TRY/AVOID note every
+     • _meta_advice_monitor refreshes the 4-bucket note every
        meta_advice_interval evals
-     • _analyzer_monitor refreshes top-K parent analyses every
-       analyzer_interval evals
+     • _analyzer_monitor refreshes the parent-analysis cache every
+       analyzer_interval evals (accumulating, churn-driven)
 
 4. Paradigm shift
-   mode = pick_mode(stagnation)         # synthesis | shift | surgical
+   mode = pick_mode(stagnation)         # synthesis | surgical | shift
    prompt, anchors = _build_paradigm_prompt_for_mode(mode)
    code = frontier(prompt)
    archive.add(Program(..., source="paradigm"))
@@ -309,8 +377,7 @@ The archive's re-clustering happens inside `archive.add(...)` whenever
 enough admits have accumulated. The orchestrator never touches cluster
 bookkeeping directly. Admits and errors are simultaneously appended to
 two small rolling queues (`_advisor_admits`, `_advisor_errors`) that
-feed the meta-advisor; these are independent of `error_buffer` (which
-the repair branch drains by `popleft`).
+feed the meta-advisor.
 
 ---
 
@@ -327,7 +394,7 @@ the canonical reference, not the workflow file.
 
 | Knob | Default | Notes |
 | --- | --- | --- |
-| `mutation_model` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | Small / fast model. Drives mutate, crossover, repair, init variants, paradigm variants, meta-advisor, analyzer. |
+| `mutation_model` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | Small / fast model. Drives mutate, crossover, init variants, paradigm variants, meta-advisor, analyzer. |
 | `paradigm_model` | `openrouter/openai/gpt-5` | Frontier model. Drives diverse-seed phase and per-mode paradigm shift. |
 | `embedding_model` | `openrouter/openai/text-embedding-3-small` | Description embedder for the second half of the behavior signature. |
 
@@ -362,19 +429,18 @@ the canonical reference, not the workflow file.
 | `paradigm_variant_temperature` | `0.85` | Mutation temperature for paradigm-fanout variants. |
 | `n_paradigm_variants` | `4` | Variants spun off the new paradigm seed. |
 
-### 3.4 Operator mix & repair
+### 3.4 Operator mix
 
 | Knob | Default | Notes |
 | --- | --- | --- |
-| `p_crossover` | `0.35` | Probability of crossover per main-loop step. Empirically observed admit-rate: mutate operators ~10–17%, crossover operators ~13–16%. |
-| `enable_repair` | `True` | One-shot repair branch for error candidates. |
+| `p_crossover` | `0.35` | Probability of crossover per main-loop step. The remaining 65% is mutate. There is **no repair branch**: failed candidates count as rejects and surface in the advisor's error taxonomy. |
 
 ### 3.5 Three-mode paradigm shift
 
 | Knob | Default | Notes |
 | --- | --- | --- |
 | `paradigm_synthesis_max_stagnation` | `0.4` | At or below → `synthesis` mode. |
-| `paradigm_shift_max_stagnation` | `0.7` | Between synthesis cap and this → `shift` mode; above → `surgical`. |
+| `paradigm_surgical_max_stagnation` | `0.7` | Between synthesis cap and this → `surgical` mode; above → `shift`. |
 | `paradigm_synthesis_n_anchors` | `3` | Full-code anchors in synthesis mode. |
 | `paradigm_shift_n_anchors` | `2` | Full-code anchors in shift mode. |
 | `paradigm_surgical_n_inspirations` | `5` | Description-only inspirations in surgical mode (alongside the single champion anchor). |
@@ -386,19 +452,19 @@ the canonical reference, not the workflow file.
 | --- | --- | --- |
 | `enable_targeted_mutate` | `True` | Master toggle for the analyzer + TARGETED_MUTATE_PROMPT path. |
 | `analyzer_interval` | `30` | Refresh the analysis cache every N completed evaluations. |
-| `analyzer_top_k` | `3` | Number of top-ranked programs analysed per refresh. |
+| `analyzer_top_k` | `3` | How many *new* (uncached) programs to analyse per refresh. Cache survives across refreshes; only evicted when the program leaves the archive. |
 | `analyzer_temperature` | `0.3` | Mutation-model temperature for the analysis call. |
 | `analyzer_max_tokens` | `500` | Token cap for one analysis. |
-| `p_targeted_mutate` | `0.7` | When the chosen parent has a cached analysis, probability of using TARGETED_MUTATE_PROMPT (else fall back to PromptSampler). |
+| `p_targeted_mutate` | `0.5` | When the chosen parent has a cached analysis, probability of using TARGETED_MUTATE_PROMPT (else fall back to PromptSampler). |
 
 ### 3.7 Meta-advisor
 
 | Knob | Default | Notes |
 | --- | --- | --- |
 | `enable_meta_advice` | `True` | Master toggle. |
-| `meta_advice_interval` | `50` | Regenerate the WORKING/TRY/AVOID note every N evaluations. |
-| `meta_advice_mode` | `"rich"` | Either `rich` (top descriptions + recent admits with delta + typed error taxonomy + previous advice) or `errors_only` (taxonomy + previous advice only). The latter is the paper ablation flag. |
-| `meta_advice_inject_p` | `0.7` | Probability of injecting the current note into the next mutate / crossover prompt. |
+| `meta_advice_interval` | `50` | Regenerate the 4-bucket note every N evaluations. |
+| `meta_advice_mode` | `"rich"` | Either `rich` (top descriptions + IMPROVING/SATURATED admit split + typed error taxonomy + previous advice) or `errors_only` (taxonomy + previous advice only). The latter is the paper ablation flag. |
+| `meta_advice_inject_p` | `0.35` | Probability of injecting the current note into the next mutate / crossover prompt. |
 | `meta_advice_temperature` | `0.4` | Mutation-model temperature for the advisor call. |
 | `meta_advice_max_tokens` | `400` | Token cap for one advisor note. |
 
@@ -447,17 +513,17 @@ through the JSON `advanced_options` input, e.g.
 
   "meta_advice_interval": 50,
   "meta_advice_mode": "rich",
+  "meta_advice_inject_p": 0.35,
   "meta_advice_disabled": false,
   "targeted_mutate_disabled": false,
-  "repair_disabled": false,
 
   "analyzer_interval": 30,
   "analyzer_top_k": 3,
-  "p_targeted_mutate": 0.7,
+  "p_targeted_mutate": 0.5,
   "p_crossover": 0.35,
 
   "paradigm_synthesis_max_stagnation": 0.4,
-  "paradigm_shift_max_stagnation": 0.7,
+  "paradigm_surgical_max_stagnation": 0.7,
   "paradigm_synthesis_n_anchors": 3,
   "paradigm_shift_n_anchors": 2,
   "paradigm_surgical_n_inspirations": 5
@@ -466,17 +532,18 @@ through the JSON `advanced_options` input, e.g.
 
 The CLI exposes the same knobs as `--n-cells`, `--analyzer-interval`,
 `--p-targeted-mutate`, `--p-crossover`, `--meta-advice-mode`,
-`--paradigm-synthesis-max-stagnation`, etc. Run
+`--meta-advice-inject-p`, `--paradigm-synthesis-max-stagnation`,
+`--paradigm-surgical-max-stagnation`, etc. Run
 `uv run python scripts/run_blade.py --help` for the full list.
 
 ---
 
 ## 4. Ablation protocol (paper-facing)
 
-The workflow exposes nine mutually-exclusive ablation choices via the
+The workflow exposes eight mutually-exclusive ablation choices via the
 `ablation` dropdown. Three target the behavior signature / clustering
-side (A1–A3); five target individual operator / loop components
-(A4–A8); the remaining slot is the un-ablated default (`full`).
+side (A1–A3); four target individual operator / loop components
+(A4–A7); the remaining slot is the un-ablated default (`full`).
 
 | Ablation | Toggle (workflow) | Toggle (CLI) | What is removed |
 | --- | --- | --- | --- |
@@ -485,14 +552,18 @@ side (A1–A3); five target individual operator / loop components
 | **A2 — ast-only** | `ablation: ast_only` | `--ast-only` | The PCA description-embedding half. |
 | **A3 — static-cells** | `ablation: static_cells` | `--static-cells` | Adaptive re-clustering. KMeans fit once at `n_cells`, then frozen. |
 | **A4 — no-meta-advice** | `ablation: no_meta_advice` | `--no-meta-advice` | The lessons-learnt advisor entirely. |
-| **A5 — meta-errors-only** | `ablation: meta_errors_only` | `--meta-advice-mode errors_only` | The success-side signals (top descriptions + recent admits). Advisor still runs but sees only the error taxonomy. Isolates the contribution of the success-side feed. |
+| **A5 — meta-errors-only** | `ablation: meta_errors_only` | `--meta-advice-mode errors_only` | The success-side signals (top descriptions + IMPROVING/SATURATED admits). Advisor still runs but sees only the error taxonomy. Isolates the contribution of the success-side feed. |
 | **A6 — no-targeted-mutate** | `ablation: no_targeted_mutate` | `--no-targeted-mutate` | The parent analyzer + `TARGETED_MUTATE_PROMPT`. The PromptSampler still produces the other 5 templates. |
 | **A7 — no-crossover** | `ablation: no_crossover` | `--no-crossover` | The crossover branch (sets `p_crossover = 0`). |
 | **A8 — no-paradigm** | `ablation: no_paradigm` | `--pe-interval 0` | The frontier paradigm-shift loop. |
 
 The three behavior-signature toggles (A1, A2, A3) are mutually
-orthogonal to the five operator-side toggles (A4–A8), so reporting
-results as two separate ablation tables is reasonable.
+orthogonal to the operator-side toggles (A4–A8), so reporting results
+as two separate ablation tables is reasonable. The previous
+`--no-repair` toggle is gone: the repair branch was removed
+unconditionally (failed candidates count as rejects and surface in
+the advisor's error taxonomy), so there is no longer an ablation slot
+for it.
 
 ---
 
@@ -503,8 +574,8 @@ Per run, `output_dir/`:
 - `best.py` — top-scoring program (also written as `best_program.py`).
 - `summary.json` — run metadata + budget + ablation block (records the
   exact flag combination — `no_meta_advice`, `meta_advice_mode`,
-  `no_targeted_mutate`, `no_repair`, `no_crossover`, `p_crossover`,
-  plus the behavior-signature ablation booleans).
+  `no_targeted_mutate`, `no_crossover`, `p_crossover`, plus the
+  behavior-signature ablation booleans).
 - `snapshot.json` — full archive dump:
   - `monitor` — `eval_count, best_score, plateau_steps, admit_gap,
     global_stagnation, local_stagnation, stagnation_level, accept_rate`
@@ -514,11 +585,11 @@ Per run, `output_dir/`:
     low-level archive parameters
   - `meta_advice` — `{enabled, interval, mode, inject_p,
     trigger_count, current}` (the `current` field carries the
-    WORKING/TRY/AVOID text from the most recent advisor cycle)
+    WORKING/SATURATED/TRY/AVOID text from the most recent advisor cycle)
   - `analyzer` — `{enabled, interval, top_k, trigger_count,
     targeted_mutate_count, p_targeted_mutate, cache_size}`
   - `paradigm_modes` — `{synthesis_max_stagnation,
-    shift_max_stagnation, synthesis_n_anchors, shift_n_anchors,
+    surgical_max_stagnation, synthesis_n_anchors, shift_n_anchors,
     surgical_n_inspirations}`
 
 ---
@@ -528,11 +599,11 @@ Per run, `output_dir/`:
 - `[Eval #N] {model} {status} | source: ... | score: ... | best: ... | $cost`
 - Sources include the prompt-variant label, e.g. `mutate_focused_fix`,
   `crossover_component_swap`, `mutate_targeted`, `paradigm_synthesis`,
-  `paradigm_surgical`.
+  `paradigm_surgical`, `paradigm_shift`.
 - `[Status] Cost: ... | Evals: ... | Archive: N (cells K) | Best: ... | Elapsed: ...s`
-- `[BLADE PE] mode=surgical anchors=1 stagnation=0.82 best=2.2871`
+- `[BLADE PE] mode=shift anchors=2 stagnation=0.82 best=2.6133`
 - `[BLADE PE] fanout: K variants from paradigm seed (score=..., accepted=...)`
-- `[BLADE analyzer] trigger #N at eval=M (refreshing top-K)`
+- `[BLADE analyzer] trigger #N at eval=M (analysing up to K uncached programs; cache=C)`
 - `[BLADE advisor] new advice (N chars) at eval=M`
 - `[Archive] recluster: n=... → K/n_cells occupied cells (admits since last recluster=...)`
 
@@ -558,11 +629,17 @@ uv run python scripts/run_blade.py \
   --seconds 10800 --dollars 5 \
   --no-targeted-mutate
 
-# Push surgical mode earlier (force exploit-heavy late phase)
+# Force shift earlier (push the surgical→shift boundary down to 0.5)
 uv run python scripts/run_blade.py \
   --example-dir levi/examples/circle_packing_rect \
   --seconds 10800 --dollars 5 \
-  --paradigm-shift-max-stagnation 0.5
+  --paradigm-surgical-max-stagnation 0.5
+
+# Increase advice influence (60% of mutate prompts see the advice block)
+uv run python scripts/run_blade.py \
+  --example-dir levi/examples/circle_packing_rect \
+  --seconds 10800 --dollars 5 \
+  --meta-advice-inject-p 0.6
 
 # Paper ablation: errors-only meta-advisor
 uv run python scripts/run_blade.py \
@@ -590,9 +667,11 @@ Two pre-merge gates pin the contracts the system relies on:
 ```bash
 # Offline unit tests
 cd levi && uv run python -m pytest tests/blade/ --tb=short
-# Coverage: archive invariants (4) + prompt templates (8) + paradigm
-# modes (4) + orchestrator E2E on fake LLMs (3) + meta-advisor signal
-# wiring + error taxonomy (9) = 28 tests, ~35s wall-clock.
+# Coverage: archive invariants + prompt templates + paradigm
+# modes (mode dispatch + per-mode anchors) + orchestrator E2E on
+# fake LLMs + meta-advisor signal wiring (incl. IMPROVING/SATURATED
+# split + 4-bucket schema) + analyzer accumulating-cache policy
+# (5 tests) + error taxonomy = 33 offline tests.
 
 # Live audit: one real call per prompt variant against the production
 # mutation model, checks that every response contains

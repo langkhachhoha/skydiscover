@@ -103,9 +103,10 @@ def solve(x):
     return x ** 3
 ```
 """,
-    # Crash candidate — exercises error_buffer + repair.
+    # Crash candidate — should be recorded as a reject and counted in
+    # the advisor error stream, but no longer triggers a repair attempt.
     """## Description
-broken on purpose to test the repair branch.
+broken on purpose to verify the reject path.
 
 ## Code
 ```python
@@ -116,9 +117,10 @@ def solve(x):
 ]
 
 
-# Repair response (mutation model is reused for repair).
-_REPAIR_RESPONSE = """## Description
-Fixed the division-by-zero; now returns the cube of x.
+# Extra mutation response — kept queued so the fake LM never runs dry
+# when worker fanout overruns the canned ``_MUTATION_RESPONSES`` list.
+_EXTRA_MUTATION_RESPONSE = """## Description
+Fallback response so the fake LLM does not exhaust mid-test.
 
 ## Code
 ```python
@@ -162,7 +164,7 @@ def test_blade_orchestrator_end_to_end(tmp_path: Path, monkeypatch):
     orch = BladeOrchestrator(cfg)
 
     # Swap in fake LLM clients post-construction.
-    orch.mutation_lm = _FakeLM("fake/mutation", _MUTATION_RESPONSES + [_REPAIR_RESPONSE])
+    orch.mutation_lm = _FakeLM("fake/mutation", _MUTATION_RESPONSES + [_EXTRA_MUTATION_RESPONSE])
     orch.paradigm_lm = _FakeLM("fake/paradigm", [_PARADIGM_RESPONSE])
 
     result = asyncio.run(orch.run())

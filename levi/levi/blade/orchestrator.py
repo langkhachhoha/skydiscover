@@ -14,8 +14,8 @@ Phases:
 2. **Bootstrap phase 2** — mutation model fans out
    ``n_variants_per_seed`` variants per seed in parallel.
 
-3. **Main loop** — up to ``n_workers`` mutate/crossover/repair workers
-   running concurrently. Every ``pe_cron_interval`` evaluations a
+3. **Main loop** — up to ``n_workers`` mutate/crossover workers running
+   concurrently. Every ``pe_cron_interval`` evaluations a
    background task fires a paradigm shift: frontier writes one seed
    informed by the current cell representatives (one program per cell,
    ranked by score, capped at ``paradigm_n_anchors``), then the
@@ -71,7 +71,6 @@ from .prompts import (
     build_mutate_prompt,
     build_paradigm_shift_prompt,
     build_paradigm_variant_prompt,
-    build_repair_prompt,
     build_surgical_exploit_prompt,
     build_synthesis_prompt,
     build_targeted_mutate_prompt,
@@ -172,29 +171,67 @@ class BladeConfig:
     """Refresh cached analyses every N evaluations."""
 
     analyzer_top_k: int = 3
-    """How many top-ranked (by score) programs to analyse each refresh.
-    Analyses are keyed by ``id(program)`` and reused across many
-    mutations of the same parent until the parent leaves the top-K."""
+    """How many *new* programs to analyse on each refresh.
+
+    Each cycle the analyser walks the archive in score-descending order
+    and picks the first ``analyzer_top_k`` programs that do NOT yet
+    have a cached analysis. Programs that already have a cache entry
+    are skipped (their analysis is still valid). Cache entries are
+    only evicted when the underlying program leaves the archive (cell
+    incumbent kicked it out, or the program was never re-inserted by
+    a re-cluster) — never just because the program slipped out of
+    today's top-K.
+
+    Behavioural consequence: when the top-K is frozen (best score
+    plateaued, no churn), the cache grows monotonically — refresh #1
+    analyses ranks 1-3, refresh #2 analyses ranks 4-6, and so on,
+    until eventually every program in the archive has an analysis.
+    From then on the analyser is a no-op until a fresh program is
+    admitted, at which point exactly one new analysis is produced.
+
+    This replaces the prior "top-K only, evict everything else"
+    policy that re-analysed the same three frozen parents every
+    cycle and starved targeted-mutate of analysis-level diversity."""
 
     analyzer_temperature: float = 0.3
     analyzer_max_tokens: int = 500
 
-    p_targeted_mutate: float = 0.7
+    p_targeted_mutate: float = 0.5
     """Probability of choosing :data:`TARGETED_MUTATE_PROMPT` when the
     chosen parent has a cached analysis. When no cached analysis is
     available the orchestrator falls back to the standard mutate
-    sampler regardless of this probability."""
+    sampler regardless of this probability. Lowered from 0.7 → 0.5
+    because the prior value crowded out the prompt-template diversity
+    provided by :class:`PromptSampler` whenever a top-K parent was
+    picked, which happens most of the time under the Zipfian sampler."""
 
-    # Paradigm-shift mode thresholds (Đề xuất 8 — three-mode shift)
+    # Paradigm-shift mode thresholds (three-mode shift).
+    #
+    # Mapping (rationale):
+    #   stagnation ≤ paradigm_synthesis_max_stagnation  →  synthesis
+    #   stagnation ≤ paradigm_surgical_max_stagnation   →  surgical
+    #   stagnation  >  paradigm_surgical_max_stagnation →  shift
+    #
+    # The earlier version routed *high* stagnation to ``surgical`` and
+    # mid stagnation to ``shift``. Empirically that left the search
+    # trapped: when the champion has plateaued, asking the frontier for
+    # another local fix to the same code rarely escapes. The fix that
+    # actually broke prior plateaus in our runs was the ``shift`` mode
+    # (a genuinely new paradigm class). We therefore route the deepest
+    # stagnation to ``shift`` and reserve ``surgical`` for the
+    # mid-stagnation band, where the champion still has some momentum
+    # and a careful local polish can compound.
     paradigm_synthesis_max_stagnation: float = 0.4
     """At or below this stagnation level the paradigm shift picks the
     ``synthesis`` mode (combine 2-3 close-in-score anchors)."""
 
-    paradigm_shift_max_stagnation: float = 0.7
+    paradigm_surgical_max_stagnation: float = 0.7
     """Above ``paradigm_synthesis_max_stagnation`` and at or below this
-    threshold the paradigm shift picks the ``shift`` mode (propose a
-    fundamentally new paradigm class). Above this threshold the shift
-    flips to ``surgical`` mode (focus on the champion alone)."""
+    threshold the paradigm shift picks ``surgical`` (deep tune of the
+    champion). Above this threshold the shift flips to ``shift`` mode
+    (propose a fundamentally new paradigm class) — when the search is
+    deeply stuck, jumping paradigms is more likely to unlock progress
+    than further sanding the same local optimum."""
 
     paradigm_synthesis_n_anchors: int = 3
     """Number of anchors surfaced in synthesis mode (2 or 3)."""
@@ -206,24 +243,40 @@ class BladeConfig:
     """Description-only inspirations passed to surgical mode in
     addition to the single (champion) anchor."""
 
-    # Repair (one-shot per error candidate)
-    enable_repair: bool = True
-
     # Meta-advisor — periodically writes a short prescriptive note that
     # future mutation prompts include verbatim.
     enable_meta_advice: bool = True
     meta_advice_interval: int = 50
-    meta_advice_inject_p: float = 0.7
+    meta_advice_inject_p: float = 0.35
+    """Probability of injecting the current advice block into a given
+    mutation / crossover prompt.
+
+    Lowered from 0.7 → 0.35. At 0.7 nearly every mutation prompt saw
+    the same advice text, which heavily biased the mutation model
+    toward whichever direction the last advisor cycle endorsed and
+    blunted the diversity provided by the prompt-template sampler.
+    0.35 means ~1 in 3 prompts is advice-guided, which still gives the
+    advisor a meaningful nudge across a paradigm-shift window (50
+    evals × 0.35 ≈ 17 advice-guided attempts) without saturating it.
+    """
+
     meta_advice_temperature: float = 0.4
     meta_advice_max_tokens: int = 400
     meta_advice_mode: str = "rich"
     """Either ``"rich"`` (default) or ``"errors_only"``.
 
     ``rich`` feeds the advisor with the top-K archived descriptions,
-    recent admits with score-delta vs parent, and a typed error
-    taxonomy — so the advice block can name what's working and what to
-    try next. ``errors_only`` deliberately drops the success-side
-    signals and is the ablation flag for "old-style" defensive advice.
+    recent admits with score-delta vs parent, a saturation signal
+    (admits whose score-delta vs parent is ≈ 0, indicating an operator
+    family that is converting but no longer improving), and a typed
+    error taxonomy — so the advice block can name what's working,
+    what's saturated, what to try next, and what to avoid. The
+    saturated-bucket signal is inspired by SeaEvo's Strategic
+    Landscape Navigation, which tracks effective / saturated /
+    underexplored strategy families at the population level rather
+    than reasoning about individual programs in isolation.
+    ``errors_only`` deliberately drops the success-side signals and is
+    the ablation flag for "old-style" defensive advice.
     """
 
     # Output
@@ -313,11 +366,9 @@ class BladeOrchestrator:
         self.cost = _CallLog()
         self.paradigm_trials: list[ParadigmTrial] = []
         self.recent_trials: deque[str] = deque(maxlen=6)
-        self.error_buffer: deque[tuple[str, float, str]] = deque(maxlen=64)
-        # Separate signal streams for the meta-advisor. Kept independent of
-        # ``error_buffer`` (which feeds the repair operator and is drained
-        # by ``popleft``) so that the advisor sees a stable rolling window
-        # of recent admits and recent errors with their source operator.
+        # Rolling signal streams the meta-advisor reads each cycle.
+        # Failed candidates simply count as rejects — there is no longer
+        # a one-shot repair operator that drains an error queue.
         self._advisor_admits: deque[tuple[str, float, float | None]] = deque(maxlen=12)
         self._advisor_errors: deque[tuple[str, str]] = deque(maxlen=64)
 
@@ -621,7 +672,6 @@ class BladeOrchestrator:
                     return
                 score, _scores_dict, err = await self._evaluate_code(parsed.code)
                 if err is not None:
-                    self.error_buffer.append((parsed.code, parent_score, err))
                     self._record_reject(source=op, score=score, error_msg=err)
                     return
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
@@ -635,37 +685,8 @@ class BladeOrchestrator:
                 logger.exception("[BLADE] worker step failed; counting as reject")
                 self._record_reject(source=op, error_msg=f"worker exception: {e}")
 
-    async def _repair_one(self) -> None:
-        if not self.config.enable_repair or not self.error_buffer:
-            return
-        broken_code, parent_score, error_msg = self.error_buffer.popleft()
-        prompt = build_repair_prompt(
-            problem_description=self.config.problem_description,
-            function_signature=self.config.function_signature,
-            broken_code=broken_code, parent_score=parent_score, error_msg=error_msg,
-        )
-        try:
-            raw = await self._call(self.mutation_lm, prompt, temperature=0.4)
-        except Exception as e:
-            logger.exception("[BLADE] repair LLM call failed; counting as reject")
-            self._record_reject(source="repair", error_msg=f"LLM error: {e}")
-            return
-        parsed = self.parser.parse(raw)
-        if not parsed.has_code:
-            self._record_reject(source="repair", error_msg="parse_miss (no code in output)")
-            return
-        score, _scores, err = await self._evaluate_code(parsed.code)
-        if err is not None:
-            self._record_reject(source="repair", score=score, error_msg=err)
-            return
-        description = await self._summarize_if_needed(parsed.code, parsed.description)
-        await self._admit(
-            code=parsed.code, description=description, score=score,
-            source="repair", parent_score=parent_score,
-        )
-
     # ------------------------------------------------------------------
-    # Analyzer (Đề xuất 1 — review of top-ranked parents)
+    # Analyzer — accumulating review of as-yet-unanalysed parents
     # ------------------------------------------------------------------
 
     async def _analyze_parent(self, parent: Program) -> str | None:
@@ -700,36 +721,60 @@ class BladeOrchestrator:
             return None
         async with self._analysis_lock:
             self._analysis_cache[key] = text
-            # Evict oldest entries when the cache grows past a sensible
-            # cap. id() reuse is fine here — stale ids simply get
-            # overwritten on the next analysis call.
-            if len(self._analysis_cache) > 64:
-                oldest = next(iter(self._analysis_cache))
-                self._analysis_cache.pop(oldest, None)
+        # No per-entry cap: the cache is bounded above by the archive
+        # size (cells × in-flight). Eviction is driven exclusively by
+        # ``_refresh_analyses`` when a program leaves the archive, so
+        # we never silently drop a still-valid analysis for an arbitrary
+        # "oldest entry" — that's the bug the prior cap could cause.
         return text
 
     async def _refresh_analyses(self) -> None:
-        """Refresh cached analyses for the current top-K programs.
+        """Refresh cached analyses with an accumulating, churn-driven policy.
 
-        Drops cache entries whose ``id()`` no longer corresponds to a
-        top-K parent (so the cache doesn't accumulate forever as the
-        archive churns)."""
+        Each refresh:
+          1. Evicts cache entries for programs that no longer live in
+             the archive (kicked out by a better cell incumbent or
+             dropped during re-cluster). The cache is keyed by
+             ``id(program)`` so the only valid entries are ones whose
+             program object is still reachable from the archive.
+          2. Walks the archive in score-descending order and analyses
+             the first ``analyzer_top_k`` programs that do *not* yet
+             have a cache entry. Programs already in the cache are
+             skipped — their analysis is unchanged.
+
+        Concretely: refresh #1 analyses ranks 1-3; refresh #2, given a
+        frozen top-3, analyses ranks 4-6; refresh #3 analyses ranks
+        7-9; … until every program in the archive has an analysis,
+        after which refreshes are no-ops until a new program enters
+        the archive (cell churn → exactly one new analysis next
+        cycle). Top-K analyses survive across cycles unless their
+        parent program is actually displaced.
+        """
         cfg = self.config
         if not cfg.enable_targeted_mutate:
             return
         programs = self.archive.programs()
         if not programs:
             return
-        top_k = sorted(programs, key=lambda p: -p.score)[: cfg.analyzer_top_k]
-        top_ids = {id(p) for p in top_k}
 
-        # Drop analyses for parents no longer in top-K.
+        live_ids = {id(p) for p in programs}
         async with self._analysis_lock:
-            stale = [k for k in self._analysis_cache if k not in top_ids]
+            stale = [k for k in self._analysis_cache if k not in live_ids]
             for k in stale:
                 self._analysis_cache.pop(k, None)
+            cached_ids = set(self._analysis_cache.keys())
 
-        await asyncio.gather(*(self._analyze_parent(p) for p in top_k))
+        ranked = sorted(programs, key=lambda p: -p.score)
+        to_analyze: list[Program] = []
+        for p in ranked:
+            if len(to_analyze) >= cfg.analyzer_top_k:
+                break
+            if id(p) not in cached_ids:
+                to_analyze.append(p)
+
+        if not to_analyze:
+            return
+        await asyncio.gather(*(self._analyze_parent(p) for p in to_analyze))
 
     async def _analyzer_monitor(self) -> None:
         cfg = self.config
@@ -749,8 +794,10 @@ class BladeOrchestrator:
                     self.last_analyzer_eval_count = ec
                     self.analyzer_trigger_count += 1
                     logger.info(
-                        "[BLADE analyzer] trigger #%d at eval=%d (refreshing top-%d)",
-                        self.analyzer_trigger_count, ec, cfg.analyzer_top_k,
+                        "[BLADE analyzer] trigger #%d at eval=%d "
+                        "(analysing up to %d uncached programs; cache=%d)",
+                        self.analyzer_trigger_count, ec,
+                        cfg.analyzer_top_k, len(self._analysis_cache),
                     )
                     try:
                         await self._refresh_analyses()
@@ -774,16 +821,18 @@ class BladeOrchestrator:
         """Decide which paradigm-shift mode to fire.
 
         - synthesis: low stagnation, many close-in-score anchors.
-        - shift:     mid stagnation, search needs a fresh paradigm.
-        - surgical:  high stagnation, exploit the champion further.
+        - surgical:  mid stagnation, champion still has momentum to polish.
+        - shift:     high stagnation, the current paradigm family is
+                     exhausted and a fresh paradigm is the most likely
+                     way out.
         """
         cfg = self.config
         s = self.monitor.stagnation_level()
         if s <= cfg.paradigm_synthesis_max_stagnation:
             return "synthesis"
-        if s <= cfg.paradigm_shift_max_stagnation:
-            return "shift"
-        return "surgical"
+        if s <= cfg.paradigm_surgical_max_stagnation:
+            return "surgical"
+        return "shift"
 
     def _build_paradigm_prompt_for_mode(
         self, mode: str
@@ -908,7 +957,6 @@ class BladeOrchestrator:
                 parent_score=prev_best if prev_best != float("-inf") else None,
             )
         else:
-            self.error_buffer.append((parsed.code, prev_best, err))
             self._record_reject(source=source_label, score=score, error_msg=err)
 
         delta = None
@@ -958,7 +1006,6 @@ class BladeOrchestrator:
                 return
             v_score, _vscores, v_err = await self._evaluate_code(parsed_v.code)
             if v_err is not None:
-                self.error_buffer.append((parsed_v.code, base_score, v_err))
                 self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err)
                 return
             v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
@@ -1024,7 +1071,6 @@ class BladeOrchestrator:
                     continue
                 score, _scores, err = await self._evaluate_code(parsed.code)
                 if err is not None:
-                    self.error_buffer.append((parsed.code, float("-inf"), err))
                     self._record_reject(source="init", score=score, error_msg=err)
                     continue
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
@@ -1080,7 +1126,6 @@ class BladeOrchestrator:
                 return
             score, _scores, err = await self._evaluate_code(parsed.code)
             if err is not None:
-                self.error_buffer.append((parsed.code, float("-inf"), err))
                 self._record_reject(source="init", score=score, error_msg=err)
                 return
             description = await self._summarize_if_needed(parsed.code, parsed.description)
@@ -1183,19 +1228,13 @@ class BladeOrchestrator:
     async def _main_loop(self) -> None:
         cfg = self.config
         in_flight: set[asyncio.Task] = set()
-        repair_task: asyncio.Task | None = None
         while not self.stop_event.is_set() and not self._budget_exhausted():
             while len(in_flight) < cfg.n_workers and not self._budget_exhausted():
                 in_flight.add(asyncio.create_task(self._generate_one()))
-            if (repair_task is None or repair_task.done()) and self.error_buffer:
-                repair_task = asyncio.create_task(self._repair_one())
-            wait_set = set(in_flight)
-            if repair_task is not None and not repair_task.done():
-                wait_set.add(repair_task)
-            if not wait_set:
+            if not in_flight:
                 await asyncio.sleep(0.05)
                 continue
-            done, _pending = await asyncio.wait(wait_set, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
+            done, _pending = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED, timeout=2.0)
             for t in done:
                 exc = t.exception()
                 if exc is not None:
@@ -1203,8 +1242,6 @@ class BladeOrchestrator:
             in_flight = {t for t in in_flight if not t.done()}
 
         leftovers: list[asyncio.Task] = list(in_flight)
-        if repair_task is not None and not repair_task.done():
-            leftovers.append(repair_task)
         for t in leftovers:
             t.cancel()
         if leftovers:
@@ -1283,15 +1320,6 @@ class BladeOrchestrator:
     # ------------------------------------------------------------------
     # Meta-advisor
     # ------------------------------------------------------------------
-
-    def _recent_error_messages(self, n: int = 5) -> list[str]:
-        """Legacy accessor — kept for backwards compatibility with any
-        caller outside the orchestrator. The advisor itself now consumes
-        ``_advisor_errors`` directly so it sees the ``source`` operator."""
-        if not self.error_buffer:
-            return []
-        items = list(self.error_buffer)[-n:]
-        return [msg for (_code, _parent_score, msg) in items]
 
     def _top_descriptions_for_advisor(self, k: int = 3) -> list[tuple[str, float]]:
         """Top-K archived programs by score — descriptions + scores only."""
@@ -1443,7 +1471,7 @@ class BladeOrchestrator:
             },
             "paradigm_modes": {
                 "synthesis_max_stagnation": self.config.paradigm_synthesis_max_stagnation,
-                "shift_max_stagnation": self.config.paradigm_shift_max_stagnation,
+                "surgical_max_stagnation": self.config.paradigm_surgical_max_stagnation,
                 "synthesis_n_anchors": self.config.paradigm_synthesis_n_anchors,
                 "shift_n_anchors": self.config.paradigm_shift_n_anchors,
                 "surgical_n_inspirations": self.config.paradigm_surgical_n_inspirations,

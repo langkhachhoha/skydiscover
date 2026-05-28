@@ -3,15 +3,19 @@
 The meta-advisor receives, on each trigger:
 
 * The top-K archived programs (descriptions + scores).
-* Recent admits as ``(source, score, delta_vs_parent)`` triples.
+* Recent admits as ``(source, score, delta_vs_parent)`` triples,
+  internally split into IMPROVING (Δ > tol) and SATURATED (|Δ| ≤ tol
+  or Δ < -tol) buckets so the advisor can name a stuck strategy
+  family.
 * A typed taxonomy of recent errors grouped by ``classify_error``.
 
-These tests pin (a) that all three signal streams flow through the
-prompt verbatim, (b) that the structured ``WORKING / TRY NEXT / AVOID``
-contract is announced to the model, (c) that the error classifier maps
-the real-world failure messages we observed in production to the right
-buckets, and (d) that ``errors_only`` ablation parity is achievable by
-passing empty success-side sequences.
+These tests pin (a) that all signal streams flow through the prompt
+verbatim, (b) that the four-section ``WORKING / SATURATED / TRY NEXT /
+AVOID`` contract is announced to the model, (c) that the error
+classifier maps real-world failure messages to the right buckets,
+(d) that ``errors_only`` ablation parity is achievable by passing
+empty success-side sequences, and (e) that the improving/saturated
+split correctly routes admits by score delta.
 """
 
 from __future__ import annotations
@@ -76,10 +80,13 @@ def test_classify_error_fallback() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_prompt_announces_three_section_contract() -> None:
-    """The model must be told to emit WORKING / TRY NEXT / AVOID — this
-    is the structural contract the orchestrator later parses and the
-    operators consume verbatim."""
+def test_prompt_announces_four_section_contract() -> None:
+    """The model must be told to emit WORKING / SATURATED / TRY NEXT /
+    AVOID — this is the structural contract the orchestrator later
+    parses and the operators consume verbatim. The SATURATED bucket
+    (added to mirror SeaEvo's notion of mined-out strategy families)
+    lets the advisor explicitly name a direction that keeps producing
+    admits but no longer makes progress."""
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
         function_signature=SIGNATURE,
@@ -93,10 +100,16 @@ def test_prompt_announces_three_section_contract() -> None:
         previous_advice=None,
     )
     assert "WORKING:" in p
+    assert "SATURATED:" in p
     assert "TRY NEXT:" in p
     assert "AVOID:" in p
-    # Order matters: WORKING < TRY NEXT < AVOID in the prompt body.
-    assert p.index("WORKING:") < p.index("TRY NEXT:") < p.index("AVOID:")
+    # Order matters: WORKING < SATURATED < TRY NEXT < AVOID.
+    assert (
+        p.index("WORKING:")
+        < p.index("SATURATED:")
+        < p.index("TRY NEXT:")
+        < p.index("AVOID:")
+    )
 
 
 def test_prompt_includes_all_signal_streams() -> None:
@@ -125,14 +138,33 @@ def test_prompt_includes_all_signal_streams() -> None:
     )
     # Top descriptions appear verbatim with score.
     assert "hexagonal lattice" in p
-    assert "2.5000" in p or "2.5000" in p
-    # Admits show source + delta sign.
+    assert "2.5000" in p
+    # Admits show source + delta sign. The improving / saturated split
+    # routes them to different blocks but both must surface.
     assert "mutate_focused_fix" in p
     assert "crossover_component_swap" in p
     assert "+0.0200" in p
     assert "-0.0100" in p
-    # ``None`` delta renders as Δ=n/a.
+    # ``None`` delta renders as Δ=n/a and is treated as improving
+    # (we cannot judge it negatively, so we surface it as progress).
     assert "Δ=n/a" in p
+    # Routing check: the +0.02 admit must appear above the SATURATED
+    # header (i.e. in the IMPROVING block), and the -0.01 admit must
+    # appear below the IMPROVING block header (i.e. in SATURATED). We
+    # use the block headers from the prompt itself as anchors.
+    improving_header = "Recent admits, IMPROVING"
+    saturated_header = "Recent admits, SATURATED"
+    assert improving_header in p and saturated_header in p
+    improving_pos = p.index(improving_header)
+    saturated_pos = p.index(saturated_header)
+    # +0.02 admit (mutate_focused_fix) is between the IMPROVING header
+    # and the SATURATED header — i.e. it lives in the IMPROVING block.
+    plus_pos = p.index("+0.0200")
+    assert improving_pos < plus_pos < saturated_pos
+    # -0.01 admit (crossover_component_swap) is after the SATURATED
+    # header.
+    minus_pos = p.index("-0.0100")
+    assert minus_pos > saturated_pos
     # Error taxonomy buckets, with counts.
     assert "constraint ×2" in p
     assert "shape_mismatch ×1" in p
@@ -160,7 +192,9 @@ def test_prompt_handles_empty_signals_gracefully() -> None:
     )
     assert "n/a" in p
     assert "(archive empty)" in p
-    assert "(no admits in this window)" in p
+    # Both improving and saturated admit blocks render the empty
+    # placeholder when no admits have flowed yet.
+    assert p.count("(none in this window)") >= 2
     assert "(no failures in this window)" in p
     assert "(none yet" in p
 
@@ -186,7 +220,7 @@ def test_prompt_errors_only_mode_parity() -> None:
         previous_advice=None,
     )
     assert "(archive empty)" in p
-    assert "(no admits in this window)" in p
+    assert p.count("(none in this window)") >= 2
     # Errors still flow through.
     assert "constraint ×1" in p
 
@@ -228,6 +262,47 @@ def test_prompt_truncates_long_error_messages() -> None:
     assert "…" in p
     # Bucket still constraint despite truncation.
     assert "constraint ×1" in p
+
+
+def test_prompt_saturation_split_uses_delta_tolerance() -> None:
+    """A near-zero Δ admit must land in SATURATED, not IMPROVING.
+
+    The split uses an absolute tolerance of 1e-3 against the score
+    delta vs parent. This is the signal SeaEvo's SLN concept calls out:
+    an operator that keeps producing accepted-but-non-improving moves
+    is *converted*, not *making progress*, and the advisor needs to be
+    able to name that pattern so future TRY NEXT suggestions can
+    de-emphasise it.
+    """
+    p = build_meta_advice_prompt(
+        problem_description=PROBLEM,
+        function_signature=SIGNATURE,
+        best_score=2.5,
+        n_evaluations=200,
+        accept_rate=0.3,
+        stagnation_level=0.6,
+        top_descriptions=[("hex lattice", 2.50)],
+        recent_admits=[
+            # Improving — beats parent by 2 cents of score.
+            ("mutate_general", 2.50, 0.02),
+            # Saturated — 0.0001 < 1e-3 tolerance ⇒ no real progress.
+            ("crossover_structural", 2.49, 0.0001),
+            # Saturated — exact zero delta is the canonical case.
+            ("mutate_targeted", 2.48, 0.0),
+            # Saturated — slight regression (still got admitted because
+            # it beat its cell's incumbent, but it is not progress).
+            ("mutate_focused_fix", 2.47, -0.005),
+        ],
+        errors_by_source=[],
+        previous_advice=None,
+    )
+    improving_pos = p.index("Recent admits, IMPROVING")
+    saturated_pos = p.index("Recent admits, SATURATED")
+    # The +0.02 admit must be in the IMPROVING block.
+    assert improving_pos < p.index("+0.0200") < saturated_pos
+    # The three near-zero / negative deltas must be in SATURATED.
+    for marker in ("+0.0001", "+0.0000", "-0.0050"):
+        assert p.index(marker) > saturated_pos, marker
 
 
 def test_prompt_aggregates_repeated_errors_correctly() -> None:
