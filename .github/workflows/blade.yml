@@ -70,7 +70,7 @@ on:
         description: "Paradigm-shift cadence (every N evaluations)"
         required: false
         type: string
-        default: "50"
+        default: "10"
       eval_timeout:
         description: "Per-candidate evaluation timeout in seconds"
         required: false
@@ -162,7 +162,7 @@ on:
       pe_interval:
         required: false
         type: string
-        default: "50"
+        default: "10"
       eval_timeout:
         required: false
         type: string
