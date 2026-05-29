@@ -289,7 +289,7 @@ jobs:
           esac
 
           uv run --active python ../scripts/run_blade.py \
-            --example-dir "../${{ inputs.benchmark }}" \
+            --example-dir "${{ inputs.benchmark }}" \
             --problem-module "$PROBLEM_MODULE" \
             --mutation-model "${{ inputs.mutation_model }}" \
             --paradigm-model "${{ inputs.paradigm_model }}" \
