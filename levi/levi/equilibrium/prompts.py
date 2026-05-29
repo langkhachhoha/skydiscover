@@ -198,7 +198,7 @@ PARADIGM_SHIFT_PROMPT = PARADIGM_SHIFT_PROMPTS["early"]
 # ---------------------------------------------------------------------------
 
 
-VARIANT_GENERATION_PROMPT = """# Generate Variant of Paradigm Shift Solution
+VARIANT_GENERATION_PROMPT = """# Generate Variant {variant_idx} of {n_variants} — Paradigm Shift Solution
 
 ## Problem
 {problem_description}
@@ -213,16 +213,24 @@ VARIANT_GENERATION_PROMPT = """# Generate Variant of Paradigm Shift Solution
 {base_code}
 ```
 
-## Your Task
-Generate a VARIANT of the above paradigm shift solution by:
-1. Keeping the core algorithmic approach intact
-2. Making targeted modifications to:
-   - Constants and thresholds
-   - Secondary heuristics
-   - Edge case handling
-   - Implementation details
+## Your Variant Directive (variant {variant_idx} of {n_variants})
+{variant_directive}
 
-The variant should explore nearby regions of the solution space while preserving the novel approach.
+## Your Task
+You are generating **variant {variant_idx} of {n_variants}** — a sibling fanout
+from the same base solution. The other variants will explore DIFFERENT
+directives; your job is to commit fully to the directive above so that the
+sibling set spans different parts of the solution space.
+
+Rules:
+1. Keep the base's high-level paradigm class recognisable, but the directive
+   above takes priority — if it asks you to replace a component, REPLACE it,
+   don't just retune its constants.
+2. Make at least one **non-cosmetic, structural** change consistent with the
+   directive. Renaming variables, changing a single constant by < 2x, or
+   adding a no-op safety check does NOT count.
+3. Do NOT duplicate what the base already does well. If the directive
+   conflicts with the base in some part, follow the directive there.
 
 ### Critical Requirements:
 - Your function signature MUST match exactly: `{function_signature}`
@@ -235,6 +243,62 @@ The variant should explore nearby regions of the solution space while preserving
 ## Output
 Output ONLY complete, runnable Python code in a ```python block. No explanations before or after.
 """
+
+
+# Diversified exploration directives — orchestrator round-robins through this
+# list when fanning out ``n_paradigm_variants`` siblings from the same base
+# paradigm seed. The goal is to force each sibling into a distinct corner of
+# the solution space instead of having every variant tweak the same handful
+# of constants (which was the previous failure mode).
+VARIANT_DIRECTIVES: tuple[str, ...] = (
+    # 0: initialisation / starting point
+    "**Re-design the INITIALISATION / starting state.** Replace how the base "
+    "constructs its initial candidate (seed pattern, point layout, parameter "
+    "init, warm-start). Keep the post-init optimisation pipeline intact, but "
+    "feed it a structurally different starting point (e.g. switch from random "
+    "to structured / lattice / problem-specific construction, or vice versa).",
+    # 1: optimisation step rule
+    "**Replace the OPTIMISATION STEP RULE / inner update.** Keep the overall "
+    "loop structure but swap the update rule (e.g. gradient → coordinate "
+    "descent, Adam → SGD-with-momentum, projected gradient → augmented "
+    "Lagrangian, greedy → simulated annealing acceptance). The before/after "
+    "of one iteration must look algorithmically different.",
+    # 2: objective / loss shaping
+    "**Re-shape the OBJECTIVE / loss the inner loop optimises.** Add or remove "
+    "penalty / barrier / regulariser terms; change the smoothing/softmax "
+    "temperature; switch between log-barrier and quadratic penalty for "
+    "constraints. The final scoring is unchanged, but the surface the inner "
+    "loop climbs should be different.",
+    # 3: symmetry / structural prior
+    "**Inject or break a SYMMETRY / structural prior.** If the base is "
+    "unstructured, impose a symmetry (reflective, rotational, lattice, "
+    "block-diagonal, hierarchical) and parametrise inside it. If the base "
+    "already assumes a symmetry, break it intentionally and parametrise the "
+    "broken degrees of freedom.",
+    # 4: termination / restart policy
+    "**Change the TERMINATION & RESTART policy.** Add multi-restart with "
+    "best-of-K selection, basin hopping, or population-style retries; or "
+    "conversely, replace early stopping with a longer single run. Adjust how "
+    "the inner loop decides it's done so the outer behaviour is qualitatively "
+    "different — not just a different number of iterations.",
+    # 5: scale / discretisation / resolution
+    "**Change the SCALE / DISCRETISATION / resolution.** Coarsen-then-refine "
+    "(multi-resolution / multi-grid), or switch from continuous parameters to "
+    "a discrete combinatorial search and back, or change problem size N for "
+    "intermediate sub-problems before assembling the final answer.",
+    # 6: hybrid composition
+    "**Compose a HYBRID with a complementary technique.** Wrap the base in "
+    "an outer loop that calls a fundamentally different solver for one stage "
+    "(e.g. LP / SDP relaxation → rounding, branch-and-bound on a small "
+    "subset, local search post-processor on the base's output). The base "
+    "becomes one component of a pipeline, not the whole pipeline.",
+    # 7: aggressive constant / shape rebalance
+    "**Aggressively REBALANCE the hyperparameter regime.** Change at least "
+    "two key hyperparameters by ≥ 3× simultaneously (learning rate, num "
+    "iterations, batch / population size, temperature schedule, penalty "
+    "weights). Pick a clearly different operating point — large-step "
+    "exploration, or tiny-step deep refinement — not a small perturbation.",
+)
 
 
 # ---------------------------------------------------------------------------

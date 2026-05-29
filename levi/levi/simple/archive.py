@@ -287,6 +287,53 @@ class ClusterArchive:
                 return True, "replaced"
             return False, "dropped_worse"
 
+    def force_add(self, program: Program) -> tuple[bool, str]:
+        """Forcefully admit *program*, dropping the weakest program in the
+        archive if normal :meth:`add` rejected it.
+
+        Intended for paradigm-shift escapes — when the search is deeply
+        stagnated and a frontier seed deserves an archive slot even if its
+        score is below its cell's incumbent. Behaviour:
+
+        - First try a normal :meth:`add`. If it returns ``"added"`` or
+          ``"replaced"``, just propagate that.
+        - Else (``"dropped_worse"``): remove the single lowest-score
+          program in the entire archive, then retry the insertion.
+        - If the archive is empty (no weakest to drop), or the embedding
+          is missing, fall back to the original failure reason.
+
+        Returns ``(accepted, reason)`` with reasons mirroring :meth:`add`
+        plus ``"forced"`` when the weakest-drop path was taken.
+        """
+        accepted, reason = self.add(program)
+        if accepted:
+            return accepted, reason
+        if reason != "dropped_worse":
+            # ``no_embedding`` or any other non-cell rejection — don't
+            # paper over a real bug by force-inserting.
+            return accepted, reason
+
+        with self._lock:
+            if not self._programs:
+                return False, reason
+            weakest = min(self._programs, key=lambda p: p.score)
+            self._programs[:] = [p for p in self._programs if p is not weakest]
+            # Re-run admit. Cell assignment uses the existing centroids,
+            # which is what we want — we are not re-clustering just
+            # because we dropped one program. The dropped slot is now
+            # either (a) empty if it was a 1-program cell, in which case
+            # ``add`` will return "added", or (b) refilled by the next
+            # cell incumbent search; if our new program lives in a
+            # different cell, it still gets in via "added"/"replaced".
+            accepted2, reason2 = self.add(program)
+            if accepted2:
+                return True, "forced"
+            # Extremely unlikely: even after dropping the weakest, the
+            # new program still lost to a stronger incumbent in its cell.
+            # Put the weakest back to avoid losing a slot for nothing.
+            self._programs.append(weakest)
+            return False, reason2
+
     def cell_of(self, program: Program) -> int:
         """Cell id of *program* under the *current* centroids. Useful
         for logging and for the sampler to recompute cell-membership

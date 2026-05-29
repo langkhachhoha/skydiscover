@@ -61,6 +61,7 @@ from ..simple import (
 from ..simple.parser import fallback_summarize
 from ..utils.evaluation import evaluate_code
 from ..utils.resilient_pool import ResilientProcessPool
+from ..equilibrium.prompts import VARIANT_DIRECTIVES
 from .prompts import (
     PromptSampler,
     build_analysis_prompt,
@@ -550,7 +551,17 @@ class BladeOrchestrator:
         score: float,
         source: str,
         parent_score: float | None,
+        force_on_drop: bool = False,
     ) -> tuple[bool, str]:
+        """Admit a candidate into the archive.
+
+        ``force_on_drop=True`` is the paradigm-shift escape valve: if the
+        archive would otherwise reject the program with ``dropped_worse``
+        (its score didn't beat the cell incumbent), we evict the single
+        lowest-score program currently in the archive and retry. Used only
+        for frontier ``paradigm`` seeds in mode=``shift`` so a deeply
+        stalled search can still inject a fresh paradigm.
+        """
         embedding = await asyncio.to_thread(self.embedder.embed, description)
         program = Program(
             code=code,
@@ -561,7 +572,10 @@ class BladeOrchestrator:
             created_at_eval=self.monitor.eval_count + 1,
         )
         prev_best = self.monitor.best_score
-        accepted, reason = self.archive.add(program)
+        if force_on_drop:
+            accepted, reason = self.archive.force_add(program)
+        else:
+            accepted, reason = self.archive.add(program)
         self.monitor.record_eval(score=score, accepted=accepted)
         is_new_best = accepted and score > prev_best
         if accepted:
@@ -569,6 +583,11 @@ class BladeOrchestrator:
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best)
         if not accepted and reason == "dropped_worse":
             logger.debug("[BLADE] dropped score=%.4f did not beat cell incumbent", score)
+        if accepted and reason == "forced":
+            logger.info(
+                "[BLADE PE] force-admitted paradigm seed (score=%.4f) by evicting weakest program",
+                score,
+            )
         return accepted, reason
 
     # ------------------------------------------------------------------
@@ -951,10 +970,18 @@ class BladeOrchestrator:
         description = await self._summarize_if_needed(parsed.code, parsed.description)
         accepted = False
         if err is None:
+            # mode=="shift" fires only when stagnation is high; the
+            # frontier seed is the search's escape attempt. If it would
+            # otherwise be dropped by its cell incumbent, evict the
+            # weakest program in the archive and inject the seed anyway —
+            # losing one weak slot is cheaper than missing the chance to
+            # break out of the stuck paradigm family.
+            force_on_drop = (mode == "shift")
             accepted, _reason = await self._admit(
                 code=parsed.code, description=description, score=score,
                 source="paradigm",
                 parent_score=prev_best if prev_best != float("-inf") else None,
+                force_on_drop=force_on_drop,
             )
         else:
             self._record_reject(source=source_label, score=score, error_msg=err)
@@ -981,21 +1008,47 @@ class BladeOrchestrator:
 
         base_code = parsed.code
         base_score = score
+        n_variants = cfg.n_paradigm_variants
         logger.info(
             "[BLADE PE] fanout: %d variants from paradigm seed (score=%.4f, accepted=%s)",
-            cfg.n_paradigm_variants, base_score, accepted,
+            n_variants, base_score, accepted,
         )
 
-        async def _one_paradigm_variant() -> None:
+        # Diversified fanout: each sibling variant gets (a) a distinct
+        # VARIANT_DIRECTIVE (round-robin, shuffled per fanout to avoid the
+        # same directive always landing on variant 0), and (b) its own
+        # temperature staggered around ``paradigm_variant_temperature`` so
+        # the sibling set spans exploit→explore in one pass instead of all
+        # variants sampling at the same temperature.
+        directive_pool = list(VARIANT_DIRECTIVES)
+        random.shuffle(directive_pool)
+
+        center_temp = cfg.paradigm_variant_temperature
+        if n_variants <= 1:
+            variant_temps = [center_temp]
+        else:
+            # Spread evenly across [center - 0.25, center + 0.15], clipped
+            # to a safe LLM range. Asymmetric range biases toward more
+            # exploration (the previous failure mode was all variants
+            # converging to the same exploit point).
+            lo, hi = max(0.2, center_temp - 0.25), min(1.4, center_temp + 0.15)
+            step = (hi - lo) / (n_variants - 1)
+            variant_temps = [lo + step * i for i in range(n_variants)]
+
+        async def _one_paradigm_variant(v_idx: int) -> None:
             if self._budget_exhausted():
                 return
+            directive = directive_pool[v_idx % len(directive_pool)]
+            v_temp = variant_temps[v_idx]
             v_prompt = build_paradigm_variant_prompt(
                 problem_description=cfg.problem_description,
                 function_signature=cfg.function_signature,
                 base_code=base_code, base_score=base_score,
+                variant_idx=v_idx + 1, n_variants=n_variants,
+                variant_directive=directive,
             )
             try:
-                raw_v = await self._call(self.mutation_lm, v_prompt, temperature=cfg.paradigm_variant_temperature)
+                raw_v = await self._call(self.mutation_lm, v_prompt, temperature=v_temp)
             except Exception as e:
                 logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
                 self._record_reject(source="paradigm_variant", error_msg=f"LLM error: {e}")
@@ -1014,7 +1067,7 @@ class BladeOrchestrator:
                 source="paradigm_variant", parent_score=base_score,
             )
 
-        await asyncio.gather(*(_one_paradigm_variant() for _ in range(cfg.n_paradigm_variants)))
+        await asyncio.gather(*(_one_paradigm_variant(i) for i in range(n_variants)))
 
     # ------------------------------------------------------------------
     # Bootstrap

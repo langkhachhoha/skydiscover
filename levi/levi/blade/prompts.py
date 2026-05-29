@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from ..artifacts.code import DIVERSITY_SEED_PROMPT
-from ..equilibrium.prompts import VARIANT_GENERATION_PROMPT
+from ..equilibrium.prompts import VARIANT_DIRECTIVES, VARIANT_GENERATION_PROMPT
 from ..simple.parser import OUTPUT_FORMAT_INSTRUCTION
 
 __all__ = [
@@ -1058,12 +1058,32 @@ def build_paradigm_variant_prompt(
     function_signature: str,
     base_code: str,
     base_score: float,
+    variant_idx: int = 1,
+    n_variants: int = 1,
+    variant_directive: str | None = None,
 ) -> str:
+    """Build the prompt for one paradigm-shift fanout sibling.
+
+    ``variant_idx`` / ``n_variants`` are 1-indexed and shown to the LLM so it
+    knows it is part of a sibling fanout. ``variant_directive`` is the
+    free-text instruction telling this specific sibling which corner of the
+    solution space to explore; if omitted, the orchestrator's round-robin
+    over :data:`VARIANT_DIRECTIVES` is bypassed and a neutral instruction is
+    used (kept only for backwards compat with old callers / tests).
+    """
+    if variant_directive is None:
+        variant_directive = (
+            "Explore a meaningfully different region of the solution space "
+            "from the base — not just a constant tweak."
+        )
     rendered = VARIANT_GENERATION_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
         base_code=base_code,
         base_score=base_score,
+        variant_idx=variant_idx,
+        n_variants=n_variants,
+        variant_directive=variant_directive,
     )
     return rendered + "\n\n" + OUTPUT_FORMAT_INSTRUCTION
 

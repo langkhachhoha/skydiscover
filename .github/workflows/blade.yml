@@ -310,7 +310,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blade-${{ inputs.benchmark }}-${{ inputs.ablation }}-${{ github.run_id }}
+          name: blade-${{ replace(inputs.benchmark, '/', '_') }}-${{ inputs.ablation }}-${{ github.run_id }}
           path: ${{ env.OUTPUT_DIR }}
           if-no-files-found: warn
           retention-days: 14

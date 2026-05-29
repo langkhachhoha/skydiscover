@@ -388,6 +388,12 @@ Output ONLY complete, runnable Python code in a ```python block.
             function_signature=self.config.function_signature,
             base_code=base_content,
             base_score=base_score,
+            variant_idx=1,
+            n_variants=1,
+            variant_directive=(
+                "Explore a meaningfully different region of the solution "
+                "space from the base — not just a constant tweak."
+            ),
         )
 
     # ------------------------------------------------------------------
