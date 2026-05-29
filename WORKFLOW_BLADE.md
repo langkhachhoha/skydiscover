@@ -423,7 +423,7 @@ the canonical reference, not the workflow file.
 | `n_variants_per_seed` | `20` | Mutation variants per seed (phase 2, parallel). |
 | `init_diversity_temperature` | `0.8` | Frontier temperature for diverse seeds. |
 | `init_variant_temperature` | `0.9` | Mutation temperature for phase-2 fanout. |
-| `pe_cron_interval` | `50` | Fire paradigm shift every N completed evaluations (set to 0 to disable). |
+| `pe_cron_interval` | `50` | Fire paradigm shift every N completed evaluations **after init**. The PE cadence counter is reset to `eval_count` when bootstrap finishes, so phase-1 (frontier seeds) + phase-2 (mutation variants) evals do NOT push PE toward its first trigger. Set to 0 to disable. |
 | `paradigm_min_archive_size` | `5` | Skip paradigm shift if `num_occupied_cells <` this. |
 | `paradigm_temperature` | `0.8` | Frontier temperature inside paradigm shift. |
 | `paradigm_variant_temperature` | `0.85` | Mutation temperature for paradigm-fanout variants. |

@@ -1174,6 +1174,10 @@ class BladeOrchestrator:
                         len(self.archive),
                         self.monitor.best_score if self.monitor.best_score != float("-inf") else float("nan"),
                         self.cost.cost, self.monitor.eval_count)
+            # BLADE PE only counts eval-cadence from the end of the init
+            # phase. Init evals (phase 1 frontier seeds + phase 2 mutation
+            # variants) must not push PE toward its first trigger.
+            self.last_pe_eval_count = self.monitor.eval_count
             pe_monitor_task = asyncio.create_task(self._pe_monitor())
             advisor_task = asyncio.create_task(self._meta_advice_monitor())
             analyzer_task = asyncio.create_task(self._analyzer_monitor())
