@@ -24,47 +24,31 @@ TIMEOUT_SECONDS = 600
 
 
 PROBLEM_DESCRIPTION = f"""
-SETTING:
-You are an expert mathematician specializing in circle packing problems and computational geometry.
-Your task is to improve a constructor function that directly produces a specific arrangement of {N_CIRCLES} circles in the unit square [0,1] x [0,1], maximizing the sum of their radii. The AlphaEvolve paper achieved a sum of 2.635 for n={N_CIRCLES}.
+# Circle Packing (n=26, unit square)
 
-Key geometric insights:
-- Circle packings often follow hexagonal patterns in the densest regions
-- Maximum density for infinite circle packing is pi/(2*sqrt(3)) ~ 0.9069
-- Edge effects make square container packing harder than infinite packing
-- Circles can be placed in layers or shells when confined to a square
-- Similar radius circles often form regular patterns, while varied radii allow better space utilization
-- Perfect symmetry may not yield the optimal packing due to edge effects
+## Problem
+Construct a feasible packing of exactly {N_CIRCLES} circles inside the unit square.
 
-Focus on designing an explicit constructor that places each circle in a specific position, rather than an iterative search algorithm.
+Return:
+- `centers`: array-like shape ({N_CIRCLES}, 2)
+- `radii`: array-like shape ({N_CIRCLES},)
+- `sum_radii`: float (objective)
 
-PROBLEM CONTEXT:
-- **Objective**: Implement `run_packing()` that constructs a feasible packing of exactly {N_CIRCLES} circles inside the unit square and maximizes the sum of their radii.
-- **Container**: The unit square `[0, 1] x [0, 1]`.
-- **Constraints**:
-  * Each circle i must satisfy boundary constraints:
-    `x_i - r_i >= 0`, `x_i + r_i <= 1`, `y_i - r_i >= 0`, `y_i + r_i <= 1`
-  * Non-overlap for all i != j: `distance(center_i, center_j) >= r_i + r_j`
-  * Radii must be finite and non-negative
-  * Exactly {N_CIRCLES} circles required
+## Feasibility Constraints
+- Each circle i must satisfy:
+  - `x_i - r_i >= 0`
+  - `x_i + r_i <= 1`
+  - `y_i - r_i >= 0`
+  - `y_i + r_i <= 1`
+- Non-overlap for all i != j:
+  - `distance(center_i, center_j) >= r_i + r_j`
+- Radii must be finite and non-negative.
 
-OUTPUT FORMAT:
-The function `run_packing()` MUST return a 3-tuple `(centers, radii, sum_radii)`:
-- `centers`: NumPy-compatible array of shape ({N_CIRCLES}, 2)
-- `radii`: NumPy-compatible array of shape ({N_CIRCLES},)
-- `sum_radii`: Python float, equal to `float(np.sum(radii))` (the objective value)
+## Objective
+Maximize `sum_radii`.
 
-Do NOT return a single array or a dict — the grader unpacks the tuple in this exact order.
-
-OBJECTIVE:
-Maximize `sum_radii = float(np.sum(radii))`.
-
-TECHNICAL REQUIREMENTS:
-- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
-- **Error handling**: Graceful handling of optimization failures or infeasible configurations
-- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
-- **Scalability**: Design with potential extension to different circle counts in mind
-- **Runtime Constraint**: Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
+## Runtime Constraint
+Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
 """
 
 FUNCTION_SIGNATURE = f"""

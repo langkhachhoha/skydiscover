@@ -32,20 +32,10 @@ on:
   workflow_dispatch:
     inputs:
       benchmark:
-        description: "Benchmark name under levi/examples/<name>/"
+        description: "Full path to benchmark directory (e.g. 'levi/examples/circle_packing')"
         required: true
-        type: choice
-        default: "circle_packing"
-        options:
-          - ADRS
-          - blade_demo
-          - circle_packing
-          - hotpotqa
-          - hover
-          - ifbench
-          - pupa
-          - quickstart
-          - circle_packing_rect
+        type: string
+        default: "levi/examples/circle_packing"
       evaluations:
         description: "Max evaluations (blank = no cap)"
         required: false
@@ -299,7 +289,7 @@ jobs:
           esac
 
           uv run --active python ../scripts/run_blade.py \
-            --example-dir "levi/examples/${{ inputs.benchmark }}" \
+            --example-dir "../${{ inputs.benchmark }}" \
             --problem-module "$PROBLEM_MODULE" \
             --mutation-model "${{ inputs.mutation_model }}" \
             --paradigm-model "${{ inputs.paradigm_model }}" \

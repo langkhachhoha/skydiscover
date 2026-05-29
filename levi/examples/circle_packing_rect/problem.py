@@ -23,35 +23,35 @@ TIMEOUT_SECONDS = 600
 
 
 PROBLEM_DESCRIPTION = f"""
-SETTING:
-You are an expert computational geometer and optimization specialist with deep expertise in circle packing problems, geometric optimization algorithms, and constraint satisfaction.
-Your mission is to evolve and optimize a constructor function that generates an optimal arrangement of exactly {NUM_CIRCLES} non-overlapping circles within a rectangle, maximizing the sum of their radii.
+# Circle Packing in a Rectangle (n=21, perimeter=4)
 
-PROBLEM CONTEXT:
-- **Objective**: Create a function `circle_packing21()` that returns a NumPy array of shape ({NUM_CIRCLES}, 3), where each row stores `(x, y, radius)` for one circle.
-- **Benchmark**: Beat the AlphaEvolve state-of-the-art result of sum_radii = {BENCHMARK_RADII_SUM}
-- **Container**: Rectangle with perimeter = 4 (width + height = {MAX_WIDTH_PLUS_HEIGHT}). You may choose any optimal width/height ratio — the rectangle itself is not returned; the grader computes the minimum circumscribing rectangle around your circles.
-- **Constraints**:
-  * All circles must be fully contained within an inferred bounding rectangle whose `width + height <= {MAX_WIDTH_PLUS_HEIGHT}`
-  * No circle overlaps (distance between centers >= sum of their radii)
-  * Exactly {NUM_CIRCLES} circles required
-  * All radii must be non-negative and finite
-  * Coordinates may be translated freely; only the inferred bounding rectangle and pairwise distances matter.
+## Problem
+Construct a feasible packing of exactly {NUM_CIRCLES} circles inside a
+rectangle of perimeter at most 4. The rectangle itself is not returned; the
+grader computes the minimum circumscribing rectangle around your circles.
 
-OUTPUT FORMAT:
-- Return a single NumPy-compatible array `circles` with shape ({NUM_CIRCLES}, 3).
-- Row `i` is `(x_i, y_i, r_i)`.
-- Do NOT return a tuple or a dict — only the array.
+Return a NumPy-compatible array `circles` with shape ({NUM_CIRCLES}, 3), where
+each row is `(x, y, radius)`.
 
-OBJECTIVE:
-Maximize `radii_sum = sum(circles[:, 2])`. The AlphaEvolve benchmark reference is {BENCHMARK_RADII_SUM:.16f}.
+## Feasibility Constraints
+- `circles` must have shape ({NUM_CIRCLES}, 3), finite numeric values.
+- Radii must be non-negative.
+- For every pair i != j:
+  `distance((x_i, y_i), (x_j, y_j)) >= r_i + r_j`.
+- Let `(width, height)` be the minimum circumscribing rectangle of all returned
+  circles. It must satisfy `width + height <= {MAX_WIDTH_PLUS_HEIGHT}` because
+  the rectangle perimeter is `2 * (width + height) <= 4`.
 
-TECHNICAL REQUIREMENTS:
-- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
-- **Error handling**: Graceful handling of optimization failures or infeasible configurations
-- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
-- **Scalability**: Design with potential extension to different circle counts in mind
-- **Runtime Constraint**: Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
+Coordinates may be translated freely; only the inferred bounding rectangle and
+pairwise distances matter.
+
+## Objective
+Maximize `radii_sum = sum(circles[:, 2])`.
+The AlphaEvolve benchmark reference is {BENCHMARK_RADII_SUM:.16f}; a
+`combined_score` of 1.0 matches that value.
+
+## Runtime Constraint
+Your solution must complete within **{TIMEOUT_SECONDS} seconds**.
 """
 
 
