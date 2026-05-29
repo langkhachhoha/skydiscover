@@ -61,7 +61,6 @@ from ..simple import (
 from ..simple.parser import fallback_summarize
 from ..utils.evaluation import evaluate_code
 from ..utils.resilient_pool import ResilientProcessPool
-from ..equilibrium.prompts import VARIANT_DIRECTIVES
 from .prompts import (
     PromptSampler,
     build_analysis_prompt,
@@ -1014,23 +1013,18 @@ class BladeOrchestrator:
             n_variants, base_score, accepted,
         )
 
-        # Diversified fanout: each sibling variant gets (a) a distinct
-        # VARIANT_DIRECTIVE (round-robin, shuffled per fanout to avoid the
-        # same directive always landing on variant 0), and (b) its own
-        # temperature staggered around ``paradigm_variant_temperature`` so
-        # the sibling set spans exploit→explore in one pass instead of all
-        # variants sampling at the same temperature.
-        directive_pool = list(VARIANT_DIRECTIVES)
-        random.shuffle(directive_pool)
-
+        # Stagger sampling temperature across the sibling fanout so the set
+        # spans exploit → explore in one pass instead of all variants
+        # sampling at the same temperature with the same prompt (which was
+        # the previous failure mode — every sibling tweaked the same few
+        # constants).
         center_temp = cfg.paradigm_variant_temperature
         if n_variants <= 1:
             variant_temps = [center_temp]
         else:
             # Spread evenly across [center - 0.25, center + 0.15], clipped
-            # to a safe LLM range. Asymmetric range biases toward more
-            # exploration (the previous failure mode was all variants
-            # converging to the same exploit point).
+            # to a safe LLM range. Asymmetric range biases slightly toward
+            # exploration.
             lo, hi = max(0.2, center_temp - 0.25), min(1.4, center_temp + 0.15)
             step = (hi - lo) / (n_variants - 1)
             variant_temps = [lo + step * i for i in range(n_variants)]
@@ -1038,14 +1032,11 @@ class BladeOrchestrator:
         async def _one_paradigm_variant(v_idx: int) -> None:
             if self._budget_exhausted():
                 return
-            directive = directive_pool[v_idx % len(directive_pool)]
             v_temp = variant_temps[v_idx]
             v_prompt = build_paradigm_variant_prompt(
                 problem_description=cfg.problem_description,
                 function_signature=cfg.function_signature,
                 base_code=base_code, base_score=base_score,
-                variant_idx=v_idx + 1, n_variants=n_variants,
-                variant_directive=directive,
             )
             try:
                 raw_v = await self._call(self.mutation_lm, v_prompt, temperature=v_temp)
