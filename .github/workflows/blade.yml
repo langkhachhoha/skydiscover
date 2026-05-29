@@ -1,4 +1,5 @@
 name: BLADE
+run-name: BLADE — ${{ inputs.benchmark }} (${{ inputs.ablation }})
 
 # Run BLADE Lite — adaptive MAP-Elites with hybrid AST + description-embedding
 # behavior signature — on a self-contained LEVI example under
