@@ -67,6 +67,9 @@ Your function must complete within **{TIMEOUT_SECONDS} seconds**.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time
+import random
+import math
 
 def min_max_dist_dim3_14() -> np.ndarray:
     '''

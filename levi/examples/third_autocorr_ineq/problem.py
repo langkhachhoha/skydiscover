@@ -62,9 +62,11 @@ Implement ``run()`` which **must** return a 4-tuple in this exact order:
 - The integral ``sum(f_values) * dx`` must satisfy
   ``( integral )^2 >= {INTEGRAL_TOL}`` (otherwise the ratio is unstable
   and the candidate is rejected).
-- The grader **re-computes** the C3 ratio with NumPy's ``np.convolve`` and
-  ``np.abs``; the reported ``c3_achieved`` must agree with this recomputed
-  value to within ``|delta| <= {VERIFY_TOL}``.
+- The grader **independently re-computes** the C3 ratio from your
+  returned ``f_values`` using the same formula (discrete autoconvolution
+  scaled by ``dx``, divided by the squared discrete integral); the
+  reported ``c3_achieved`` must agree with this recomputed value to
+  within ``|delta| <= {VERIFY_TOL}``.
 
 ## Objective
 Minimise ``c3_achieved``. The grader reports
@@ -78,6 +80,9 @@ Your ``run()`` call must complete within **{TIMEOUT_SECONDS} seconds**.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time
+import random
+import math
 
 def run() -> tuple[np.ndarray, float, float, int]:
     '''

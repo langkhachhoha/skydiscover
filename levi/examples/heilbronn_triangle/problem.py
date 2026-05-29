@@ -10,8 +10,8 @@ Mirrors the benchmark at benchmarks/math/heilbronn_triangle.
 
 from __future__ import annotations
 
-import itertools
 import time
+from math import comb
 from typing import Any
 
 import numpy as np
@@ -21,6 +21,7 @@ NUM_POINTS = 11
 BENCHMARK = 0.036529889880030156
 TOL = 1e-6
 TIMEOUT_SECONDS = 600
+NUM_TRIPLES = comb(NUM_POINTS, 3)
 
 
 PROBLEM_DESCRIPTION = f"""
@@ -52,9 +53,10 @@ where row i is the (x, y) coordinate of the i-th point.
 
 ## Objective
 Let A_T = sqrt(3)/4 be the area of the unit equilateral triangle T, and let
-``min_area`` be the minimum area over all C({NUM_POINTS}, 3) =
-{len(list(itertools.combinations(range(NUM_POINTS), 3)))} triangles
-formed by triples of your {NUM_POINTS} points. Maximize
+``min_area`` be the minimum area over all {NUM_TRIPLES} unordered
+3-subsets of indices ``{{i, j, k}}`` with ``0 <= i < j < k < {NUM_POINTS}``
+(i.e. every triangle formed by three of your {NUM_POINTS} points).
+Maximize
 
     score = min_area / A_T
 
@@ -116,11 +118,15 @@ def _inside_equilateral(points: np.ndarray, tol: float = TOL) -> tuple[bool, str
 
 
 def _min_triangle_area(points: np.ndarray) -> float:
-    areas = [
-        _triangle_area(p1, p2, p3)
-        for p1, p2, p3 in itertools.combinations(points, 3)
-    ]
-    return float(min(areas))
+    n = len(points)
+    best = float("inf")
+    for i in range(n - 2):
+        for j in range(i + 1, n - 1):
+            for k in range(j + 1, n):
+                a = _triangle_area(points[i], points[j], points[k])
+                if a < best:
+                    best = a
+    return float(best)
 
 
 def score_fn(heilbronn_triangle11, _inputs=None) -> dict:

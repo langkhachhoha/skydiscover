@@ -10,8 +10,8 @@ Mirrors the benchmark at benchmarks/math/heilbronn_convex/13.
 
 from __future__ import annotations
 
-import itertools
 import time
+from math import comb
 from typing import Any
 
 import numpy as np
@@ -21,6 +21,7 @@ from scipy.spatial import ConvexHull
 NUM_POINTS = 13
 BENCHMARK = 0.030936889034895654
 TIMEOUT_SECONDS = 600
+NUM_TRIPLES = comb(NUM_POINTS, 3)
 
 
 PROBLEM_DESCRIPTION = f"""
@@ -49,12 +50,13 @@ where row i is the (x, y) coordinate of the i-th point.
   coordinate range you find convenient is fine.
 
 ## Objective
-Let ``H = ConvexHull(points)`` and let ``min_area`` be the minimum area
-over all C({NUM_POINTS}, 3) =
-{len(list(itertools.combinations(range(NUM_POINTS), 3)))} triangles
-formed by triples of your {NUM_POINTS} points. Maximize
+Let ``hull_area`` be the area of the convex hull of all {NUM_POINTS}
+points, and let ``min_area`` be the minimum area over all {NUM_TRIPLES}
+unordered 3-subsets of indices ``{{i, j, k}}`` with
+``0 <= i < j < k < {NUM_POINTS}`` (i.e. every triangle formed by three of
+your {NUM_POINTS} points). Maximize
 
-    score = min_area / area(H)
+    score = min_area / hull_area
 
 The AlphaEvolve / best-known reference is
 ``score = {BENCHMARK:.16f}``; a ``combined_score`` of 1.0 matches that
@@ -68,6 +70,8 @@ Your function must complete within **{TIMEOUT_SECONDS} seconds**.
 FUNCTION_SIGNATURE = f"""
 import numpy as np
 import time
+import random
+import math
 
 def heilbronn_convex13() -> np.ndarray:
     '''
@@ -97,11 +101,15 @@ def _triangle_area(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
 
 
 def _min_triangle_area(points: np.ndarray) -> float:
-    areas = [
-        _triangle_area(p1, p2, p3)
-        for p1, p2, p3 in itertools.combinations(points, 3)
-    ]
-    return float(min(areas))
+    n = len(points)
+    best = float("inf")
+    for i in range(n - 2):
+        for j in range(i + 1, n - 1):
+            for k in range(j + 1, n):
+                a = _triangle_area(points[i], points[j], points[k])
+                if a < best:
+                    best = a
+    return float(best)
 
 
 def score_fn(heilbronn_convex13, _inputs=None) -> dict:
