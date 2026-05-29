@@ -71,6 +71,9 @@ optimisation strategy that fits in this budget.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time
+import random
+import math
 
 def heilbronn_triangle11() -> np.ndarray:
     '''

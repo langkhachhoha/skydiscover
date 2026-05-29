@@ -67,6 +67,7 @@ Your function must complete within **{TIMEOUT_SECONDS} seconds**.
 
 FUNCTION_SIGNATURE = f"""
 import numpy as np
+import time
 
 def heilbronn_convex13() -> np.ndarray:
     '''
