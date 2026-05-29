@@ -202,6 +202,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Sanitise benchmark path for artifact name
+        run: |
+          # GitHub Actions does not have a `replace()` expression function,
+          # so we precompute the artifact-safe variant of inputs.benchmark
+          # (which may contain '/') here and consume it via env.
+          SAFE="${BENCHMARK_RAW//\//_}"
+          echo "BENCHMARK_SAFE=$SAFE" >> "$GITHUB_ENV"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
       - name: Verify in-tree LEVI + BLADE modules
         run: |
           test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml"; exit 1; }
@@ -311,7 +321,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blade-${{ replace(inputs.benchmark, '/', '_') }}-${{ inputs.ablation }}-${{ github.run_id }}
+          name: blade-${{ env.BENCHMARK_SAFE }}-${{ inputs.ablation }}-${{ github.run_id }}
           path: ${{ env.OUTPUT_DIR }}
           if-no-files-found: warn
           retention-days: 14
