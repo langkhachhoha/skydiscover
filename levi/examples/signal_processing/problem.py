@@ -106,6 +106,9 @@ Per-signal soft limit: {PER_SIGNAL_TIMEOUT} s. Total problem timeout:
 
 FUNCTION_SIGNATURE = """
 import numpy as np
+import time
+import random
+import math
 
 def run_signal_processing(noisy_signal, window_size):
     '''

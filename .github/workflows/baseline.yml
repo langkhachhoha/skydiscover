@@ -1,4 +1,5 @@
 name: Baselines Smoke
+run-name: Baselines Smoke — ${{ inputs.baseline }} · ${{ inputs.benchmark_dir }} · ${{ inputs.model }}
 
 # Run a single baseline (openevolve_native | gepa_native | adaevolve | evox)
 # on any benchmark directory under ./benchmarks/. The job is hard-capped at

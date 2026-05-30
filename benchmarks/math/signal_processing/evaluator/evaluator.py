@@ -149,7 +149,7 @@ def calculate_false_reversal_penalty(filtered_signal, clean_signal, window_size)
     # Account for processing delay
     delay = window_size - 1
     if len(clean_signal) <= delay:
-        return 1.0
+        return 0
 
     # Align signals
     aligned_clean = clean_signal[delay : delay + len(filtered_signal)]
@@ -221,7 +221,7 @@ def generate_test_signals(num_signals=5):
     test_signals = []
 
     for i in range(num_signals):
-        np.random.seed(42 + i)  # Different seed for each signal
+        rng = np.random.default_rng(42 + i)
         length = 500 + i * 100  # Varying lengths
         noise_level = 0.2 + i * 0.1  # Varying noise levels
 
@@ -252,10 +252,10 @@ def generate_test_signals(num_signals=5):
             )
         else:
             # Random walk with trend
-            clean = np.cumsum(np.random.randn(length) * 0.1) + 0.05 * t
+            clean = np.cumsum(rng.standard_normal(length) * 0.1) + 0.05 * t
 
         # Add noise
-        noise = np.random.normal(0, noise_level, length)
+        noise = rng.normal(0.0, noise_level, length)
         noisy = clean + noise
 
         test_signals.append((noisy, clean))
@@ -315,14 +315,15 @@ def evaluate(program_path):
                     print(f"Signal {i}: Missing filtered_signal in result")
                     continue
 
-                filtered_signal = result["filtered_signal"]
+                filtered_signal = np.asarray(result["filtered_signal"], dtype=float)
 
-                if len(filtered_signal) == 0:
-                    print(f"Signal {i}: Empty filtered signal")
+                if filtered_signal.ndim != 1 or filtered_signal.size == 0:
+                    print(f"Signal {i}: Empty or non-1D filtered signal")
                     continue
 
-                # Convert to numpy arrays
-                filtered_signal = np.array(filtered_signal)
+                if not np.isfinite(filtered_signal).all():
+                    print(f"Signal {i}: Non-finite values in filtered signal")
+                    continue
 
                 # Calculate metrics using the generated test signal
                 window_size = 20
