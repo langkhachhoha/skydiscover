@@ -55,6 +55,23 @@ class GEPANativeController(DiscoveryController):
     def __init__(self, controller_input: DiscoveryControllerInput):
         super().__init__(controller_input)
 
+        # GEPA Native is typically paired with reasoning models (e.g.
+        # kimi-k2-thinking, qwen3) that don't reliably honour the
+        # SEARCH/REPLACE diff contract — they tend to emit a complete
+        # rewritten program instead. With diff_based_generation on, the strict
+        # diff parser rejects every iteration ("No valid diffs found" / "Diff
+        # SEARCH blocks did not match parent"), so nothing ever enters the
+        # database and every benchmark stalls at score 0. Default GEPA to
+        # full-rewrite generation. This touches only the in-memory config for
+        # the GEPA run — the benchmark config.yaml is left untouched and no
+        # other search strategy is affected.
+        if getattr(self.config, "diff_based_generation", False):
+            logger.info(
+                "GEPANativeController: defaulting diff_based_generation=False "
+                "(full-rewrite generation) for robustness with reasoning models"
+            )
+            self.config.diff_based_generation = False
+
         # Override context builder with GEPA-specific one
         self.context_builder = GEPANativeContextBuilder(self.config)
 

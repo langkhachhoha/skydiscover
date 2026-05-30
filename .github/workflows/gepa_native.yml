@@ -1,0 +1,140 @@
+name: GEPA Native Smoke
+run-name: GEPA Native Smoke — ${{ inputs.benchmark_dir }} · ${{ inputs.model }}
+
+# Run the native GEPA strategy (skydiscover `gepa_native`: reflective
+# prompting, acceptance gating, LLM-mediated merge) on any benchmark directory
+# under ./benchmarks/. The job is hard-capped at 3 hours by `timeout-minutes`;
+# per-run budgets live in the benchmark's own config.yaml.
+#
+# gepa_native is a NATIVE strategy, so it only needs `uv sync` (no external
+# extra). The controller defaults diff_based_generation=False at runtime so
+# reasoning models that emit full-program rewrites (kimi-k2-thinking, qwen3)
+# are parsed correctly instead of failing with "No valid diffs found". The
+# benchmark config.yaml is left untouched.
+#
+# Per-LLM-call OpenRouter usage.cost is appended to cost_log.jsonl with a
+# running cost_log.totals.json (skydiscover.llm.cost_tracker).
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_dir:
+        description: "Benchmark directory (must contain initial_program.py, config.yaml, and either evaluator.py or evaluator/evaluator.py)"
+        required: false
+        default: "benchmarks/math/circle_packing_rect"
+      iterations:
+        description: "Number of iterations to run"
+        required: false
+        default: "100"
+      model:
+        description: "OpenRouter model id routed through SkyDiscover"
+        required: false
+        default: "openrouter/moonshotai/kimi-k2-thinking"
+
+concurrency:
+  group: gepa-native-${{ github.ref }}-${{ inputs.benchmark_dir }}
+  cancel-in-progress: true
+
+jobs:
+  gepa_native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_BASE: https://openrouter.ai/api/v1
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Validate OpenRouter secret
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "Missing GitHub secret: OPENROUTER_API_KEY"
+            exit 1
+          fi
+
+      - name: Validate benchmark dir & resolve evaluator
+        id: resolve
+        run: |
+          BD="${{ inputs.benchmark_dir }}"
+          # Required files at the benchmark root.
+          for f in initial_program.py config.yaml; do
+            if [ ! -f "$BD/$f" ]; then
+              echo "::error::Expected $BD/$f to exist"
+              exit 1
+            fi
+          done
+          # Evaluator can live at either:
+          #   <bench>/evaluator.py            (legacy "outer" layout, e.g. circle_packing)
+          #   <bench>/evaluator/evaluator.py  (container layout, e.g. circle_packing_rect)
+          # Both define `evaluate(program_path) -> dict` and run fine without Docker.
+          if [ -f "$BD/evaluator.py" ]; then
+            EVAL_FILE="$BD/evaluator.py"
+          elif [ -f "$BD/evaluator/evaluator.py" ]; then
+            EVAL_FILE="$BD/evaluator/evaluator.py"
+          else
+            echo "::error::Could not find an evaluator at $BD/evaluator.py or $BD/evaluator/evaluator.py"
+            exit 1
+          fi
+          echo "Using evaluator: $EVAL_FILE"
+          echo "eval_file=$EVAL_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv run python scripts/install_benchmark_requirements.py \
+            "${{ inputs.benchmark_dir }}"
+
+      - name: Run gepa_native on ${{ inputs.benchmark_dir }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Per-call OpenRouter usage.cost is appended here by skydiscover.llm.cost_tracker.
+          # A running aggregate is rewritten at cost_log.totals.json on every call.
+          SKYDISCOVER_COST_LOG: outputs/github-actions/gepa_native_${{ github.run_id }}/cost_log.jsonl
+        run: |
+          mkdir -p "outputs/github-actions/gepa_native_${{ github.run_id }}"
+          uv run skydiscover-run "${{ inputs.benchmark_dir }}/initial_program.py" \
+            "${{ steps.resolve.outputs.eval_file }}" \
+            --config "${{ inputs.benchmark_dir }}/config.yaml" \
+            --search "gepa_native" \
+            --model "${{ inputs.model }}" \
+            --iterations "${{ inputs.iterations }}" \
+            --output "outputs/github-actions/gepa_native_${{ github.run_id }}/run"
+
+      - name: Cost summary
+        if: always()
+        run: |
+          OUT_DIR="outputs/github-actions/gepa_native_${{ github.run_id }}"
+          TOTALS="$OUT_DIR/cost_log.totals.json"
+          LOG="$OUT_DIR/cost_log.jsonl"
+          echo "## gepa_native on ${{ inputs.benchmark_dir }}" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$TOTALS" ]; then
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat "$TOTALS" >> $GITHUB_STEP_SUMMARY
+            echo '' >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "Cost totals:"
+            cat "$TOTALS"
+          else
+            echo "_No cost log produced._" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "$LOG" ]; then
+            echo ""
+            echo "LLM calls recorded: $(wc -l < "$LOG" | tr -d ' ')"
+          fi
+
+      - name: Upload run outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gepa-native-${{ github.run_id }}
+          path: outputs/github-actions/
+          if-no-files-found: warn

@@ -59,6 +59,7 @@ tests/**/test_outputs_*/
 
 # Evaluation run outputs
 eval_runs/
+gepa_result/
 
 # Local documentation
 tasks/
