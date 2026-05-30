@@ -20,7 +20,7 @@ import scipy as sp
 NUM_POINTS = 16
 DIMENSION = 2
 BENCHMARK = 1.0 / 12.889266112  # ~0.07758, equals (d_min/d_max)^2 of AlphaEvolve result
-TIMEOUT_SECONDS = 600
+TIMEOUT_SECONDS = 100
 
 
 PROBLEM_DESCRIPTION = f"""
