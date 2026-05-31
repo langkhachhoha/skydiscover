@@ -157,6 +157,16 @@ class BladeConfig:
     covers the explore/exploit trade-off; an extra 'healthy vs stuck'
     switch produced no measurable benefit in prior versions."""
 
+    # Operator-prompt ablation (A6).
+    single_prompt_operators: bool = False
+    """When True, the :class:`PromptSampler` stops drawing mutate /
+    crossover templates at random and always uses the single simplest
+    template per operator (``MUTATE_PROMPT_GENERAL`` for mutate,
+    ``CROSSOVER_PROMPT_STRUCTURAL`` for crossover). This is the A6
+    ablation — it isolates the contribution of prompt-template
+    diversity from the rest of the search. The targeted-mutate prompt
+    is orthogonal and controlled by ``enable_targeted_mutate`` (A5)."""
+
     # Targeted-mutate analyzer (Đề xuất 1 — analyse-then-mutate)
     enable_targeted_mutate: bool = True
     """Master toggle for the LLM-generated parent analysis pipeline.
@@ -242,6 +252,17 @@ class BladeConfig:
     paradigm_surgical_n_inspirations: int = 5
     """Description-only inspirations passed to surgical mode in
     addition to the single (champion) anchor."""
+
+    # Paradigm-prompt ablation (A8).
+    paradigm_force_mode: str | None = None
+    """When set to one of ``"synthesis"``, ``"surgical"`` or
+    ``"shift"``, every paradigm shift uses that single mode regardless
+    of stagnation, instead of routing across the three modes via
+    ``_pick_paradigm_mode``. This is the A8 ablation — it keeps the
+    frontier paradigm-shift loop ON (unlike A7, which disables it
+    entirely) but collapses the three-prompt repertoire down to one,
+    isolating the contribution of mode diversity. ``None`` (default)
+    keeps the adaptive three-mode routing."""
 
     # Meta-advisor — periodically writes a short prescriptive note that
     # future mutation prompts include verbatim.
@@ -385,7 +406,9 @@ class BladeOrchestrator:
         self._meta_advice_lock = asyncio.Lock()
 
         # Targeted-mutate analyzer state (Đề xuất 1).
-        self.prompt_sampler = PromptSampler()
+        self.prompt_sampler = PromptSampler(
+            single_prompt=config.single_prompt_operators
+        )
         self._analysis_cache: dict[int, str] = {}
         self._analysis_lock = asyncio.Lock()
         self.last_analyzer_eval_count: int = 0
@@ -843,8 +866,13 @@ class BladeOrchestrator:
         - shift:     high stagnation, the current paradigm family is
                      exhausted and a fresh paradigm is the most likely
                      way out.
+
+        A8 ablation: when ``cfg.paradigm_force_mode`` is set, that mode
+        is returned unconditionally (no stagnation routing).
         """
         cfg = self.config
+        if cfg.paradigm_force_mode is not None:
+            return cfg.paradigm_force_mode
         s = self.monitor.stagnation_level()
         if s <= cfg.paradigm_synthesis_max_stagnation:
             return "synthesis"
@@ -1523,6 +1551,7 @@ class BladeOrchestrator:
                 "synthesis_n_anchors": self.config.paradigm_synthesis_n_anchors,
                 "shift_n_anchors": self.config.paradigm_shift_n_anchors,
                 "surgical_n_inspirations": self.config.paradigm_surgical_n_inspirations,
+                "force_mode": self.config.paradigm_force_mode,
             },
             "paradigm_trials": [
                 {
@@ -1542,6 +1571,8 @@ class BladeOrchestrator:
                 "n_cells": self.config.archive_config.n_cells,
                 "embedding_dim": self.config.archive_config.embedding_dim,
                 "recluster_every": self.config.archive_config.recluster_every,
+                "single_prompt_operators": self.config.single_prompt_operators,
+                "paradigm_force_mode": self.config.paradigm_force_mode,
             },
         }
         (self.output_dir / "snapshot.json").write_text(json.dumps(snap, indent=2))

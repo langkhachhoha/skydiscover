@@ -524,6 +524,13 @@ class PromptSampler:
     No learning, no Thompson sampling — the variants are roughly
     equally useful and the mutation model benefits from prompt-level
     diversity regardless of which template wins on a given parent.
+
+    ``single_prompt`` is the operator-prompt ablation (A6): when set,
+    the sampler stops drawing at random and always returns the single
+    simplest template per operator — ``MUTATE_PROMPT_GENERAL`` for
+    mutate and ``CROSSOVER_PROMPT_STRUCTURAL`` for crossover. This
+    isolates the contribution of prompt-template diversity from the
+    rest of the search.
     """
 
     mutate_templates: list[str] = field(
@@ -539,15 +546,26 @@ class PromptSampler:
             CROSSOVER_PROMPT_COMPONENT_SWAP,
         ]
     )
+    single_prompt: bool = False
 
     def pick_mutate(self, rng: random.Random) -> tuple[str, str]:
-        """Return (label, template) for one mutate variant."""
+        """Return (label, template) for one mutate variant.
+
+        Under ``single_prompt`` (A6) this always returns the simplest
+        general-improvement template, ignoring ``rng``."""
+        if self.single_prompt:
+            return "general", MUTATE_PROMPT_GENERAL
         labels = ["general", "focused_fix", "mechanism_swap"]
         idx = rng.randrange(len(self.mutate_templates))
         return labels[idx], self.mutate_templates[idx]
 
     def pick_crossover(self, rng: random.Random) -> tuple[str, str]:
-        """Return (label, template) for one crossover variant."""
+        """Return (label, template) for one crossover variant.
+
+        Under ``single_prompt`` (A6) this always returns the simplest
+        structural-hybrid template, ignoring ``rng``."""
+        if self.single_prompt:
+            return "structural", CROSSOVER_PROMPT_STRUCTURAL
         labels = ["structural", "component_swap"]
         idx = rng.randrange(len(self.crossover_templates))
         return labels[idx], self.crossover_templates[idx]

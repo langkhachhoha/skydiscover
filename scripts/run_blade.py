@@ -177,6 +177,30 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # ------------------------------------------------------------------
+    # Operator-prompt ablation (A6) — collapse the mutate / crossover
+    # template repertoire down to a single simplest prompt each.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--single-prompt-operators", action="store_true",
+        help="Ablation A6: stop sampling mutate / crossover templates at "
+        "random; always use the single simplest template per operator "
+        "(general improvement for mutate, structural hybrid for "
+        "crossover).",
+    )
+
+    # ------------------------------------------------------------------
+    # Paradigm-prompt ablation (A8) — keep the paradigm-shift loop ON
+    # but force a single paradigm mode instead of routing across three.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--paradigm-force-mode", choices=("synthesis", "surgical", "shift"),
+        default=None,
+        help="Ablation A8: keep the frontier paradigm-shift loop enabled "
+        "but force every shift to use this single mode (default: adaptive "
+        "three-mode routing by stagnation).",
+    )
+
+    # ------------------------------------------------------------------
     # Three-mode paradigm-shift thresholds (Đề xuất 8).
     # ------------------------------------------------------------------
     p.add_argument(
@@ -348,6 +372,11 @@ def main() -> int:
     elif args.p_crossover is not None:
         overrides["p_crossover"] = args.p_crossover
 
+    if args.single_prompt_operators:
+        overrides["single_prompt_operators"] = True
+    if args.paradigm_force_mode is not None:
+        overrides["paradigm_force_mode"] = args.paradigm_force_mode
+
     if args.paradigm_synthesis_max_stagnation is not None:
         overrides["paradigm_synthesis_max_stagnation"] = args.paradigm_synthesis_max_stagnation
     if args.paradigm_surgical_max_stagnation is not None:
@@ -425,6 +454,8 @@ def main() -> int:
             "no_targeted_mutate": args.no_targeted_mutate,
             "no_crossover": args.no_crossover,
             "p_crossover": args.p_crossover,
+            "single_prompt_operators": args.single_prompt_operators,
+            "paradigm_force_mode": args.paradigm_force_mode,
         },
         "budget": {
             "evaluations": evals,
