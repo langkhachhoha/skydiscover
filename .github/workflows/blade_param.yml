@@ -1,0 +1,278 @@
+name: BLADE Param Sweep
+run-name: BLADE Param — ${{ inputs.benchmark }} (pe=${{ inputs.pe_interval }}, cells=${{ inputs.n_cells }})
+
+# Hyperparameter ablation workflow for BLADE Lite. Unlike ./blade.yml
+# (general-purpose runner) and ./blade_ablation.yml (component on/off axes
+# A1–A8), this workflow sweeps two *numeric* knobs that govern the archive /
+# paradigm cadence:
+#
+#   pe_interval — paradigm-shift cadence (every N evaluations); larger = the
+#                 frontier model is consulted less often.
+#   n_cells     — number of MAP-Elites cells (KMeans clusters) the
+#                 ClusterArchive maintains; larger = finer behavioural niching.
+#
+# Both are exposed as first-class inputs so a sweep is just a series of
+# dispatches with different (pe_interval, n_cells) pairs. Everything else
+# (benchmark, budgets, models, workers, …) and an ``advanced_options`` JSON
+# escape hatch mirror ./blade.yml so existing dispatch habits carry over.
+#
+# Note: n_cells is forwarded to scripts/run_blade.py as --n-cells; leaving it
+# blank keeps the orchestrator default.
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: "Full path to benchmark directory (e.g. 'levi/examples/circle_packing')"
+        required: true
+        type: string
+        default: "levi/examples/circle_packing"
+      pe_interval:
+        description: "Paradigm-shift cadence (every N evaluations) — swept knob #1"
+        required: false
+        type: string
+        default: "20"
+      n_cells:
+        description: "Number of MAP-Elites cells / KMeans clusters — swept knob #2 (blank = orchestrator default)"
+        required: false
+        type: string
+        default: "50"
+      evaluations:
+        description: "Max evaluations (blank = no cap)"
+        required: false
+        type: string
+        default: ""
+      dollars:
+        description: "Max USD spend (blank to disable)"
+        required: false
+        type: string
+        default: ""
+      seconds:
+        description: "Wall-clock cap in seconds (blank to disable)"
+        required: false
+        type: string
+        default: "10800"
+      mutation_model:
+        description: "OpenRouter id of the small / mutation model"
+        required: true
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        description: "OpenRouter id of the frontier (paradigm-shift) model"
+        required: true
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        description: "Concurrent LLM workers"
+        required: false
+        type: string
+        default: "4"
+      eval_timeout:
+        description: "Per-candidate evaluation timeout in seconds"
+        required: false
+        type: string
+        default: "600"
+      n_diverse_seeds:
+        description: "Phase-1 diverse seeds from the frontier model (sequential)"
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        description: "Phase-2 mutation-model variants per seed (parallel)"
+        required: false
+        type: string
+        default: "20"
+      advanced_options:
+        description: >-
+          Optional JSON object with low-level overrides. Recognised keys:
+          problem_module, target_score, embedding_model, eval_processes,
+          n_paradigm_variants, paradigm_n_anchors, paradigm_n_inspirations,
+          recluster_every, embedding_dim, meta_advice_interval,
+          meta_advice_inject_p, analyzer_interval, analyzer_top_k,
+          p_targeted_mutate, p_crossover,
+          paradigm_synthesis_max_stagnation,
+          paradigm_surgical_max_stagnation,
+          paradigm_synthesis_n_anchors, paradigm_shift_n_anchors,
+          paradigm_surgical_n_inspirations.
+          Example: '{"recluster_every":10,"p_crossover":0.35}'
+        required: false
+        type: string
+        default: ""
+
+  workflow_call:
+    inputs:
+      benchmark:
+        required: true
+        type: string
+      pe_interval:
+        required: false
+        type: string
+        default: "20"
+      n_cells:
+        required: false
+        type: string
+        default: "50"
+      evaluations:
+        required: false
+        type: string
+        default: ""
+      dollars:
+        required: false
+        type: string
+        default: ""
+      seconds:
+        required: false
+        type: string
+        default: "10800"
+      mutation_model:
+        required: true
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        required: true
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        required: false
+        type: string
+        default: "4"
+      eval_timeout:
+        required: false
+        type: string
+        default: "600"
+      n_diverse_seeds:
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        required: false
+        type: string
+        default: "20"
+      advanced_options:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  blade-param:
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_BASE: https://openrouter.ai/api/v1
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      PYTHONUNBUFFERED: "1"
+      OUTPUT_DIR: outputs/github-actions/blade_param_${{ github.run_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Sanitise benchmark path for artifact name
+        run: |
+          # GitHub Actions does not have a `replace()` expression function,
+          # so we precompute the artifact-safe variant of inputs.benchmark
+          # (which may contain '/') here and consume it via env.
+          SAFE="${BENCHMARK_RAW//\//_}"
+          echo "BENCHMARK_SAFE=$SAFE" >> "$GITHUB_ENV"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
+      - name: Verify in-tree LEVI + BLADE modules
+        run: |
+          test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml"; exit 1; }
+          test -d levi/levi/blade   || { echo "::error::Expected ./levi/levi/blade/ (BLADE orchestrator)"; exit 1; }
+          test -d levi/levi/simple  || { echo "::error::Expected ./levi/levi/simple/ (BLADE Lite primitives)"; exit 1; }
+          test -f scripts/run_blade.py || { echo "::error::Expected ./scripts/run_blade.py"; exit 1; }
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Validate OpenRouter secret
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::Missing GitHub secret OPENROUTER_API_KEY"
+            exit 1
+          fi
+
+      - name: Install LEVI (vendored in-repo)
+        working-directory: levi
+        run: uv sync
+
+      - name: Parse advanced options
+        if: inputs.advanced_options != ''
+        run: |
+          echo "${{ inputs.advanced_options }}" | python3 -c "
+          import json, sys
+          try:
+              opts = json.loads(sys.stdin.read())
+              for k, v in opts.items():
+                  env_name = f'ADV_{k.upper()}'
+                  print(f'{env_name}={v}')
+          except Exception as e:
+              print(f'Error parsing advanced options: {e}', file=sys.stderr)
+              sys.exit(1)
+          " >> $GITHUB_ENV
+
+      - name: Run BLADE param sweep (pe=${{ inputs.pe_interval }}, cells=${{ inputs.n_cells }}) on ${{ inputs.benchmark }}
+        working-directory: levi
+        run: |
+          PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
+          EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
+          EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
+
+          EXTRA_OPTS=""
+          [ -n "$ADV_TARGET_SCORE" ]    && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
+          [ -n "$ADV_N_PARADIGM_VARIANTS" ] && EXTRA_OPTS="$EXTRA_OPTS --n-paradigm-variants $ADV_N_PARADIGM_VARIANTS"
+          [ -n "$ADV_PARADIGM_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-anchors $ADV_PARADIGM_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-n-inspirations $ADV_PARADIGM_N_INSPIRATIONS"
+          [ -n "$ADV_RECLUSTER_EVERY" ] && EXTRA_OPTS="$EXTRA_OPTS --recluster-every $ADV_RECLUSTER_EVERY"
+          [ -n "$ADV_EMBEDDING_DIM" ]   && EXTRA_OPTS="$EXTRA_OPTS --embedding-dim $ADV_EMBEDDING_DIM"
+          [ -n "$ADV_META_ADVICE_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-interval $ADV_META_ADVICE_INTERVAL"
+          [ -n "$ADV_META_ADVICE_INJECT_P" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-inject-p $ADV_META_ADVICE_INJECT_P"
+          [ -n "$ADV_ANALYZER_INTERVAL" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-interval $ADV_ANALYZER_INTERVAL"
+          [ -n "$ADV_ANALYZER_TOP_K" ] && EXTRA_OPTS="$EXTRA_OPTS --analyzer-top-k $ADV_ANALYZER_TOP_K"
+          [ -n "$ADV_P_TARGETED_MUTATE" ] && EXTRA_OPTS="$EXTRA_OPTS --p-targeted-mutate $ADV_P_TARGETED_MUTATE"
+          [ -n "$ADV_P_CROSSOVER" ] && EXTRA_OPTS="$EXTRA_OPTS --p-crossover $ADV_P_CROSSOVER"
+          [ -n "$ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-max-stagnation $ADV_PARADIGM_SYNTHESIS_MAX_STAGNATION"
+          [ -n "$ADV_PARADIGM_SURGICAL_MAX_STAGNATION" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-max-stagnation $ADV_PARADIGM_SURGICAL_MAX_STAGNATION"
+          [ -n "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-n-anchors $ADV_PARADIGM_SYNTHESIS_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_SHIFT_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-n-anchors $ADV_PARADIGM_SHIFT_N_ANCHORS"
+          [ -n "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-n-inspirations $ADV_PARADIGM_SURGICAL_N_INSPIRATIONS"
+
+          # ----- the two swept hyperparameters -----
+          # pe_interval is a required positional knob; n_cells is forwarded
+          # only when provided (blank keeps the orchestrator default).
+          [ -n "${{ inputs.n_cells }}" ] && EXTRA_OPTS="$EXTRA_OPTS --n-cells ${{ inputs.n_cells }}"
+
+          uv run --active python ../scripts/run_blade.py \
+            --example-dir "${{ inputs.benchmark }}" \
+            --problem-module "$PROBLEM_MODULE" \
+            --mutation-model "${{ inputs.mutation_model }}" \
+            --paradigm-model "${{ inputs.paradigm_model }}" \
+            --embedding-model "$EMBEDDING_MODEL" \
+            --evals "${{ inputs.evaluations }}" \
+            --dollars "${{ inputs.dollars }}" \
+            --seconds "${{ inputs.seconds }}" \
+            --workers "${{ inputs.workers }}" \
+            --eval-processes "$EVAL_PROCESSES" \
+            --eval-timeout "${{ inputs.eval_timeout }}" \
+            --pe-interval "${{ inputs.pe_interval }}" \
+            --n-diverse-seeds "${{ inputs.n_diverse_seeds }}" \
+            --n-variants-per-seed "${{ inputs.n_variants_per_seed }}" \
+            --output-dir "${{ env.OUTPUT_DIR }}" \
+            $EXTRA_OPTS
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blade-param-${{ env.BENCHMARK_SAFE }}-pe${{ inputs.pe_interval }}-c${{ inputs.n_cells }}-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14
