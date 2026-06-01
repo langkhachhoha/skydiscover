@@ -1,0 +1,1248 @@
+Installed 82 packages in 118ms
+[blade] example_dir       = /home/runner/work/skydiscover/skydiscover/levi/examples/circle_packing_rect
+[blade] mutation_model    = openrouter/qwen/qwen3-30b-a3b-instruct-2507
+[blade] paradigm_model    = openrouter/openai/gpt-5
+[blade] embedding_model   = openrouter/openai/text-embedding-3-small
+[blade] budget evals      = None
+[blade] budget dollars    = None
+[blade] budget seconds    = 10800.0
+[blade] pe_cron_interval  = 20
+[blade] n_diverse_seeds   = 5
+[blade] n_variants/seed   = 20
+[blade] n_paradigm_var    = 4
+[blade] ablation_ast_only = False
+[blade] ablation_emb_only = False
+[blade] ablation_static   = False
+[blade] workers           = 4
+[blade] output_dir        = /home/runner/work/skydiscover/skydiscover/outputs/github-actions/blade_26653336920
+17:55:35 [INFO] [BLADE] starting — budget: $None evals=None seconds=10800.0 target=None
+17:55:35 [INFO] [BLADE] models: mutation=openrouter/qwen/qwen3-30b-a3b-instruct-2507 | paradigm=openrouter/openai/gpt-5 | embedding=openrouter/openai/text-embedding-3-small
+17:55:35 [INFO] [BLADE] archive: n_cells=50 use_ast=True use_embedding=True adaptive_recluster=True
+17:55:35 [INFO] [BLADE] knobs: workers=4 pe_interval=20 n_diverse_seeds=5 n_variants/seed=20 n_paradigm_var=4
+17:55:35 [INFO] [BLADE init] phase 1 starting — 5 diverse seeds (sequential, frontier model)
+17:55:35 [INFO] [BLADE init] [seed 1] requesting diverse seed from gpt-5
+17:56:05 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 30s
+17:56:35 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 60s
+17:57:05 [INFO] [Status] Cost: $0.000 | Evals: 0 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 90s
+17:57:35 [INFO] [Status] Cost: $0.094 | Evals: 0 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 120s
+17:57:38 [INFO] [Eval #1] qwen3-30b-a3b-instruct-2507 ERROR (init): Syntax error: invalid syntax (<string>, line 2)
+17:57:38 [INFO] [BLADE init] [seed 1 retry 1] requesting diverse seed from gpt-5
+17:58:05 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 150s
+17:58:35 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 180s
+17:59:05 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 210s
+17:59:35 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 240s
+18:00:05 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 270s
+18:00:35 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 300s
+18:01:05 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 330s
+18:01:35 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 360s
+18:02:05 [INFO] [Status] Cost: $0.094 | Evals: 1 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 390s
+18:02:35 [INFO] [Status] Cost: $0.260 | Evals: 1 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 420s
+18:02:39 [INFO] [Eval #2] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 1
+18:02:39 [INFO] [BLADE init] [seed 1 retry 2] requesting diverse seed from gpt-5
+18:03:05 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 450s
+18:03:35 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 480s
+18:04:05 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 510s
+18:04:35 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 540s
+18:05:05 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 570s
+18:05:35 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 600s
+18:06:05 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 630s
+18:06:35 [INFO] [Status] Cost: $0.260 | Evals: 2 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 0 (cells 0) | Best: n/a | Elapsed: 660s
+18:07:00 [INFO] [Eval #3] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 0.419616 | best: 0.419616 | $0.427
+18:07:00 [INFO] [BLADE init] [seed 1 retry 2] OK (score=0.4196)
+18:07:00 [INFO] [BLADE init] [seed 2] requesting diverse seed from gpt-5
+18:07:05 [INFO] [Status] Cost: $0.427 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 1 (cells 1) | Best: 0.419616 | Elapsed: 690s
+18:07:35 [INFO] [Status] Cost: $0.427 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 1 (cells 1) | Best: 0.419616 | Elapsed: 720s
+18:08:05 [INFO] [Status] Cost: $0.427 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 1 (cells 1) | Best: 0.419616 | Elapsed: 750s
+18:08:35 [INFO] [Status] Cost: $0.427 | Evals: 3 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 1 (cells 1) | Best: 0.419616 | Elapsed: 780s
+18:09:04 [INFO] [Eval #4] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 1.507903 | best: 1.507903 | $0.524
+18:09:04 [INFO] [BLADE init] [seed 2] OK (score=1.5079)
+18:09:04 [INFO] [BLADE init] [seed 3] requesting diverse seed from gpt-5
+18:09:05 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 810s
+18:09:35 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 840s
+18:10:05 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 870s
+18:10:35 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 900s
+18:11:05 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 930s
+18:11:35 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 960s
+18:12:05 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 990s
+18:12:35 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 1020s
+18:13:05 [INFO] [Status] Cost: $0.524 | Evals: 4 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 1050s
+18:13:35 [INFO] [Status] Cost: $0.643 | Evals: 4 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 2 (cells 2) | Best: 1.507903 | Elapsed: 1080s
+18:13:43 [INFO] [Eval #5] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: init               | score: 2.320055 | best: 2.320055 | $0.643
+18:13:43 [INFO] [BLADE init] [seed 3] OK (score=2.3201)
+18:13:43 [INFO] [BLADE init] [seed 4] requesting diverse seed from gpt-5
+18:14:05 [INFO] [Status] Cost: $0.643 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 3 (cells 3) | Best: 2.320055 | Elapsed: 1110s
+18:14:35 [INFO] [Status] Cost: $0.643 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 3 (cells 3) | Best: 2.320055 | Elapsed: 1140s
+18:15:05 [INFO] [Status] Cost: $0.643 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 3 (cells 3) | Best: 2.320055 | Elapsed: 1170s
+18:15:35 [INFO] [Status] Cost: $0.643 | Evals: 5 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 3 (cells 3) | Best: 2.320055 | Elapsed: 1200s
+18:15:53 [INFO] [Eval #6] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.688943 | best: 2.320055 | $0.745
+18:15:53 [INFO] [BLADE init] [seed 4] OK (score=1.6889)
+18:15:53 [INFO] [BLADE init] [seed 5] requesting diverse seed from gpt-5
+18:16:05 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1230s
+18:16:35 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1260s
+18:17:05 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1290s
+18:17:35 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1320s
+18:18:05 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1350s
+18:18:35 [INFO] [Status] Cost: $0.745 | Evals: 6 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 4 (cells 4) | Best: 2.320055 | Elapsed: 1380s
+18:18:56 [INFO] [Eval #7] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.509709 | best: 2.320055 | $0.884
+18:18:56 [INFO] [BLADE init] [seed 5] OK (score=1.5097)
+18:18:56 [INFO] [BLADE init] [seed 6] requesting diverse seed from gpt-5
+18:19:05 [INFO] [Status] Cost: $0.884 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 5 (cells 5) | Best: 2.320055 | Elapsed: 1410s
+18:19:35 [INFO] [Status] Cost: $0.884 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 5 (cells 5) | Best: 2.320055 | Elapsed: 1440s
+18:20:05 [INFO] [Status] Cost: $0.884 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 5 (cells 5) | Best: 2.320055 | Elapsed: 1470s
+18:20:35 [INFO] [Status] Cost: $0.884 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 5 (cells 5) | Best: 2.320055 | Elapsed: 1500s
+18:21:05 [INFO] [Status] Cost: $0.884 | Evals: 7 | Clients in-flight: 1 | Eval in-flight: 0 | Archive: 5 (cells 5) | Best: 2.320055 | Elapsed: 1530s
+18:21:23 [INFO] [Eval #8] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.272727 | best: 2.320055 | $0.991
+18:21:23 [INFO] [BLADE init] [seed 6] OK (score=2.2727)
+18:21:23 [INFO] [BLADE init] phase 1 done: 6 seeds admitted
+18:21:23 [INFO] [BLADE init] phase 2 generating 120 variants (20 × 6) in parallel
+18:21:35 [INFO] [Status] Cost: $0.991 | Evals: 8 | Clients in-flight: 120 | Eval in-flight: 0 | Archive: 6 (cells 6) | Best: 2.320055 | Elapsed: 1560s
+18:21:39 [INFO] [Eval #9] qwen3-30b-a3b-instruct-2507 ERROR (init): too many indices for array: array is 1-dimensional, but 2 were indexed
+18:21:40 [INFO] [Eval #10] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.288472 | best: 2.320055 | $1.004
+18:21:43 [INFO] [Eval #11] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+18:21:44 [INFO] [Eval #12] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.803136 | best: 2.320055 | $1.010
+18:21:48 [INFO] [Eval #13] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+18:21:50 [INFO] [Eval #14] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.708226 | best: 2.320055 | $1.017
+18:21:52 [INFO] [Eval #15] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.836855 | best: 2.320055 | $1.019
+18:21:53 [INFO] [Eval #16] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.511580 | best: 2.320055 | $1.020
+18:21:54 [INFO] [Eval #17] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.109655 | best: 2.320055 | $1.020
+18:21:56 [INFO] [Eval #18] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlapping circles at 0, 1
+18:21:56 [INFO] [Eval #19] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'width_height' where it is not associated with a va
+18:21:58 [INFO] [Eval #20] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.398448 | best: 2.320055 | $1.034
+18:22:00 [INFO] [Eval #21] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:22:02 [INFO] [Eval #22] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:22:04 [INFO] [Eval #23] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'tree' where it is not associated with a value
+18:22:05 [INFO] [Status] Cost: $1.060 | Evals: 23 | Clients in-flight: 77 | Eval in-flight: 28 | Archive: 13 (cells 13) | Best: 2.320055 | Elapsed: 1590s
+18:22:07 [INFO] [Eval #24] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.525000 | best: 2.320055 | $1.067
+18:22:08 [INFO] [Eval #25] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.407016 | best: 2.320055 | $1.067
+18:22:11 [INFO] [Eval #26] qwen3-30b-a3b-instruct-2507 ERROR (init): 'numpy.ndarray' object has no attribute 'append'
+18:22:12 [INFO] [Eval #27] qwen3-30b-a3b-instruct-2507 ERROR (init): high - low < 0
+18:22:12 [INFO] [Eval #28] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.292785 | best: 2.320055 | $1.079
+18:22:16 [INFO] [Eval #29] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.898878 | best: 2.320055 | $1.088
+18:22:16 [INFO] [Eval #30] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.023240 | best: 2.320055 | $1.088
+18:22:18 [INFO] [Eval #31] qwen3-30b-a3b-instruct-2507 ERROR (init): Circles are not contained inside a rectangle of perimeter 4
+18:22:19 [INFO] [Eval #32] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.809636 | best: 2.320055 | $1.095
+18:22:21 [INFO] [Eval #33] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.000000 | best: 2.320055 | $1.097
+18:22:24 [INFO] [Eval #34] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.244172 | best: 2.320055 | $1.099
+18:22:27 [INFO] [Eval #35] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 1 and 2
+18:22:29 [INFO] [Eval #36] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.507077 | best: 2.320055 | $1.109
+18:22:33 [INFO] [Eval #37] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'r' where it is not associated with a value
+18:22:35 [INFO] [Status] Cost: $1.127 | Evals: 37 | Clients in-flight: 27 | Eval in-flight: 64 | Archive: 22 (cells 22) | Best: 2.320055 | Elapsed: 1620s
+18:22:37 [INFO] [Eval #38] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:22:49 [INFO] [Eval #39] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 1
+18:22:55 [INFO] [Eval #40] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.000000 | best: 2.320055 | $1.163
+18:23:05 [INFO] [Status] Cost: $1.163 | Evals: 40 | Clients in-flight: 0 | Eval in-flight: 88 | Archive: 23 (cells 23) | Best: 2.320055 | Elapsed: 1650s
+18:23:21 [INFO] [Eval #41] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.684818 | best: 2.320055 | $1.163
+18:23:25 [INFO] [Eval #42] qwen3-30b-a3b-instruct-2507 ERROR (init): operands could not be broadcast together with shapes (210,) (21,21) 
+18:23:29 [INFO] [Eval #43] qwen3-30b-a3b-instruct-2507 ERROR (init): invalid index to scalar variable.
+18:23:35 [INFO] [Status] Cost: $1.163 | Evals: 43 | Clients in-flight: 0 | Eval in-flight: 85 | Archive: 24 (cells 24) | Best: 2.320055 | Elapsed: 1680s
+18:23:49 [INFO] [Eval #44] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.953267 | best: 2.320055 | $1.163
+18:23:57 [INFO] [Eval #45] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.877347 | best: 2.320055 | $1.163
+18:24:01 [INFO] [Eval #46] qwen3-30b-a3b-instruct-2507 ERROR (init): tuple indices must be integers or slices, not tuple
+18:24:05 [INFO] [Status] Cost: $1.163 | Evals: 46 | Clients in-flight: 0 | Eval in-flight: 82 | Archive: 26 (cells 26) | Best: 2.320055 | Elapsed: 1710s
+18:24:07 [INFO] [Eval #47] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 1
+18:24:15 [INFO] [Eval #48] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.375995 | best: 2.320055 | $1.163
+18:24:18 [INFO] [Eval #49] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:24:22 [INFO] [Eval #50] qwen3-30b-a3b-instruct-2507 ERROR (init): The truth value of an array with more than one element is ambiguous. Use a.any()
+18:24:27 [INFO] [Eval #51] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.106095 | best: 2.320055 | $1.163
+18:24:34 [INFO] [Eval #52] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.906423 | best: 2.320055 | $1.163
+18:24:35 [INFO] [Status] Cost: $1.163 | Evals: 52 | Clients in-flight: 0 | Eval in-flight: 76 | Archive: 29 (cells 29) | Best: 2.320055 | Elapsed: 1740s
+18:24:40 [INFO] [Eval #53] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.741149 | best: 2.320055 | $1.163
+18:24:45 [INFO] [Eval #54] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.684336 | best: 2.320055 | $1.163
+18:24:48 [INFO] [Eval #55] qwen3-30b-a3b-instruct-2507 ERROR (init): name 'grid_size' is not defined
+18:24:53 [INFO] [Eval #56] qwen3-30b-a3b-instruct-2507 ERROR (init): 'NoneType' object is not subscriptable
+18:24:57 [INFO] [Eval #57] qwen3-30b-a3b-instruct-2507 ERROR (init): could not broadcast input array from shape (4,) into shape (21,)
+18:25:01 [INFO] [Eval #58] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.000000 | best: 2.320055 | $1.163
+18:25:05 [INFO] [Status] Cost: $1.163 | Evals: 58 | Clients in-flight: 0 | Eval in-flight: 70 | Archive: 32 (cells 32) | Best: 2.320055 | Elapsed: 1770s
+18:25:07 [INFO] [Eval #59] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.552699 | best: 2.320055 | $1.163
+18:25:17 [INFO] [Eval #60] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.487132 | best: 2.320055 | $1.163
+18:25:35 [INFO] [Status] Cost: $1.163 | Evals: 60 | Clients in-flight: 0 | Eval in-flight: 68 | Archive: 34 (cells 34) | Best: 2.320055 | Elapsed: 1800s
+18:25:56 [INFO] [Eval #61] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.435696 | best: 2.320055 | $1.163
+18:26:00 [INFO] [Eval #62] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:26:04 [INFO] [Eval #63] qwen3-30b-a3b-instruct-2507 ERROR (init): index 0 is out of bounds for axis 0 with size 0
+18:26:05 [INFO] [Status] Cost: $1.163 | Evals: 63 | Clients in-flight: 0 | Eval in-flight: 65 | Archive: 35 (cells 35) | Best: 2.320055 | Elapsed: 1830s
+18:26:08 [INFO] [Eval #64] qwen3-30b-a3b-instruct-2507 ERROR (init): circles must have shape (21, 3), got (3, 3)
+18:26:12 [INFO] [Eval #65] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.765329 | best: 2.320055 | $1.163
+18:26:25 [INFO] [Eval #66] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot unpack non-iterable NoneType object
+18:26:29 [INFO] [Eval #67] qwen3-30b-a3b-instruct-2507 ERROR (init): index 21 is out of bounds for axis 0 with size 21
+18:26:33 [INFO] [Eval #68] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.840000 | best: 2.320055 | $1.163
+18:26:35 [INFO] [Status] Cost: $1.163 | Evals: 68 | Clients in-flight: 0 | Eval in-flight: 60 | Archive: 37 (cells 37) | Best: 2.320055 | Elapsed: 1860s
+18:26:37 [INFO] [Eval #69] qwen3-30b-a3b-instruct-2507 ERROR (init): deque.pop() takes no arguments (1 given)
+18:26:41 [INFO] [Eval #70] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'r' where it is not associated with a value
+18:26:45 [INFO] [Eval #71] qwen3-30b-a3b-instruct-2507 ERROR (init): name 'box_smooth' is not defined
+18:26:48 [INFO] [Eval #72] qwen3-30b-a3b-instruct-2507 ERROR (init): '<' not supported between instances of 'float' and 'NoneType'
+18:27:05 [INFO] [Status] Cost: $1.163 | Evals: 72 | Clients in-flight: 0 | Eval in-flight: 56 | Archive: 37 (cells 37) | Best: 2.320055 | Elapsed: 1890s
+18:27:07 [INFO] [Eval #73] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 9 and 10
+18:27:09 [INFO] [Eval #74] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 3 and 5
+18:27:11 [INFO] [Eval #75] qwen3-30b-a3b-instruct-2507 ERROR (init): minimum() takes from 2 to 3 positional arguments but 4 were given
+18:27:13 [INFO] [Eval #76] qwen3-30b-a3b-instruct-2507 ERROR (init): array is not broadcastable to correct shape
+18:27:15 [INFO] [Eval #77] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:27:18 [INFO] [Eval #78] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap detected after final adjustment
+18:27:19 [INFO] [Eval #79] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 1
+18:27:23 [INFO] [Eval #80] qwen3-30b-a3b-instruct-2507 ERROR (init): unsupported operand type(s) for -: 'list' and 'list'
+18:27:25 [INFO] [Eval #81] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:27:27 [INFO] [Eval #82] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:27:29 [INFO] [Eval #83] qwen3-30b-a3b-instruct-2507 ERROR (init): setting an array element with a sequence.
+18:27:32 [INFO] [Eval #84] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:27:33 [INFO] [Eval #85] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:27:35 [INFO] [Status] Cost: $1.163 | Evals: 85 | Clients in-flight: 0 | Eval in-flight: 43 | Archive: 37 (cells 37) | Best: 2.320055 | Elapsed: 1920s
+18:27:36 [INFO] [Eval #86] qwen3-30b-a3b-instruct-2507 ERROR (init): The truth value of an array with more than one element is ambiguous. Use a.any()
+18:27:39 [INFO] [Eval #87] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.021413 | best: 2.320055 | $1.163
+18:27:40 [INFO] [Eval #88] qwen3-30b-a3b-instruct-2507 ERROR (init): 'numpy.float64' object cannot be interpreted as an integer
+<string>:110: RuntimeWarning: invalid value encountered in scalar divide
+<string>:111: RuntimeWarning: invalid value encountered in scalar divide
+18:27:42 [INFO] [Eval #89] qwen3-30b-a3b-instruct-2507 ERROR (init): circles contains non-finite values
+18:27:44 [INFO] [Eval #90] qwen3-30b-a3b-instruct-2507 ERROR (init): unsupported operand type(s) for -: 'list' and 'list'
+18:27:56 [INFO] [Eval #91] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.592506 | best: 2.320055 | $1.163
+18:28:05 [INFO] [Status] Cost: $1.163 | Evals: 91 | Clients in-flight: 0 | Eval in-flight: 36 | Archive: 39 (cells 39) | Best: 2.320055 | Elapsed: 1950s
+18:28:06 [INFO] [Eval #92] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.295961 | best: 2.320055 | $1.163
+18:28:07 [INFO] [Eval #93] qwen3-30b-a3b-instruct-2507 ERROR (init): 'numpy.float64' object cannot be interpreted as an integer
+18:28:11 [INFO] [Eval #94] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:28:15 [INFO] [Eval #95] qwen3-30b-a3b-instruct-2507 ERROR (init): index 1 is out of bounds for axis 0 with size 1
+18:28:19 [INFO] [Eval #96] qwen3-30b-a3b-instruct-2507 ERROR (init): array is not broadcastable to correct shape
+18:28:24 [INFO] [Eval #97] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.759768 | best: 2.320055 | $1.163
+18:28:35 [INFO] [Status] Cost: $1.163 | Evals: 97 | Clients in-flight: 0 | Eval in-flight: 31 | Archive: 41 (cells 41) | Best: 2.320055 | Elapsed: 1980s
+18:28:54 [INFO] [Eval #98] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.188061 | best: 2.320055 | $1.163
+18:28:55 [INFO] [Eval #99] qwen3-30b-a3b-instruct-2507 ERROR (init): too many indices for array: array is 1-dimensional, but 2 were indexed
+18:29:02 [INFO] [Eval #100] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.922185 | best: 2.320055 | $1.163
+18:29:05 [INFO] [Status] Cost: $1.163 | Evals: 100 | Clients in-flight: 0 | Eval in-flight: 28 | Archive: 43 (cells 43) | Best: 2.320055 | Elapsed: 2010s
+18:29:05 [INFO] [Eval #101] qwen3-30b-a3b-instruct-2507 ERROR (init): circles must have shape (21, 3), got (42, 3)
+18:29:12 [INFO] [Eval #102] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.608996 | best: 2.320055 | $1.163
+18:29:25 [INFO] [Eval #103] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.670176 | best: 2.320055 | $1.163
+18:29:29 [INFO] [Eval #104] qwen3-30b-a3b-instruct-2507 ERROR (init): Syntax error: invalid syntax (<string>, line 73)
+18:29:35 [INFO] [Status] Cost: $1.163 | Evals: 104 | Clients in-flight: 0 | Eval in-flight: 24 | Archive: 45 (cells 45) | Best: 2.320055 | Elapsed: 2040s
+18:29:38 [INFO] [Eval #105] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.141116 | best: 2.320055 | $1.163
+18:29:39 [INFO] [Eval #106] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.805091 | best: 2.320055 | $1.163
+18:29:41 [INFO] [Eval #107] qwen3-30b-a3b-instruct-2507 ERROR (init): operands could not be broadcast together with shapes (16,) (21,) 
+18:29:43 [INFO] [Eval #108] qwen3-30b-a3b-instruct-2507 ERROR (init): not enough values to unpack (expected 4, got 2)
+18:29:47 [INFO] [Eval #109] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.125000 | best: 2.320055 | $1.163
+18:29:49 [INFO] [Eval #110] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 2.100518 | best: 2.320055 | $1.163
+<string>:211: RuntimeWarning: invalid value encountered in divide
+<string>:212: RuntimeWarning: invalid value encountered in divide
+18:29:53 [INFO] [Archive] recluster: n=50 → 50/50 occupied cells (admits since last recluster=30)
+18:29:53 [INFO] [Eval #111] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.000000 | best: 2.320055 | $1.163
+18:29:54 [INFO] [Eval #112] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 0.446655 | best: 2.320055 | $1.163
+18:29:57 [INFO] [Eval #113] qwen3-30b-a3b-instruct-2507 ERROR (init): can't multiply sequence by non-int of type 'numpy.float64'
+18:29:59 [INFO] [Eval #114] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.916029 | best: 2.320055 | $1.163
+18:30:02 [INFO] [Eval #115] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 1.404442 | best: 2.320055 | $1.163
+18:30:02 [INFO] [Eval #116] qwen3-30b-a3b-instruct-2507 ERROR (init): name 'gamma' is not defined
+18:30:05 [INFO] [Status] Cost: $1.163 | Evals: 116 | Clients in-flight: 0 | Eval in-flight: 12 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2070s
+<string>:168: RuntimeWarning: invalid value encountered in scalar divide
+18:30:06 [INFO] [Eval #117] qwen3-30b-a3b-instruct-2507 ERROR (init): cannot access local variable 'x' where it is not associated with a value
+18:30:35 [INFO] [Status] Cost: $1.163 | Evals: 117 | Clients in-flight: 0 | Eval in-flight: 11 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2100s
+18:31:05 [INFO] [Status] Cost: $1.163 | Evals: 117 | Clients in-flight: 0 | Eval in-flight: 11 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2130s
+18:31:19 [INFO] [Eval #118] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 10
+18:31:23 [INFO] [Eval #119] qwen3-30b-a3b-instruct-2507 ERROR (init): list index out of range
+18:31:27 [INFO] [Eval #120] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 1.189050 | best: 2.320055 | $1.163
+18:31:33 [INFO] [Eval #121] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 0.039140 | best: 2.320055 | $1.163
+18:31:35 [INFO] [Status] Cost: $1.163 | Evals: 121 | Clients in-flight: 0 | Eval in-flight: 7 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2160s
+18:31:37 [INFO] [Eval #122] qwen3-30b-a3b-instruct-2507 ERROR (init): list indices must be integers or slices, not tuple
+18:31:41 [INFO] [Eval #123] qwen3-30b-a3b-instruct-2507 ERROR (init): The truth value of an array with more than one element is ambiguous. Use a.any()
+18:31:46 [INFO] [Eval #124] qwen3-30b-a3b-instruct-2507 rejected     | source: init               | score: 0.016024 | best: 2.320055 | $1.163
+18:31:49 [INFO] [Eval #125] qwen3-30b-a3b-instruct-2507 ERROR (init): Syntax error: no binding for nonlocal 'xs' found (<string>, line 63)
+18:32:05 [INFO] [Status] Cost: $1.163 | Evals: 125 | Clients in-flight: 0 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2190s
+18:32:35 [INFO] [Status] Cost: $1.163 | Evals: 125 | Clients in-flight: 0 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2220s
+18:32:43 [INFO] [Eval #126] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 9
+18:33:05 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2250s
+18:33:35 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2280s
+18:34:05 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2310s
+18:34:35 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2340s
+18:35:05 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2370s
+18:35:35 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2400s
+18:36:05 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2430s
+18:36:35 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2460s
+18:37:05 [INFO] [Status] Cost: $1.163 | Evals: 126 | Clients in-flight: 0 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2490s
+18:37:29 [INFO] [Eval #127] qwen3-30b-a3b-instruct-2507 accepted     | source: init               | score: 0.505010 | best: 2.320055 | $1.163
+18:37:35 [INFO] [Status] Cost: $1.163 | Evals: 127 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2520s
+18:38:05 [INFO] [Status] Cost: $1.163 | Evals: 127 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2550s
+18:38:35 [INFO] [Status] Cost: $1.163 | Evals: 127 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2580s
+18:39:05 [INFO] [Status] Cost: $1.163 | Evals: 127 | Clients in-flight: 0 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2610s
+18:39:16 [INFO] [Eval #128] qwen3-30b-a3b-instruct-2507 ERROR (init): Overlap between circles 0 and 1
+18:39:16 [INFO] [BLADE init] phase 2 done — archive size now 50
+18:39:16 [INFO] [BLADE] bootstrap complete — archive=50 best=2.320055 cost=$1.163 evals=128
+18:39:16 [INFO] [BLADE] entering evolutionary main loop (n_workers=4)
+18:39:18 [INFO] [BLADE advisor] trigger #1 at eval=128
+18:39:18 [INFO] [BLADE analyzer] trigger #1 at eval=128 (analysing up to 3 uncached programs; cache=0)
+18:39:20 [INFO] [BLADE advisor] new advice (1094 chars) at eval=128
+18:39:32 [INFO] [Eval #129] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.125000 | best: 2.320055 | $1.169
+18:39:35 [INFO] [Status] Cost: $1.170 | Evals: 129 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2640s
+18:39:36 [INFO] [Eval #130] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 1.899556 | best: 2.320055 | $1.170
+18:39:37 [INFO] [Eval #131] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.107771 | best: 2.320055 | $1.170
+18:39:58 [INFO] [Eval #132] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 1.375995 | best: 2.320055 | $1.174
+18:40:02 [INFO] [Eval #133] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.511580 | best: 2.320055 | $1.174
+18:40:05 [INFO] [Status] Cost: $1.174 | Evals: 133 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320055 | Elapsed: 2670s
+18:40:08 [INFO] [Eval #134] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: mutate_mechanism_swap | score: 2.320193 | best: 2.320193 | $1.174
+18:40:13 [INFO] [Eval #135] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.051186 | best: 2.320193 | $1.174
+18:40:35 [INFO] [Status] Cost: $1.177 | Evals: 135 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2700s
+18:40:40 [INFO] [Eval #136] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.100518 | best: 2.320193 | $1.177
+18:40:55 [INFO] [Eval #137] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.299329 | best: 2.320193 | $1.179
+18:41:05 [INFO] [Status] Cost: $1.179 | Evals: 137 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2730s
+18:41:35 [INFO] [Status] Cost: $1.183 | Evals: 137 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2760s
+18:41:40 [INFO] [Eval #138] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.941470 | best: 2.320193 | $1.183
+18:41:47 [INFO] [Eval #139] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): Circles are not contained inside a rectangle of perimeter 4
+18:42:05 [INFO] [Status] Cost: $1.184 | Evals: 139 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2790s
+18:42:06 [INFO] [Eval #140] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.108750 | best: 2.320193 | $1.184
+18:42:21 [INFO] [Eval #141] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 1.835418 | best: 2.320193 | $1.186
+18:42:31 [INFO] [Eval #142] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.272727 | best: 2.320193 | $1.186
+18:42:35 [INFO] [Status] Cost: $1.186 | Evals: 142 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2820s
+18:42:49 [INFO] [Eval #143] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.320193 | $1.188
+18:42:58 [INFO] [Eval #144] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.552699 | best: 2.320193 | $1.191
+18:43:05 [INFO] [Status] Cost: $1.191 | Evals: 144 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2850s
+18:43:30 [INFO] [Eval #145] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.255424 | best: 2.320193 | $1.194
+18:43:35 [INFO] [Eval #146] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.010406 | best: 2.320193 | $1.194
+18:43:35 [INFO] [Status] Cost: $1.194 | Evals: 146 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2880s
+18:43:41 [INFO] [Eval #147] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): Circles are not contained inside a rectangle of perimeter 4
+18:44:05 [INFO] [Status] Cost: $1.197 | Evals: 147 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2910s
+18:44:06 [INFO] [Eval #148] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.108592 | best: 2.320193 | $1.197
+18:44:08 [INFO] [BLADE PE] trigger #1 at eval=148 | stagnation=0.35 (global=0.14 local=0.35) | best=2.320193 | cells=50
+18:44:08 [INFO] [BLADE PE] mode=synthesis anchors=3 stagnation=0.35 best=2.3202
+18:44:16 [INFO] [Eval #149] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 1.598128 | best: 2.320193 | $1.197
+18:44:32 [INFO] [Eval #150] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.238676 | best: 2.320193 | $1.200
+18:44:34 [INFO] [Eval #151] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 0.889003 | best: 2.320193 | $1.200
+18:44:35 [INFO] [Status] Cost: $1.200 | Evals: 151 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2940s
+18:44:46 [INFO] [Eval #152] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.108750 | best: 2.320193 | $1.202
+18:45:04 [INFO] [Eval #153] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): circle_packing21.<locals>.objective() takes 1 positional argument but 3 were giv
+18:45:05 [INFO] [Status] Cost: $1.205 | Evals: 153 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 2970s
+18:45:14 [INFO] [Eval #154] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.320193 | best: 2.320193 | $1.205
+18:45:31 [INFO] [Eval #155] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.201659 | best: 2.320193 | $1.209
+18:45:35 [INFO] [Status] Cost: $1.209 | Evals: 155 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3000s
+18:45:36 [INFO] [Eval #156] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.108750 | best: 2.320193 | $1.209
+18:45:56 [INFO] [Eval #157] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.384612 | best: 2.320193 | $1.210
+18:46:03 [INFO] [Eval #158] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.109655 | best: 2.320193 | $1.212
+18:46:05 [INFO] [BLADE analyzer] trigger #2 at eval=158 (analysing up to 3 uncached programs; cache=3)
+18:46:05 [INFO] [Status] Cost: $1.327 | Evals: 158 | Clients in-flight: 6 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3030s
+18:46:15 [INFO] [Eval #159] gpt-5                       rejected     | source: paradigm           | score: 2.284983 | best: 2.320193 | $1.331
+18:46:15 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.2850, accepted=False)
+18:46:21 [INFO] [Eval #160] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.320193 | $1.332
+18:46:23 [INFO] [Eval #161] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 1.922185 | best: 2.320193 | $1.332
+18:46:33 [INFO] [Eval #162] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): name 'x' is not defined
+18:46:35 [INFO] [Status] Cost: $1.334 | Evals: 162 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3060s
+18:46:49 [INFO] [Eval #163] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.276120 | best: 2.320193 | $1.336
+18:47:05 [INFO] [Status] Cost: $1.340 | Evals: 163 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3090s
+18:47:09 [INFO] [Eval #164] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.311266 | best: 2.320193 | $1.344
+18:47:14 [INFO] [Eval #165] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.004428 | best: 2.320193 | $1.344
+18:47:18 [INFO] [Eval #166] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.285331 | best: 2.320193 | $1.344
+18:47:20 [INFO] [Eval #167] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.250450 | best: 2.320193 | $1.346
+18:47:22 [INFO] [Eval #168] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.272727 | best: 2.320193 | $1.346
+18:47:35 [INFO] [Status] Cost: $1.352 | Evals: 168 | Clients in-flight: 2 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3120s
+18:47:39 [INFO] [Eval #169] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.108750 | best: 2.320193 | $1.352
+18:47:40 [INFO] [Eval #170] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.272222 | best: 2.320193 | $1.352
+18:48:01 [INFO] [Eval #171] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.281336 | best: 2.320193 | $1.357
+18:48:02 [INFO] [Eval #172] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 1.902921 | best: 2.320193 | $1.357
+18:48:05 [INFO] [Status] Cost: $1.357 | Evals: 172 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3150s
+18:48:35 [INFO] [Status] Cost: $1.361 | Evals: 172 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3180s
+18:48:56 [INFO] [Eval #173] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.274008 | best: 2.320193 | $1.361
+18:49:04 [INFO] [Eval #174] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.141116 | best: 2.320193 | $1.361
+18:49:05 [INFO] [Status] Cost: $1.361 | Evals: 174 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3210s
+18:49:21 [INFO] [Eval #175] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 0.756015 | best: 2.320193 | $1.361
+18:49:35 [INFO] [Eval #176] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.320193 | best: 2.320193 | $1.363
+18:49:35 [INFO] [Status] Cost: $1.365 | Evals: 176 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3240s
+18:49:46 [INFO] [Eval #177] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.317580 | best: 2.320193 | $1.365
+18:50:03 [INFO] [Eval #178] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 0.520239 | best: 2.320193 | $1.367
+18:50:04 [INFO] [BLADE advisor] trigger #2 at eval=178
+18:50:05 [INFO] [Eval #179] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): name 'combinations' is not defined
+18:50:05 [INFO] [Status] Cost: $1.367 | Evals: 179 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3270s
+18:50:05 [INFO] [BLADE advisor] new advice (1050 chars) at eval=179
+18:50:18 [INFO] [Eval #180] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.277897 | best: 2.320193 | $1.369
+18:50:24 [INFO] [Eval #181] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): Overlap between circles 3 and 4
+18:50:30 [INFO] [Eval #182] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): circles must have shape (21, 3), got ()
+18:50:35 [INFO] [Status] Cost: $1.373 | Evals: 182 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.320193 | Elapsed: 3300s
+18:50:46 [INFO] [Eval #183] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: mutate_mechanism_swap | score: 2.324469 | best: 2.324469 | $1.376
+18:50:47 [INFO] [Eval #184] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.257689 | best: 2.324469 | $1.376
+18:50:49 [INFO] [Eval #185] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.100950 | best: 2.324469 | $1.376
+18:50:56 [INFO] [Eval #186] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.263563 | best: 2.324469 | $1.377
+18:51:05 [INFO] [Status] Cost: $1.377 | Evals: 186 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.324469 | Elapsed: 3330s
+18:51:23 [INFO] [Eval #187] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.324469 | $1.379
+18:51:35 [INFO] [Status] Cost: $1.381 | Evals: 187 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.324469 | Elapsed: 3360s
+18:51:45 [INFO] [Eval #188] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): cannot access local variable 'repair_and_scale' where it is not associated with 
+18:51:46 [INFO] [Eval #189] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.249456 | best: 2.324469 | $1.387
+18:51:46 [INFO] [BLADE analyzer] trigger #3 at eval=189 (analysing up to 3 uncached programs; cache=5)
+18:51:52 [INFO] [Eval #190] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.300869 | best: 2.324469 | $1.387
+18:51:52 [INFO] [BLADE PE] trigger #2 at eval=190 | stagnation=0.25 (global=0.07 local=0.25) | best=2.324469 | cells=50
+18:51:52 [INFO] [BLADE PE] mode=synthesis anchors=3 stagnation=0.25 best=2.3245
+18:52:05 [INFO] [Status] Cost: $1.388 | Evals: 190 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.324469 | Elapsed: 3390s
+18:52:27 [INFO] [Eval #191] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.314408 | best: 2.324469 | $1.393
+18:52:35 [INFO] [Status] Cost: $1.395 | Evals: 191 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.324469 | Elapsed: 3420s
+18:52:36 [INFO] [Eval #192] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.292150 | best: 2.324469 | $1.395
+18:52:36 [INFO] [Eval #193] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): index 15 is out of bounds for axis 0 with size 9
+18:52:47 [INFO] [Eval #194] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.262826 | best: 2.324469 | $1.397
+18:53:05 [INFO] [Status] Cost: $1.399 | Evals: 194 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.324469 | Elapsed: 3450s
+18:53:12 [INFO] [Eval #195] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.324469 | $1.501
+18:53:20 [INFO] [Eval #196] gpt-5                       NEW BEST ★   | source: paradigm           | score: 2.350703 | best: 2.350703 | $1.505
+18:53:20 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.3507, accepted=True)
+18:53:27 [INFO] [Eval #197] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.299836 | best: 2.350703 | $1.506
+18:53:29 [INFO] [Eval #198] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.233377 | best: 2.350703 | $1.506
+18:53:35 [INFO] [Status] Cost: $1.509 | Evals: 198 | Clients in-flight: 6 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3480s
+18:53:44 [INFO] [Eval #199] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.286772 | best: 2.350703 | $1.509
+18:54:05 [INFO] [Status] Cost: $1.509 | Evals: 199 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3510s
+18:54:17 [INFO] [Eval #200] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.290911 | best: 2.350703 | $1.516
+18:54:21 [INFO] [Eval #201] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): The truth value of an array with more than one element is ambiguous. Use a.any()
+18:54:26 [INFO] [Eval #202] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.324817 | best: 2.350703 | $1.518
+18:54:35 [INFO] [Status] Cost: $1.521 | Evals: 202 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3540s
+18:54:39 [INFO] [Eval #203] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.270735 | best: 2.350703 | $1.521
+18:54:44 [INFO] [Eval #204] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.341109 | best: 2.350703 | $1.521
+18:55:05 [INFO] [Status] Cost: $1.521 | Evals: 204 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3570s
+18:55:21 [INFO] [Eval #205] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.338422 | best: 2.350703 | $1.524
+18:55:35 [INFO] [Status] Cost: $1.530 | Evals: 205 | Clients in-flight: 3 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3600s
+18:55:46 [INFO] [Eval #206] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.319941 | best: 2.350703 | $1.530
+18:55:51 [INFO] [Eval #207] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.306440 | best: 2.350703 | $1.530
+18:56:05 [INFO] [Status] Cost: $1.530 | Evals: 207 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3630s
+18:56:10 [INFO] [Eval #208] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.091695 | best: 2.350703 | $1.530
+18:56:35 [INFO] [Status] Cost: $1.530 | Evals: 208 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3660s
+18:56:50 [INFO] [Eval #209] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.324518 | best: 2.350703 | $1.532
+18:57:05 [INFO] [Status] Cost: $1.535 | Evals: 209 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3690s
+18:57:10 [INFO] [Eval #210] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.268042 | best: 2.350703 | $1.535
+18:57:35 [INFO] [Status] Cost: $1.537 | Evals: 210 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3720s
+18:57:46 [INFO] [Eval #211] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.302841 | best: 2.350703 | $1.539
+18:57:48 [INFO] [Eval #212] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.306328 | best: 2.350703 | $1.539
+18:58:02 [INFO] [Eval #213] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.327783 | best: 2.350703 | $1.542
+18:58:05 [INFO] [Status] Cost: $1.542 | Evals: 213 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3750s
+18:58:35 [INFO] [Status] Cost: $1.548 | Evals: 213 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3780s
+18:58:45 [INFO] [Eval #214] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.296773 | best: 2.350703 | $1.548
+18:58:47 [INFO] [Eval #215] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.331613 | best: 2.350703 | $1.548
+18:59:01 [INFO] [Eval #216] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.290287 | best: 2.350703 | $1.550
+18:59:05 [INFO] [Status] Cost: $1.550 | Evals: 216 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3810s
+18:59:15 [INFO] [Eval #217] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.239875 | best: 2.350703 | $1.552
+18:59:33 [INFO] [Eval #218] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.309452 | best: 2.350703 | $1.557
+18:59:35 [INFO] [Status] Cost: $1.557 | Evals: 218 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3840s
+18:59:36 [INFO] [Eval #219] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): 'numpy.float64' object has no attribute 'old'
+18:59:37 [INFO] [BLADE analyzer] trigger #4 at eval=219 (analysing up to 3 uncached programs; cache=6)
+19:00:00 [INFO] [Eval #220] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.272727 | best: 2.350703 | $1.560
+19:00:05 [INFO] [Status] Cost: $1.563 | Evals: 220 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3870s
+19:00:17 [INFO] [Eval #221] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.284484 | best: 2.350703 | $1.563
+19:00:35 [INFO] [Status] Cost: $1.563 | Evals: 221 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3900s
+19:00:56 [INFO] [Eval #222] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.331232 | best: 2.350703 | $1.567
+19:00:57 [INFO] [Eval #223] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.323778 | best: 2.350703 | $1.567
+19:01:05 [INFO] [Status] Cost: $1.573 | Evals: 223 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3930s
+19:01:15 [INFO] [Eval #224] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.326949 | best: 2.350703 | $1.573
+19:01:29 [INFO] [Archive] recluster: n=50 → 50/50 occupied cells (admits since last recluster=30)
+19:01:29 [INFO] [Eval #225] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.309452 | best: 2.350703 | $1.574
+19:01:35 [INFO] [Status] Cost: $1.574 | Evals: 225 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3960s
+19:01:49 [INFO] [Eval #226] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.289939 | best: 2.350703 | $1.578
+19:02:05 [INFO] [Eval #227] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.293492 | best: 2.350703 | $1.581
+19:02:05 [INFO] [Status] Cost: $1.581 | Evals: 227 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 3990s
+19:02:09 [INFO] [Eval #228] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 1.600213 | best: 2.350703 | $1.581
+19:02:10 [INFO] [BLADE advisor] trigger #3 at eval=228
+19:02:12 [INFO] [BLADE advisor] new advice (971 chars) at eval=228
+19:02:35 [INFO] [Status] Cost: $1.581 | Evals: 228 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4020s
+19:02:54 [INFO] [Eval #229] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.329065 | best: 2.350703 | $1.583
+19:03:05 [INFO] [Status] Cost: $1.589 | Evals: 229 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4050s
+19:03:09 [INFO] [Eval #230] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.306964 | best: 2.350703 | $1.589
+19:03:13 [INFO] [Eval #231] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.329669 | best: 2.350703 | $1.589
+19:03:20 [INFO] [Eval #233] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): LLM error: 
+19:03:35 [INFO] [Status] Cost: $1.589 | Evals: 233 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4080s
+19:03:48 [INFO] [Eval #234] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): axis 1 is out of bounds for array of dimension 1
+19:03:53 [INFO] [Eval #235] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.322627 | best: 2.350703 | $1.593
+19:04:05 [INFO] [Status] Cost: $1.596 | Evals: 235 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4110s
+19:04:07 [INFO] [Eval #236] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.344509 | best: 2.350703 | $1.596
+19:04:12 [INFO] [Eval #237] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): cannot access local variable 'r' where it is not associated with a value
+19:04:33 [INFO] [Eval #238] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.100950 | best: 2.350703 | $1.599
+19:04:35 [INFO] [Status] Cost: $1.599 | Evals: 238 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4140s
+19:04:40 [INFO] [Eval #239] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.229313 | best: 2.350703 | $1.603
+19:04:50 [INFO] [Eval #240] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.347630 | best: 2.350703 | $1.603
+19:05:05 [INFO] [Status] Cost: $1.603 | Evals: 240 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4170s
+19:05:19 [INFO] [Eval #241] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): name 'ymin' is not defined
+19:05:21 [INFO] [Eval #242] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): worker exception: 
+19:05:35 [INFO] [Status] Cost: $1.608 | Evals: 242 | Clients in-flight: 3 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4200s
+19:05:36 [INFO] [Eval #243] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.342700 | best: 2.350703 | $1.611
+19:05:48 [INFO] [Eval #244] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.344040 | best: 2.350703 | $1.611
+19:06:05 [INFO] [Eval #245] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.278541 | best: 2.350703 | $1.612
+19:06:05 [INFO] [Status] Cost: $1.612 | Evals: 245 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4230s
+19:06:34 [INFO] [Eval #246] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.322462 | best: 2.350703 | $1.616
+19:06:35 [INFO] [Status] Cost: $1.618 | Evals: 246 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4260s
+19:06:46 [INFO] [Eval #247] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 0.677029 | best: 2.350703 | $1.619
+19:06:47 [INFO] [Eval #248] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.313732 | best: 2.350703 | $1.619
+19:07:05 [INFO] [Status] Cost: $1.622 | Evals: 248 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4290s
+19:07:07 [INFO] [Eval #249] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.311047 | best: 2.350703 | $1.622
+19:07:07 [INFO] [BLADE analyzer] trigger #5 at eval=249 (analysing up to 3 uncached programs; cache=7)
+19:07:07 [INFO] [Eval #250] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.051186 | best: 2.350703 | $1.622
+19:07:10 [INFO] [Eval #251] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): operands could not be broadcast together with shapes (21,) (5,) 
+19:07:35 [INFO] [Status] Cost: $1.625 | Evals: 251 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4320s
+19:07:51 [INFO] [Eval #252] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.316444 | best: 2.350703 | $1.630
+19:07:52 [INFO] [Eval #253] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.099668 | best: 2.350703 | $1.632
+19:07:54 [INFO] [BLADE PE] trigger #3 at eval=253 | stagnation=0.57 (global=0.57 local=0.00) | best=2.350703 | cells=50
+19:07:54 [INFO] [BLADE PE] mode=surgical anchors=1 stagnation=0.57 best=2.3507
+19:07:59 [INFO] [Eval #254] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+19:08:05 [INFO] [Status] Cost: $1.632 | Evals: 254 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4350s
+19:08:24 [INFO] [Eval #255] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.125000 | best: 2.350703 | $1.633
+19:08:35 [INFO] [Status] Cost: $1.636 | Evals: 255 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4380s
+19:08:36 [INFO] [Eval #256] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): circle_packing21.<locals>.all_ok_for_i() missing 3 required positional arguments
+19:08:41 [INFO] [Eval #257] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): circle_packing21.<locals>.width_height() missing 1 required positional argument:
+19:09:05 [INFO] [Status] Cost: $1.642 | Evals: 257 | Clients in-flight: 2 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4410s
+19:09:12 [INFO] [Eval #258] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.292787 | best: 2.350703 | $1.644
+19:09:13 [INFO] [Eval #259] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.305602 | best: 2.350703 | $1.644
+19:09:19 [INFO] [Eval #260] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.296252 | best: 2.350703 | $1.644
+19:09:35 [INFO] [Status] Cost: $1.644 | Evals: 260 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4440s
+19:09:44 [INFO] [Eval #261] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.051186 | best: 2.350703 | $1.644
+19:09:58 [INFO] [Eval #262] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): Circles are not contained inside a rectangle of perimeter 4
+19:10:04 [INFO] [Eval #263] gpt-5                       rejected     | source: paradigm           | score: 2.321595 | best: 2.350703 | $1.754
+19:10:04 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.3216, accepted=False)
+19:10:05 [INFO] [Eval #264] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.309452 | best: 2.350703 | $1.754
+19:10:05 [INFO] [Status] Cost: $1.754 | Evals: 264 | Clients in-flight: 8 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4470s
+19:10:35 [INFO] [Status] Cost: $1.759 | Evals: 264 | Clients in-flight: 6 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4500s
+19:10:37 [INFO] [Eval #265] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.338462 | best: 2.350703 | $1.759
+19:10:42 [INFO] [Eval #266] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.299635 | best: 2.350703 | $1.762
+19:10:50 [INFO] [Eval #267] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.292250 | best: 2.350703 | $1.762
+19:11:05 [INFO] [Status] Cost: $1.762 | Evals: 267 | Clients in-flight: 8 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4530s
+19:11:22 [INFO] [Eval #268] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.281465 | best: 2.350703 | $1.766
+19:11:35 [INFO] [Status] Cost: $1.769 | Evals: 268 | Clients in-flight: 6 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4560s
+19:11:47 [INFO] [Eval #269] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.271932 | best: 2.350703 | $1.778
+19:11:53 [INFO] [Eval #270] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.287890 | best: 2.350703 | $1.778
+19:11:55 [INFO] [Eval #271] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.250499 | best: 2.350703 | $1.779
+19:11:59 [INFO] [Eval #272] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.156058 | best: 2.350703 | $1.779
+19:12:04 [INFO] [Eval #273] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.105559 | best: 2.350703 | $1.779
+19:12:05 [INFO] [Status] Cost: $1.779 | Evals: 273 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4590s
+19:12:07 [INFO] [Eval #274] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.347385 | best: 2.350703 | $1.779
+19:12:28 [INFO] [Eval #275] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.327444 | best: 2.350703 | $1.782
+19:12:35 [INFO] [Status] Cost: $1.782 | Evals: 275 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4620s
+19:12:57 [INFO] [Eval #276] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.302329 | best: 2.350703 | $1.784
+19:13:05 [INFO] [Status] Cost: $1.787 | Evals: 276 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4650s
+19:13:17 [INFO] [Eval #277] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.290287 | best: 2.350703 | $1.787
+19:13:32 [INFO] [Eval #278] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.200322 | best: 2.350703 | $1.788
+19:13:32 [INFO] [BLADE advisor] trigger #4 at eval=278
+19:13:34 [INFO] [BLADE advisor] new advice (990 chars) at eval=278
+19:13:35 [INFO] [Status] Cost: $1.789 | Evals: 278 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4680s
+19:14:05 [INFO] [Status] Cost: $1.791 | Evals: 278 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4710s
+19:14:12 [INFO] [Eval #279] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.299144 | best: 2.350703 | $1.791
+19:14:13 [INFO] [BLADE analyzer] trigger #6 at eval=279 (analysing up to 3 uncached programs; cache=9)
+19:14:35 [INFO] [Status] Cost: $1.794 | Evals: 279 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4740s
+19:14:53 [INFO] [Eval #280] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.346678 | best: 2.350703 | $1.796
+19:15:05 [INFO] [Status] Cost: $1.797 | Evals: 280 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4770s
+19:15:09 [INFO] [Eval #281] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.922185 | best: 2.350703 | $1.799
+19:15:20 [INFO] [Eval #282] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.272727 | best: 2.350703 | $1.800
+19:15:22 [INFO] [Eval #283] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.332888 | best: 2.350703 | $1.800
+19:15:35 [INFO] [Status] Cost: $1.800 | Evals: 283 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4800s
+19:16:05 [INFO] [Status] Cost: $1.805 | Evals: 283 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4830s
+19:16:07 [INFO] [Eval #284] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.310682 | best: 2.350703 | $1.805
+19:16:17 [INFO] [Eval #285] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.269347 | best: 2.350703 | $1.807
+19:16:22 [INFO] [Eval #286] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.321282 | best: 2.350703 | $1.807
+19:16:35 [INFO] [Status] Cost: $1.807 | Evals: 286 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4860s
+19:16:50 [INFO] [Eval #287] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.272727 | best: 2.350703 | $1.811
+19:17:02 [INFO] [Eval #288] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.311178 | best: 2.350703 | $1.814
+19:17:05 [INFO] [Status] Cost: $1.814 | Evals: 288 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4890s
+19:17:12 [INFO] [Eval #289] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.289736 | best: 2.350703 | $1.814
+19:17:28 [INFO] [Eval #290] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.117498 | best: 2.350703 | $1.815
+19:17:34 [INFO] [Eval #291] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 1.836855 | best: 2.350703 | $1.816
+19:17:35 [INFO] [Status] Cost: $1.816 | Evals: 291 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4920s
+19:17:49 [INFO] [Eval #292] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): Overlap between circles 0 and 7
+19:18:05 [INFO] [Status] Cost: $1.821 | Evals: 292 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4950s
+19:18:06 [INFO] [Eval #293] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+19:18:23 [INFO] [Eval #294] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.099668 | best: 2.350703 | $1.822
+19:18:35 [INFO] [Status] Cost: $1.822 | Evals: 294 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 4980s
+19:18:45 [INFO] [Eval #295] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.106095 | best: 2.350703 | $1.823
+19:18:46 [INFO] [BLADE PE] trigger #4 at eval=295 | stagnation=0.99 (global=0.99 local=0.05) | best=2.350703 | cells=50
+19:18:46 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=0.99 best=2.3507
+19:18:52 [INFO] [Eval #296] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.301279 | best: 2.350703 | $1.825
+19:19:03 [INFO] [Eval #297] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): Overlap between circles 0 and 5
+19:19:04 [INFO] [Eval #298] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.240175 | best: 2.350703 | $1.827
+19:19:05 [INFO] [Status] Cost: $1.827 | Evals: 298 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5010s
+19:19:35 [INFO] [Status] Cost: $1.830 | Evals: 298 | Clients in-flight: 2 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5040s
+19:19:46 [INFO] [Eval #299] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.272364 | best: 2.350703 | $1.830
+19:19:53 [INFO] [Eval #300] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): name 'I_pairs' is not defined
+19:20:05 [INFO] [Status] Cost: $1.833 | Evals: 300 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5070s
+<string>:84: OptimizeWarning: Initial guess is not within the specified bounds
+19:20:20 [INFO] [Eval #301] gpt-5                       rejected     | source: paradigm           | score: 1.997530 | best: 2.350703 | $1.943
+19:20:20 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.9975, accepted=False)
+19:20:35 [INFO] [Status] Cost: $1.943 | Evals: 301 | Clients in-flight: 5 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5100s
+19:20:51 [INFO] [Eval #302] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.284267 | best: 2.350703 | $1.951
+19:20:57 [INFO] [Eval #303] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.905335 | best: 2.350703 | $1.951
+19:21:05 [INFO] [Status] Cost: $1.951 | Evals: 303 | Clients in-flight: 3 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5130s
+19:21:05 [INFO] [Eval #304] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.052914 | best: 2.350703 | $1.951
+19:21:19 [INFO] [Eval #305] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): executor error: Process exceeded 600.0s timeout
+19:21:35 [INFO] [Status] Cost: $1.954 | Evals: 305 | Clients in-flight: 2 | Eval in-flight: 4 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5160s
+19:21:37 [INFO] [Eval #306] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.998505 | best: 2.350703 | $1.955
+19:21:46 [INFO] [Eval #307] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.976238 | best: 2.350703 | $1.957
+19:21:59 [INFO] [Eval #308] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.272727 | best: 2.350703 | $1.957
+19:22:05 [INFO] [Status] Cost: $1.957 | Evals: 308 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5190s
+19:22:33 [INFO] [Eval #309] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.272727 | best: 2.350703 | $1.958
+19:22:35 [INFO] [BLADE analyzer] trigger #7 at eval=309 (analysing up to 3 uncached programs; cache=10)
+19:22:35 [INFO] [Status] Cost: $1.958 | Evals: 309 | Clients in-flight: 4 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5220s
+19:22:54 [INFO] [Eval #310] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.832407 | best: 2.350703 | $1.961
+19:23:05 [INFO] [Status] Cost: $1.961 | Evals: 310 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5250s
+19:23:35 [INFO] [Status] Cost: $1.962 | Evals: 310 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5280s
+19:23:39 [INFO] [Eval #311] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): Circles are not contained inside a rectangle of perimeter 4
+19:23:58 [INFO] [Eval #312] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): Overlap between circles 10 and 16
+19:24:05 [INFO] [Status] Cost: $1.963 | Evals: 312 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5310s
+19:24:35 [INFO] [Status] Cost: $1.963 | Evals: 312 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5340s
+19:24:57 [INFO] [Eval #313] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.321839 | best: 2.350703 | $1.965
+19:25:05 [INFO] [Status] Cost: $1.965 | Evals: 313 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5370s
+19:25:35 [INFO] [Status] Cost: $1.966 | Evals: 313 | Clients in-flight: 0 | Eval in-flight: 4 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5400s
+19:25:36 [INFO] [Eval #314] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.118139 | best: 2.350703 | $1.966
+19:26:05 [INFO] [Status] Cost: $1.966 | Evals: 314 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5430s
+19:26:10 [INFO] [Eval #315] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): worker exception: litellm.APIError: APIError: OpenrouterException - Unable to ge
+19:26:35 [INFO] [Status] Cost: $1.966 | Evals: 315 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5460s
+19:26:50 [INFO] [Eval #316] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.045418 | best: 2.350703 | $1.968
+19:27:05 [INFO] [Eval #317] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.346678 | best: 2.350703 | $1.968
+19:27:05 [INFO] [Status] Cost: $1.968 | Evals: 317 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5490s
+19:27:16 [INFO] [Eval #318] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.272727 | best: 2.350703 | $1.970
+19:27:29 [INFO] [Eval #319] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.398448 | best: 2.350703 | $1.972
+19:27:35 [INFO] [Status] Cost: $1.972 | Evals: 319 | Clients in-flight: 1 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5520s
+19:27:35 [INFO] [Eval #320] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.099668 | best: 2.350703 | $1.972
+19:28:05 [INFO] [Status] Cost: $1.974 | Evals: 320 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5550s
+19:28:13 [INFO] [Eval #321] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+19:28:28 [INFO] [Eval #322] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.323621 | best: 2.350703 | $1.976
+19:28:35 [INFO] [Status] Cost: $1.976 | Evals: 322 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5580s
+19:28:50 [INFO] [Eval #323] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.052914 | best: 2.350703 | $1.978
+19:29:05 [INFO] [Status] Cost: $1.980 | Evals: 323 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5610s
+19:29:06 [INFO] [Eval #324] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): executor error: Process exceeded 600.0s timeout
+19:29:15 [INFO] [Eval #325] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.272724 | best: 2.350703 | $1.981
+19:29:17 [INFO] [Eval #326] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 0.293213 | best: 2.350703 | $1.981
+19:29:19 [INFO] [Eval #327] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): circles must have shape (21, 3), got ()
+19:29:21 [INFO] [BLADE PE] trigger #5 at eval=327 | stagnation=1.00 (global=1.00 local=0.45) | best=2.350703 | cells=50
+19:29:21 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+19:29:35 [INFO] [Status] Cost: $1.981 | Evals: 327 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5640s
+19:30:04 [INFO] [Eval #328] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.054687 | best: 2.350703 | $1.985
+19:30:05 [INFO] [BLADE advisor] trigger #5 at eval=328
+19:30:05 [INFO] [Status] Cost: $1.985 | Evals: 328 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5670s
+19:30:07 [INFO] [BLADE advisor] new advice (990 chars) at eval=328
+19:30:10 [INFO] [Eval #329] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Syntax error: invalid syntax (<string>, line 135)
+19:30:12 [INFO] [Eval #330] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): executor error: Process exceeded 600.0s timeout
+19:30:13 [INFO] [Eval #331] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.308813 | best: 2.350703 | $1.987
+19:30:35 [INFO] [Status] Cost: $1.987 | Evals: 331 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5700s
+19:30:46 [INFO] [Eval #332] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): too many indices for array: array is 1-dimensional, but 2 were indexed
+19:31:00 [INFO] [Eval #333] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.315942 | best: 2.350703 | $1.994
+19:31:01 [INFO] [Eval #334] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.272727 | best: 2.350703 | $1.994
+19:31:05 [INFO] [Status] Cost: $1.994 | Evals: 334 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5730s
+19:31:26 [INFO] [Eval #335] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.306826 | best: 2.350703 | $1.995
+19:31:35 [INFO] [Status] Cost: $1.995 | Evals: 335 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5760s
+19:31:38 [INFO] [Eval #336] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.109655 | best: 2.350703 | $1.995
+19:31:43 [INFO] [Eval #337] gpt-5                       rejected     | source: paradigm           | score: 0.420000 | best: 2.350703 | $2.151
+19:31:43 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=0.4200, accepted=False)
+19:31:52 [INFO] [Eval #338] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.335637 | best: 2.350703 | $2.151
+19:32:03 [INFO] [Eval #339] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.115010 | best: 2.350703 | $2.153
+19:32:04 [INFO] [BLADE analyzer] trigger #8 at eval=339 (analysing up to 3 uncached programs; cache=12)
+19:32:05 [INFO] [Status] Cost: $2.153 | Evals: 339 | Clients in-flight: 11 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5790s
+19:32:16 [INFO] [Eval #340] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 0.420000 | best: 2.350703 | $2.163
+19:32:19 [INFO] [Eval #341] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 0.441000 | best: 2.350703 | $2.163
+19:32:20 [INFO] [Eval #342] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 0.525000 | best: 2.350703 | $2.163
+19:32:25 [INFO] [Eval #343] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.321282 | best: 2.350703 | $2.163
+19:32:35 [INFO] [Eval #344] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 0.462000 | best: 2.350703 | $2.165
+19:32:35 [INFO] [Status] Cost: $2.165 | Evals: 344 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5820s
+19:32:44 [INFO] [Eval #345] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.030958 | best: 2.350703 | $2.166
+19:32:58 [INFO] [Eval #346] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.375995 | best: 2.350703 | $2.170
+19:33:05 [INFO] [Status] Cost: $2.170 | Evals: 346 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5850s
+19:33:11 [INFO] [Eval #347] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.311504 | best: 2.350703 | $2.170
+19:33:35 [INFO] [Status] Cost: $2.171 | Evals: 347 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5880s
+19:33:40 [INFO] [Eval #348] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): name 'dr_forces' is not defined
+19:33:45 [INFO] [Eval #349] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.314790 | best: 2.350703 | $2.175
+19:33:52 [INFO] [Eval #350] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.329582 | best: 2.350703 | $2.175
+19:34:05 [INFO] [Status] Cost: $2.175 | Evals: 350 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5910s
+19:34:10 [INFO] [Archive] recluster: n=50 → 50/50 occupied cells (admits since last recluster=30)
+19:34:10 [INFO] [Eval #351] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 0.500000 | best: 2.350703 | $2.176
+19:34:26 [INFO] [Eval #352] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 0.777977 | best: 2.350703 | $2.178
+19:34:35 [INFO] [Status] Cost: $2.182 | Evals: 352 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5940s
+19:34:37 [INFO] [Eval #353] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): name 'all_ok_for_i' is not defined
+19:34:57 [INFO] [Eval #354] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.320193 | best: 2.350703 | $2.182
+19:34:59 [INFO] [Eval #355] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 1.600679 | best: 2.350703 | $2.182
+19:35:05 [INFO] [Status] Cost: $2.183 | Evals: 355 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 5970s
+19:35:11 [INFO] [Eval #356] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.272727 | best: 2.350703 | $2.183
+19:35:28 [INFO] [Eval #357] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.329065 | best: 2.350703 | $2.186
+19:35:35 [INFO] [Status] Cost: $2.188 | Evals: 357 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6000s
+19:35:38 [INFO] [Eval #358] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.404442 | best: 2.350703 | $2.188
+19:36:05 [INFO] [Eval #359] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.272727 | best: 2.350703 | $2.194
+19:36:05 [INFO] [Status] Cost: $2.194 | Evals: 359 | Clients in-flight: 2 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6030s
+19:36:05 [INFO] [Eval #360] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.141116 | best: 2.350703 | $2.194
+19:36:07 [INFO] [Eval #361] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.341049 | best: 2.350703 | $2.194
+19:36:30 [INFO] [Eval #362] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.237282 | best: 2.350703 | $2.195
+19:36:35 [INFO] [Status] Cost: $2.195 | Evals: 362 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6060s
+19:36:48 [INFO] [Eval #363] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 1.404442 | best: 2.350703 | $2.198
+19:37:05 [INFO] [Status] Cost: $2.198 | Evals: 363 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6090s
+19:37:19 [INFO] [Eval #364] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.949817 | best: 2.350703 | $2.200
+19:37:21 [INFO] [BLADE PE] trigger #6 at eval=364 | stagnation=1.00 (global=1.00 local=0.05) | best=2.350703 | cells=50
+19:37:21 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+19:37:26 [INFO] [Eval #365] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.085438 | best: 2.350703 | $2.200
+19:37:35 [INFO] [Status] Cost: $2.200 | Evals: 365 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6120s
+19:38:05 [INFO] [Status] Cost: $2.205 | Evals: 365 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6150s
+19:38:17 [INFO] [Eval #366] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.091667 | best: 2.350703 | $2.206
+19:38:22 [INFO] [Eval #367] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.108427 | best: 2.350703 | $2.206
+19:38:25 [INFO] [Eval #368] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.292933 | best: 2.350703 | $2.206
+19:38:35 [INFO] [Status] Cost: $2.206 | Evals: 368 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6180s
+19:39:05 [INFO] [Status] Cost: $2.318 | Evals: 368 | Clients in-flight: 2 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6210s
+19:39:11 [INFO] [Eval #369] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.306566 | best: 2.350703 | $2.321
+19:39:12 [INFO] [BLADE analyzer] trigger #9 at eval=369 (analysing up to 3 uncached programs; cache=14)
+19:39:20 [INFO] [Eval #370] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.324844 | best: 2.350703 | $2.322
+19:39:20 [INFO] [Eval #371] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+19:39:26 [INFO] [Eval #372] gpt-5                       accepted     | source: paradigm           | score: 1.665755 | best: 2.350703 | $2.324
+19:39:26 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.6658, accepted=True)
+<string>:469: OptimizeWarning: Unknown solver options: gtol
+19:39:35 [INFO] [Eval #373] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.286281 | best: 2.350703 | $2.325
+19:39:35 [INFO] [Status] Cost: $2.325 | Evals: 373 | Clients in-flight: 8 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6240s
+19:40:05 [INFO] [Status] Cost: $2.333 | Evals: 373 | Clients in-flight: 3 | Eval in-flight: 5 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6270s
+19:40:14 [INFO] [Eval #374] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.673093 | best: 2.350703 | $2.336
+19:40:15 [INFO] [Eval #375] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.661381 | best: 2.350703 | $2.336
+19:40:20 [INFO] [Eval #376] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.295280 | best: 2.350703 | $2.336
+19:40:28 [INFO] [Eval #377] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.322702 | best: 2.350703 | $2.336
+19:40:30 [INFO] [Eval #378] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.671249 | best: 2.350703 | $2.336
+19:40:31 [INFO] [BLADE advisor] trigger #6 at eval=378
+19:40:34 [INFO] [BLADE advisor] new advice (990 chars) at eval=378
+19:40:35 [INFO] [Status] Cost: $2.338 | Evals: 378 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6300s
+19:40:38 [INFO] [Eval #379] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.272727 | best: 2.350703 | $2.339
+19:40:39 [INFO] [Eval #380] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.306566 | best: 2.350703 | $2.339
+19:41:02 [INFO] [Eval #381] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.344176 | best: 2.350703 | $2.346
+19:41:03 [INFO] [Eval #382] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.010510 | best: 2.350703 | $2.348
+19:41:05 [INFO] [Status] Cost: $2.348 | Evals: 382 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6330s
+19:41:07 [INFO] [Eval #383] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.639821 | best: 2.350703 | $2.348
+19:41:10 [INFO] [Eval #384] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.272727 | best: 2.350703 | $2.349
+<string>:60: RuntimeWarning: divide by zero encountered in scalar divide
+<string>:60: RuntimeWarning: invalid value encountered in scalar multiply
+19:41:35 [INFO] [Eval #385] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.320193 | best: 2.350703 | $2.353
+19:41:35 [INFO] [Status] Cost: $2.353 | Evals: 385 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6360s
+19:41:41 [INFO] [Eval #386] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 0.888889 | best: 2.350703 | $2.353
+19:41:42 [INFO] [Eval #387] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.331232 | best: 2.350703 | $2.353
+19:42:01 [INFO] [Eval #388] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.335532 | best: 2.350703 | $2.358
+19:42:02 [INFO] [Eval #389] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): Syntax error: unmatched ')' (<string>, line 250)
+19:42:05 [INFO] [Status] Cost: $2.358 | Evals: 389 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6390s
+19:42:22 [INFO] [Eval #390] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.107092 | best: 2.350703 | $2.361
+19:42:35 [INFO] [Status] Cost: $2.361 | Evals: 390 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6420s
+19:42:44 [INFO] [Eval #391] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.965441 | best: 2.350703 | $2.363
+19:42:56 [INFO] [Eval #392] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.277666 | best: 2.350703 | $2.365
+19:43:05 [INFO] [Status] Cost: $2.365 | Evals: 392 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6450s
+19:43:11 [INFO] [Eval #393] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 0.962349 | best: 2.350703 | $2.365
+19:43:14 [INFO] [Eval #394] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 1.243565 | best: 2.350703 | $2.366
+19:43:15 [INFO] [Eval #395] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.404442 | best: 2.350703 | $2.366
+19:43:35 [INFO] [Status] Cost: $2.371 | Evals: 395 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6480s
+19:43:40 [INFO] [Eval #396] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 1.922185 | best: 2.350703 | $2.372
+19:43:45 [INFO] [Eval #397] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.272727 | best: 2.350703 | $2.372
+19:43:51 [INFO] [Eval #398] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.282609 | best: 2.350703 | $2.372
+19:43:56 [INFO] [Eval #399] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.673765 | best: 2.350703 | $2.372
+19:43:56 [INFO] [BLADE analyzer] trigger #10 at eval=399 (analysing up to 3 uncached programs; cache=16)
+19:44:05 [INFO] [Status] Cost: $2.375 | Evals: 399 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6510s
+19:44:11 [INFO] [Eval #400] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.229313 | best: 2.350703 | $2.377
+19:44:25 [INFO] [Eval #401] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): Overlap between circles 1 and 3
+19:44:35 [INFO] [Status] Cost: $2.381 | Evals: 401 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6540s
+19:44:41 [INFO] [Eval #402] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 1.494548 | best: 2.350703 | $2.381
+19:44:45 [INFO] [Eval #403] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.239719 | best: 2.350703 | $2.383
+19:44:47 [INFO] [BLADE PE] trigger #7 at eval=403 | stagnation=1.00 (global=1.00 local=0.05) | best=2.350703 | cells=50
+19:44:47 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+19:44:53 [INFO] [Eval #404] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.245621 | best: 2.350703 | $2.385
+19:45:03 [INFO] [Eval #405] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.217576 | best: 2.350703 | $2.385
+19:45:05 [INFO] [Status] Cost: $2.385 | Evals: 405 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6570s
+<string>:133: RuntimeWarning: divide by zero encountered in divide
+<string>:133: RuntimeWarning: invalid value encountered in divide
+<string>:134: RuntimeWarning: divide by zero encountered in divide
+<string>:134: RuntimeWarning: invalid value encountered in divide
+19:45:08 [INFO] [Eval #406] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): too many indices for array: array is 1-dimensional, but 2 were indexed
+19:45:18 [INFO] [Eval #407] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.928943 | best: 2.350703 | $2.387
+19:45:35 [INFO] [Status] Cost: $2.389 | Evals: 407 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6600s
+Optimization failed: Inequality constraints incompatible
+19:45:39 [INFO] [Eval #408] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.075839 | best: 2.350703 | $2.390
+19:45:42 [INFO] [Eval #409] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): name 'heappush' is not defined
+19:45:55 [INFO] [Eval #410] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.323001 | best: 2.350703 | $2.392
+19:45:59 [INFO] [Eval #411] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.836855 | best: 2.350703 | $2.395
+19:46:05 [INFO] [Status] Cost: $2.395 | Evals: 411 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6630s
+19:46:15 [INFO] [Eval #412] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 1.829187 | best: 2.350703 | $2.398
+19:46:18 [INFO] [Eval #413] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.241871 | best: 2.350703 | $2.398
+19:46:18 [INFO] [Eval #414] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.308738 | best: 2.350703 | $2.398
+19:46:30 [INFO] [Eval #415] gpt-5                       rejected     | source: paradigm           | score: 1.233233 | best: 2.350703 | $2.512
+19:46:30 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.2332, accepted=False)
+19:46:35 [INFO] [Status] Cost: $2.513 | Evals: 415 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6660s
+19:46:40 [INFO] [Eval #416] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 0.525000 | best: 2.350703 | $2.513
+19:46:56 [INFO] [Eval #417] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): Overlap between circles 0 and 1
+19:46:57 [INFO] [Eval #418] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.100000 | best: 2.350703 | $2.518
+19:46:58 [INFO] [Eval #419] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.217549 | best: 2.350703 | $2.518
+19:46:58 [INFO] [Eval #420] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): Overlap between circles 0 and 4
+19:47:01 [INFO] [Eval #421] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.331131 | best: 2.350703 | $2.521
+19:47:03 [INFO] [Eval #422] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): name 'ymin' is not defined
+19:47:05 [INFO] [Status] Cost: $2.523 | Evals: 422 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6690s
+19:47:14 [INFO] [Eval #423] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.293071 | best: 2.350703 | $2.523
+19:47:22 [INFO] [Eval #424] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.106095 | best: 2.350703 | $2.526
+19:47:27 [INFO] [Eval #425] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.404442 | best: 2.350703 | $2.527
+19:47:33 [INFO] [Eval #426] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.023240 | best: 2.350703 | $2.529
+19:47:35 [INFO] [Status] Cost: $2.529 | Evals: 426 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6720s
+19:47:53 [INFO] [Eval #427] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.373692 | best: 2.350703 | $2.530
+19:48:04 [INFO] [Eval #428] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): circle_packing21.<locals>.all_ok_for_i() missing 3 required positional arguments
+19:48:04 [INFO] [BLADE advisor] trigger #7 at eval=428
+19:48:05 [INFO] [Status] Cost: $2.531 | Evals: 428 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6750s
+19:48:06 [INFO] [BLADE advisor] new advice (990 chars) at eval=428
+19:48:10 [INFO] [Eval #429] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.165707 | best: 2.350703 | $2.536
+19:48:11 [INFO] [BLADE analyzer] trigger #11 at eval=429 (analysing up to 3 uncached programs; cache=17)
+19:48:18 [INFO] [Eval #430] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.279702 | best: 2.350703 | $2.538
+19:48:27 [INFO] [Eval #431] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.339403 | best: 2.350703 | $2.540
+19:48:35 [INFO] [Status] Cost: $2.540 | Evals: 431 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6780s
+19:48:47 [INFO] [Eval #432] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.240175 | best: 2.350703 | $2.542
+19:48:48 [INFO] [Eval #433] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): Syntax error: unmatched ')' (<string>, line 210)
+19:49:05 [INFO] [Status] Cost: $2.542 | Evals: 433 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6810s
+19:49:25 [INFO] [Eval #434] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.323740 | best: 2.350703 | $2.547
+19:49:29 [INFO] [Eval #435] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.346678 | best: 2.350703 | $2.547
+19:49:35 [INFO] [Status] Cost: $2.547 | Evals: 435 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6840s
+19:50:05 [INFO] [Status] Cost: $2.549 | Evals: 435 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6870s
+19:50:24 [INFO] [Eval #436] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.280437 | best: 2.350703 | $2.555
+19:50:33 [INFO] [Eval #437] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.326208 | best: 2.350703 | $2.555
+19:50:35 [INFO] [Status] Cost: $2.555 | Evals: 437 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6900s
+19:51:02 [INFO] [Eval #438] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.102591 | best: 2.350703 | $2.556
+19:51:05 [INFO] [Status] Cost: $2.558 | Evals: 438 | Clients in-flight: 1 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6930s
+19:51:07 [INFO] [Eval #439] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.042964 | best: 2.350703 | $2.558
+19:51:10 [INFO] [Eval #440] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.280885 | best: 2.350703 | $2.558
+19:51:21 [INFO] [Eval #441] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+19:51:21 [INFO] [BLADE PE] trigger #8 at eval=441 | stagnation=1.00 (global=1.00 local=1.00) | best=2.350703 | cells=50
+19:51:21 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+19:51:34 [INFO] [Eval #442] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.254552 | best: 2.350703 | $2.559
+19:51:35 [INFO] [Status] Cost: $2.559 | Evals: 442 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6960s
+19:51:48 [INFO] [Eval #443] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.107092 | best: 2.350703 | $2.562
+19:51:54 [INFO] [Eval #444] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.268785 | best: 2.350703 | $2.562
+19:52:05 [INFO] [Status] Cost: $2.564 | Evals: 444 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 6990s
+19:52:15 [INFO] [Eval #445] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.330450 | best: 2.350703 | $2.565
+19:52:19 [INFO] [Eval #446] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 0.962349 | best: 2.350703 | $2.565
+19:52:35 [INFO] [Status] Cost: $2.568 | Evals: 446 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7020s
+19:52:42 [INFO] [Eval #447] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.341362 | best: 2.350703 | $2.568
+19:52:54 [INFO] [Eval #448] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): circle_packing21.<locals>.all_ok_for_i() missing 3 required positional arguments
+19:53:04 [INFO] [Eval #449] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 1.238102 | best: 2.350703 | $2.695
+19:53:04 [INFO] [Eval #450] gpt-5                       rejected     | source: paradigm           | score: 1.494100 | best: 2.350703 | $2.695
+19:53:04 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.4941, accepted=False)
+19:53:05 [INFO] [Status] Cost: $2.695 | Evals: 450 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7050s
+19:53:16 [INFO] [Eval #451] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.308048 | best: 2.350703 | $2.697
+19:53:29 [INFO] [Eval #452] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.229866 | best: 2.350703 | $2.702
+19:53:29 [INFO] [Eval #453] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 0.718265 | best: 2.350703 | $2.702
+19:53:35 [INFO] [Status] Cost: $2.702 | Evals: 453 | Clients in-flight: 3 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7080s
+19:53:37 [INFO] [Eval #454] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.600213 | best: 2.350703 | $2.706
+19:53:38 [INFO] [Eval #455] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.091025 | best: 2.350703 | $2.706
+19:53:40 [INFO] [Eval #456] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.661322 | best: 2.350703 | $2.706
+19:53:42 [INFO] [Eval #457] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.698428 | best: 2.350703 | $2.706
+19:54:02 [INFO] [Eval #458] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.272838 | best: 2.350703 | $2.706
+19:54:05 [INFO] [Status] Cost: $2.709 | Evals: 458 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7110s
+19:54:09 [INFO] [Eval #459] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.270422 | best: 2.350703 | $2.712
+19:54:09 [INFO] [BLADE analyzer] trigger #12 at eval=459 (analysing up to 3 uncached programs; cache=20)
+19:54:11 [INFO] [Eval #460] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): Syntax error: unmatched ')' (<string>, line 281)
+19:54:12 [INFO] [Eval #461] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.272727 | best: 2.350703 | $2.713
+19:54:24 [INFO] [Eval #462] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 0.962349 | best: 2.350703 | $2.715
+19:54:35 [INFO] [Status] Cost: $2.716 | Evals: 462 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7140s
+19:54:37 [INFO] [Eval #463] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.023240 | best: 2.350703 | $2.716
+19:55:05 [INFO] [Eval #464] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.336200 | best: 2.350703 | $2.721
+19:55:05 [INFO] [Status] Cost: $2.721 | Evals: 464 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7170s
+19:55:18 [INFO] [Eval #465] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.346678 | best: 2.350703 | $2.725
+19:55:25 [INFO] [Eval #466] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.051186 | best: 2.350703 | $2.726
+19:55:26 [INFO] [Eval #467] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.347995 | best: 2.350703 | $2.726
+19:55:35 [INFO] [Status] Cost: $2.727 | Evals: 467 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7200s
+19:55:36 [INFO] [Eval #468] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.350703 | $2.727
+19:55:38 [INFO] [Eval #469] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.272727 | best: 2.350703 | $2.727
+19:55:51 [INFO] [Eval #470] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.221883 | best: 2.350703 | $2.730
+19:55:59 [INFO] [Eval #471] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): Overlap between circles 0 and 1
+19:56:05 [INFO] [Status] Cost: $2.730 | Evals: 471 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7230s
+<string>:32: UserWarning: The balance properties of Sobol' points require n to be a power of 2.
+19:56:18 [INFO] [Eval #472] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): name 'heappush' is not defined
+19:56:35 [INFO] [Status] Cost: $2.734 | Evals: 472 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7260s
+19:56:37 [INFO] [Eval #473] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): circle_packing21.<locals>.all_ok_for_i() missing 3 required positional arguments
+19:56:49 [INFO] [Eval #474] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): Overlap between circles 2 and 7
+19:57:00 [INFO] [Eval #475] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.268000 | best: 2.350703 | $2.737
+19:57:05 [INFO] [Status] Cost: $2.737 | Evals: 475 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7290s
+19:57:35 [INFO] [Status] Cost: $2.741 | Evals: 475 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7320s
+19:57:42 [INFO] [Eval #476] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.320193 | best: 2.350703 | $2.741
+19:57:43 [INFO] [Eval #477] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): Overlap between circles 1 and 5
+19:57:44 [INFO] [BLADE PE] trigger #9 at eval=477 | stagnation=1.00 (global=1.00 local=0.05) | best=2.350703 | cells=50
+19:57:44 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+19:58:05 [INFO] [Archive] recluster: n=50 → 50/50 occupied cells (admits since last recluster=30)
+19:58:05 [INFO] [Eval #478] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.227443 | best: 2.350703 | $2.742
+19:58:05 [INFO] [Status] Cost: $2.742 | Evals: 478 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7350s
+19:58:06 [INFO] [BLADE advisor] trigger #8 at eval=478
+19:58:09 [INFO] [BLADE advisor] new advice (990 chars) at eval=478
+19:58:16 [INFO] [Eval #479] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.240175 | best: 2.350703 | $2.744
+19:58:35 [INFO] [Status] Cost: $2.747 | Evals: 479 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7380s
+19:58:35 [INFO] [Eval #480] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.248924 | best: 2.350703 | $2.747
+19:58:35 [INFO] [Eval #481] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): Circles are not contained inside a rectangle of perimeter 4
+19:59:00 [INFO] [Eval #482] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.106095 | best: 2.350703 | $2.748
+19:59:05 [INFO] [Status] Cost: $2.748 | Evals: 482 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7410s
+/home/runner/work/skydiscover/skydiscover/.venv/lib/python3.12/site-packages/scipy/optimize/_numdiff.py:686: RuntimeWarning: invalid value encountered in subtract
+  df = [f_eval - f0 for f_eval in f_evals]
+19:59:22 [INFO] [Eval #483] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.310320 | best: 2.350703 | $2.751
+19:59:25 [INFO] [Eval #484] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): numpy boolean subtract, the `-` operator, is not supported, use the bitwise_xor,
+19:59:35 [INFO] [Status] Cost: $2.753 | Evals: 484 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7440s
+19:59:48 [INFO] [Eval #485] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.227443 | best: 2.350703 | $2.754
+20:00:05 [INFO] [Status] Cost: $2.754 | Evals: 485 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7470s
+20:00:23 [INFO] [Eval #486] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.323985 | best: 2.350703 | $2.757
+20:00:35 [INFO] [Status] Cost: $2.759 | Evals: 486 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7500s
+20:00:42 [INFO] [Eval #487] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320932 | best: 2.350703 | $2.760
+20:01:00 [INFO] [Eval #488] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.155256 | best: 2.350703 | $2.760
+20:01:05 [INFO] [Eval #489] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.229301 | best: 2.350703 | $2.761
+20:01:05 [INFO] [Status] Cost: $2.761 | Evals: 489 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7530s
+20:01:06 [INFO] [BLADE analyzer] trigger #13 at eval=489 (analysing up to 3 uncached programs; cache=22)
+20:01:33 [INFO] [Eval #490] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.100448 | best: 2.350703 | $2.766
+20:01:35 [INFO] [Status] Cost: $2.766 | Evals: 490 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7560s
+20:01:42 [INFO] [Eval #491] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.100000 | best: 2.350703 | $2.766
+20:01:54 [INFO] [Eval #492] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.230033 | best: 2.350703 | $2.768
+20:02:05 [INFO] [Status] Cost: $2.769 | Evals: 492 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7590s
+20:02:35 [INFO] [Status] Cost: $2.771 | Evals: 492 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7620s
+20:02:40 [INFO] [Eval #493] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.346678 | best: 2.350703 | $2.771
+20:02:46 [INFO] [Eval #494] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.750000 | best: 2.350703 | $2.771
+20:03:05 [INFO] [Status] Cost: $2.845 | Evals: 494 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7650s
+20:03:06 [INFO] [Eval #495] gpt-5                       rejected     | source: paradigm           | score: 1.166995 | best: 2.350703 | $2.845
+20:03:06 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.1670, accepted=False)
+20:03:18 [INFO] [Eval #496] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.270148 | best: 2.350703 | $2.847
+20:03:32 [INFO] [Eval #497] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.320193 | best: 2.350703 | $2.849
+20:03:35 [INFO] [Status] Cost: $2.851 | Evals: 497 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7680s
+20:03:37 [INFO] [Eval #498] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.155185 | best: 2.350703 | $2.852
+20:03:40 [INFO] [Eval #499] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.155173 | best: 2.350703 | $2.852
+20:03:47 [INFO] [Eval #500] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.155185 | best: 2.350703 | $2.853
+20:03:51 [INFO] [Eval #501] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.229313 | best: 2.350703 | $2.854
+20:04:01 [INFO] [Eval #502] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.163833 | best: 2.350703 | $2.858
+20:04:05 [INFO] [Eval #503] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.272727 | best: 2.350703 | $2.858
+20:04:05 [INFO] [Status] Cost: $2.858 | Evals: 503 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7710s
+20:04:21 [INFO] [Eval #504] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.248924 | best: 2.350703 | $2.859
+20:04:35 [INFO] [Status] Cost: $2.859 | Evals: 504 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7740s
+20:05:05 [INFO] [Status] Cost: $2.862 | Evals: 504 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7770s
+20:05:11 [INFO] [Eval #505] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.293048 | best: 2.350703 | $2.862
+20:05:35 [INFO] [Status] Cost: $2.865 | Evals: 505 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7800s
+20:05:38 [INFO] [Eval #507] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): worker exception: 
+20:05:39 [INFO] [Eval #508] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.260326 | best: 2.350703 | $2.865
+20:05:56 [INFO] [Eval #509] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.272727 | best: 2.350703 | $2.869
+20:06:05 [INFO] [Status] Cost: $2.870 | Evals: 509 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7830s
+20:06:08 [INFO] [Eval #510] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.313255 | best: 2.350703 | $2.870
+20:06:08 [INFO] [Eval #511] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.272727 | best: 2.350703 | $2.873
+20:06:22 [INFO] [Eval #512] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.306118 | best: 2.350703 | $2.873
+20:06:26 [INFO] [Eval #513] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 0.430000 | best: 2.350703 | $2.874
+20:06:35 [INFO] [Status] Cost: $2.874 | Evals: 513 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7860s
+20:06:42 [INFO] [Eval #514] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): name 'ymin' is not defined
+20:06:54 [INFO] [Eval #515] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.272727 | best: 2.350703 | $2.882
+20:06:57 [INFO] [Eval #516] qwen3-30b-a3b-instruct-2507 ERROR (mutate_focused_fix): Overlap between circles 7 and 12
+20:07:05 [INFO] [Status] Cost: $2.883 | Evals: 516 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7890s
+20:07:07 [INFO] [Eval #517] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.347331 | best: 2.350703 | $2.883
+20:07:18 [INFO] [Eval #518] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.100000 | best: 2.350703 | $2.885
+20:07:19 [INFO] [Eval #519] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.245621 | best: 2.350703 | $2.885
+20:07:20 [INFO] [BLADE analyzer] trigger #14 at eval=519 (analysing up to 3 uncached programs; cache=22)
+20:07:21 [INFO] [Eval #520] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.566740 | best: 2.350703 | $2.885
+20:07:35 [INFO] [Status] Cost: $2.888 | Evals: 520 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7920s
+20:07:45 [INFO] [Eval #521] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 1.329863 | best: 2.350703 | $2.889
+20:07:49 [INFO] [Eval #522] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.248924 | best: 2.350703 | $2.890
+20:07:51 [INFO] [BLADE PE] trigger #10 at eval=522 | stagnation=1.00 (global=1.00 local=0.90) | best=2.350703 | cells=50
+20:07:51 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+20:08:03 [INFO] [Eval #523] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.321823 | best: 2.350703 | $2.895
+20:08:05 [INFO] [Status] Cost: $2.896 | Evals: 523 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7950s
+20:08:07 [INFO] [Eval #524] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.309467 | best: 2.350703 | $2.896
+20:08:07 [INFO] [Eval #525] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.270148 | best: 2.350703 | $2.896
+20:08:21 [INFO] [Eval #526] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.272727 | best: 2.350703 | $2.898
+20:08:27 [INFO] [Eval #527] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.051186 | best: 2.350703 | $2.898
+20:08:35 [INFO] [Eval #528] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 1.373692 | best: 2.350703 | $2.899
+20:08:35 [INFO] [BLADE advisor] trigger #9 at eval=528
+20:08:35 [INFO] [Status] Cost: $2.899 | Evals: 528 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 7980s
+20:08:37 [INFO] [BLADE advisor] new advice (1015 chars) at eval=528
+20:09:03 [INFO] [Eval #529] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.338422 | best: 2.350703 | $2.902
+20:09:05 [INFO] [Status] Cost: $2.905 | Evals: 529 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8010s
+20:09:10 [INFO] [Eval #530] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.277135 | best: 2.350703 | $2.908
+20:09:18 [INFO] [Eval #531] gpt-5                       rejected     | source: paradigm           | score: 1.971437 | best: 2.350703 | $3.008
+20:09:18 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=1.9714, accepted=False)
+20:09:20 [INFO] [Eval #532] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.349256 | best: 2.350703 | $3.010
+20:09:32 [INFO] [Eval #533] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.307196 | best: 2.350703 | $3.012
+20:09:34 [INFO] [Eval #534] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 1.970579 | best: 2.350703 | $3.012
+20:09:35 [INFO] [Eval #535] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.968897 | best: 2.350703 | $3.012
+20:09:35 [INFO] [Status] Cost: $3.012 | Evals: 535 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8040s
+20:09:43 [INFO] [Eval #536] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): too many indices for array: array is 1-dimensional, but 2 were indexed
+20:09:46 [INFO] [Eval #537] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.011906 | best: 2.350703 | $3.017
+20:09:49 [INFO] [Eval #538] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.272726 | best: 2.350703 | $3.017
+20:10:05 [INFO] [Status] Cost: $3.019 | Evals: 538 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8070s
+20:10:13 [INFO] [Eval #539] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 0.210000 | best: 2.350703 | $3.021
+20:10:18 [INFO] [Eval #540] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.507903 | best: 2.350703 | $3.021
+20:10:20 [INFO] [Eval #541] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.306566 | best: 2.350703 | $3.021
+20:10:35 [INFO] [Status] Cost: $3.025 | Evals: 541 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8100s
+20:10:36 [INFO] [Eval #542] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.324817 | best: 2.350703 | $3.025
+20:10:38 [INFO] [Eval #543] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 1.948777 | best: 2.350703 | $3.025
+20:10:52 [INFO] [Eval #544] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.270440 | best: 2.350703 | $3.029
+20:11:02 [INFO] [Eval #545] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.331232 | best: 2.350703 | $3.030
+20:11:05 [INFO] [Eval #546] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.100000 | best: 2.350703 | $3.032
+20:11:05 [INFO] [Status] Cost: $3.032 | Evals: 546 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8130s
+20:11:16 [INFO] [Eval #547] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.100000 | best: 2.350703 | $3.032
+20:11:19 [INFO] [Eval #548] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 0.000000 | best: 2.350703 | $3.033
+20:11:35 [INFO] [Status] Cost: $3.033 | Evals: 548 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8160s
+20:11:41 [INFO] [Eval #549] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.012448 | best: 2.350703 | $3.034
+20:11:41 [INFO] [BLADE analyzer] trigger #15 at eval=549 (analysing up to 3 uncached programs; cache=25)
+20:11:58 [INFO] [Eval #550] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 0.954545 | best: 2.350703 | $3.039
+20:12:00 [INFO] [Eval #551] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+20:12:05 [INFO] [Status] Cost: $3.041 | Evals: 551 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8190s
+20:12:14 [INFO] [Eval #552] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 0.564189 | best: 2.350703 | $3.041
+20:12:29 [INFO] [Eval #553] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.254552 | best: 2.350703 | $3.042
+20:12:35 [INFO] [Status] Cost: $3.045 | Evals: 553 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8220s
+20:12:46 [INFO] [Eval #554] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.339465 | best: 2.350703 | $3.045
+20:13:03 [INFO] [Eval #555] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.272727 | best: 2.350703 | $3.048
+20:13:05 [INFO] [Status] Cost: $3.048 | Evals: 555 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8250s
+20:13:15 [INFO] [Eval #556] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.329074 | best: 2.350703 | $3.048
+20:13:24 [INFO] [Eval #557] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.225282 | best: 2.350703 | $3.053
+20:13:33 [INFO] [Eval #558] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.324894 | best: 2.350703 | $3.053
+20:13:35 [INFO] [Status] Cost: $3.053 | Evals: 558 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8280s
+20:13:47 [INFO] [Eval #559] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): index 21 is out of bounds for axis 0 with size 21
+20:13:54 [INFO] [Eval #560] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.489042 | best: 2.350703 | $3.056
+20:14:02 [INFO] [Eval #561] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 0.889753 | best: 2.350703 | $3.059
+20:14:05 [INFO] [Status] Cost: $3.059 | Evals: 561 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8310s
+20:14:27 [INFO] [Eval #562] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.076414 | best: 2.350703 | $3.062
+20:14:35 [INFO] [Status] Cost: $3.064 | Evals: 562 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8340s
+20:14:44 [INFO] [Eval #563] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.100000 | best: 2.350703 | $3.064
+20:14:44 [INFO] [BLADE PE] trigger #11 at eval=563 | stagnation=1.00 (global=1.00 local=0.00) | best=2.350703 | cells=50
+20:14:44 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3507
+20:14:54 [INFO] [Eval #564] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.922185 | best: 2.350703 | $3.067
+20:14:56 [INFO] [Eval #565] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.280146 | best: 2.350703 | $3.067
+20:15:04 [INFO] [Eval #566] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.279959 | best: 2.350703 | $3.067
+20:15:05 [INFO] [Status] Cost: $3.067 | Evals: 566 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8370s
+20:15:14 [INFO] [Eval #567] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.345686 | best: 2.350703 | $3.069
+20:15:35 [INFO] [Status] Cost: $3.069 | Evals: 567 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8400s
+20:15:44 [INFO] [Eval #568] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.248924 | best: 2.350703 | $3.070
+20:15:57 [INFO] [Eval #569] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): cannot access local variable 'x' where it is not associated with a value
+20:16:01 [INFO] [Eval #570] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.342801 | best: 2.350703 | $3.078
+20:16:01 [INFO] [Eval #571] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): index 9 is out of bounds for axis 0 with size 9
+20:16:05 [INFO] [Status] Cost: $3.078 | Evals: 571 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8430s
+20:16:35 [INFO] [Status] Cost: $3.083 | Evals: 571 | Clients in-flight: 2 | Eval in-flight: 3 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8460s
+20:16:54 [INFO] [Eval #572] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.339844 | best: 2.350703 | $3.085
+20:16:58 [INFO] [Eval #573] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.320193 | best: 2.350703 | $3.085
+20:17:05 [INFO] [Status] Cost: $3.085 | Evals: 573 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8490s
+20:17:15 [INFO] [Eval #574] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.320193 | best: 2.350703 | $3.085
+20:17:20 [INFO] [Eval #575] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.829187 | best: 2.350703 | $3.086
+20:17:26 [INFO] [Eval #576] gpt-5                       accepted     | source: paradigm           | score: 2.132750 | best: 2.350703 | $3.285
+20:17:26 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.1328, accepted=True)
+20:17:29 [INFO] [Eval #577] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): numpy boolean subtract, the `-` operator, is not supported, use the bitwise_xor,
+20:17:35 [INFO] [Status] Cost: $3.285 | Evals: 577 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8520s
+20:17:55 [INFO] [Eval #578] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.134893 | best: 2.350703 | $3.289
+20:17:57 [INFO] [BLADE advisor] trigger #10 at eval=578
+20:18:00 [INFO] [Eval #579] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.121275 | best: 2.350703 | $3.289
+20:18:02 [INFO] [BLADE analyzer] trigger #16 at eval=579 (analysing up to 3 uncached programs; cache=26)
+20:18:05 [INFO] [BLADE advisor] new advice (1015 chars) at eval=579
+20:18:05 [INFO] [Status] Cost: $3.290 | Evals: 579 | Clients in-flight: 8 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8550s
+20:18:10 [INFO] [Eval #580] qwen3-30b-a3b-instruct-2507 ERROR (paradigm_variant): cannot access local variable 'compute_pairs_geom' where it is not associated wit
+20:18:20 [INFO] [Eval #581] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+20:18:21 [INFO] [Eval #582] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.131912 | best: 2.350703 | $3.299
+20:18:27 [INFO] [Eval #583] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.114352 | best: 2.350703 | $3.302
+20:18:33 [INFO] [Eval #584] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.282690 | best: 2.350703 | $3.303
+20:18:35 [INFO] [Status] Cost: $3.303 | Evals: 584 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8580s
+20:18:40 [INFO] [Eval #585] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 1.592506 | best: 2.350703 | $3.303
+20:19:02 [INFO] [Eval #586] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Overlap between circles 0 and 7
+20:19:05 [INFO] [Status] Cost: $3.303 | Evals: 586 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8610s
+20:19:13 [INFO] [Eval #587] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.507903 | best: 2.350703 | $3.304
+20:19:34 [INFO] [Eval #588] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.337891 | best: 2.350703 | $3.308
+20:19:35 [INFO] [Status] Cost: $3.308 | Evals: 588 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8640s
+20:19:37 [INFO] [Eval #589] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 0.293046 | best: 2.350703 | $3.308
+20:19:59 [INFO] [Eval #590] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.268071 | best: 2.350703 | $3.312
+20:20:02 [INFO] [Eval #591] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 1.494548 | best: 2.350703 | $3.312
+20:20:05 [INFO] [Status] Cost: $3.312 | Evals: 591 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8670s
+20:20:13 [INFO] [Eval #592] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.268179 | best: 2.350703 | $3.313
+20:20:28 [INFO] [Eval #593] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): Syntax error: unmatched ')' (<string>, line 172)
+20:20:35 [INFO] [Status] Cost: $3.315 | Evals: 593 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.350703 | Elapsed: 8700s
+20:20:57 [INFO] [Eval #594] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.106095 | best: 2.350703 | $3.321
+20:21:05 [INFO] [Eval #595] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: crossover_component_swap | score: 2.351283 | best: 2.351283 | $3.322
+20:21:05 [INFO] [Status] Cost: $3.322 | Evals: 595 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.351283 | Elapsed: 8730s
+20:21:06 [INFO] [Eval #596] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.248924 | best: 2.351283 | $3.322
+20:21:32 [INFO] [Eval #597] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_general     | score: 2.271352 | best: 2.351283 | $3.322
+20:21:35 [INFO] [Status] Cost: $3.322 | Evals: 597 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.351283 | Elapsed: 8760s
+20:22:01 [INFO] [Eval #598] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.324765 | best: 2.351283 | $3.325
+20:22:05 [INFO] [Status] Cost: $3.328 | Evals: 598 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.351283 | Elapsed: 8790s
+20:22:15 [INFO] [Eval #599] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.323137 | best: 2.351283 | $3.330
+20:22:22 [INFO] [Eval #600] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.321870 | best: 2.351283 | $3.333
+20:22:30 [INFO] [Eval #601] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: mutate_focused_fix | score: 2.354550 | best: 2.354550 | $3.333
+20:22:35 [INFO] [Status] Cost: $3.333 | Evals: 601 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.354550 | Elapsed: 8820s
+20:23:05 [INFO] [Status] Cost: $3.337 | Evals: 601 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.354550 | Elapsed: 8850s
+20:23:07 [INFO] [Eval #602] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): operands could not be broadcast together with shapes (21,) (210,) (21,) 
+20:23:25 [INFO] [Eval #603] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.341135 | best: 2.354550 | $3.342
+20:23:25 [INFO] [BLADE PE] trigger #12 at eval=603 | stagnation=0.10 (global=0.02 local=0.10) | best=2.354550 | cells=50
+20:23:25 [INFO] [BLADE PE] mode=synthesis anchors=3 stagnation=0.10 best=2.3546
+20:23:35 [INFO] [Eval #604] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.309001 | best: 2.354550 | $3.345
+20:23:35 [INFO] [Status] Cost: $3.345 | Evals: 604 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.354550 | Elapsed: 8880s
+20:23:42 [INFO] [Eval #605] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.346636 | best: 2.354550 | $3.345
+20:24:05 [INFO] [Status] Cost: $3.349 | Evals: 605 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.354550 | Elapsed: 8910s
+20:24:06 [INFO] [Eval #606] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.012346 | best: 2.354550 | $3.349
+20:24:07 [INFO] [Eval #607] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.321610 | best: 2.354550 | $3.349
+20:24:35 [INFO] [Status] Cost: $3.349 | Evals: 607 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.354550 | Elapsed: 8940s
+20:24:49 [INFO] [Eval #608] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.338500 | best: 2.354550 | $3.358
+20:25:02 [INFO] [Eval #609] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: crossover_component_swap | score: 2.356692 | best: 2.356692 | $3.358
+20:25:02 [INFO] [BLADE analyzer] trigger #17 at eval=609 (analysing up to 3 uncached programs; cache=25)
+20:25:05 [INFO] [Status] Cost: $3.358 | Evals: 609 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 8970s
+20:25:10 [INFO] [Eval #610] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.319381 | best: 2.356692 | $3.364
+20:25:22 [INFO] [Eval #611] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.284644 | best: 2.356692 | $3.364
+20:25:35 [INFO] [Status] Cost: $3.502 | Evals: 611 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9000s
+20:25:44 [INFO] [Eval #612] gpt-5                       rejected     | source: paradigm           | score: 2.328748 | best: 2.356692 | $3.502
+20:25:44 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.3287, accepted=False)
+20:26:05 [INFO] [Eval #613] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.341044 | best: 2.356692 | $3.509
+20:26:05 [INFO] [Status] Cost: $3.509 | Evals: 613 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9030s
+20:26:18 [INFO] [Eval #614] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.356387 | best: 2.356692 | $3.509
+20:26:32 [INFO] [Eval #615] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.349564 | best: 2.356692 | $3.519
+20:26:33 [INFO] [Eval #616] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.290177 | best: 2.356692 | $3.519
+20:26:35 [INFO] [Status] Cost: $3.522 | Evals: 616 | Clients in-flight: 6 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9060s
+20:26:48 [INFO] [Eval #617] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.355216 | best: 2.356692 | $3.522
+20:26:50 [INFO] [Eval #618] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.333381 | best: 2.356692 | $3.522
+20:27:05 [INFO] [Status] Cost: $3.528 | Evals: 618 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9090s
+20:27:19 [INFO] [Eval #619] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.344595 | best: 2.356692 | $3.531
+20:27:22 [INFO] [Eval #620] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.351868 | best: 2.356692 | $3.531
+20:27:32 [INFO] [Eval #621] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.356070 | best: 2.356692 | $3.531
+20:27:35 [INFO] [Status] Cost: $3.531 | Evals: 621 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9120s
+20:27:50 [INFO] [Eval #622] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.352226 | best: 2.356692 | $3.540
+20:27:53 [INFO] [Eval #623] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.343969 | best: 2.356692 | $3.540
+20:27:58 [INFO] [Eval #624] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.339369 | best: 2.356692 | $3.540
+20:28:05 [INFO] [Status] Cost: $3.540 | Evals: 624 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9150s
+20:28:35 [INFO] [Status] Cost: $3.540 | Evals: 624 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9180s
+20:28:51 [INFO] [Eval #625] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.356061 | best: 2.356692 | $3.546
+20:29:02 [INFO] [Eval #626] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.326529 | best: 2.356692 | $3.553
+20:29:05 [INFO] [Status] Cost: $3.553 | Evals: 626 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9210s
+20:29:11 [INFO] [Eval #627] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.356494 | best: 2.356692 | $3.553
+20:29:12 [INFO] [Eval #628] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.355925 | best: 2.356692 | $3.553
+20:29:14 [INFO] [BLADE advisor] trigger #11 at eval=628
+20:29:16 [INFO] [BLADE advisor] new advice (940 chars) at eval=628
+20:29:35 [INFO] [Status] Cost: $3.554 | Evals: 628 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9240s
+20:30:05 [INFO] [Status] Cost: $3.557 | Evals: 628 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9270s
+20:30:10 [INFO] [Eval #629] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.355593 | best: 2.356692 | $3.557
+20:30:31 [INFO] [Eval #630] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.355832 | best: 2.356692 | $3.564
+20:30:35 [INFO] [Status] Cost: $3.564 | Evals: 630 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9300s
+20:30:38 [INFO] [Eval #631] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.356524 | best: 2.356692 | $3.564
+20:30:54 [INFO] [Archive] recluster: n=50 → 50/50 occupied cells (admits since last recluster=30)
+20:30:54 [INFO] [Eval #632] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.356216 | best: 2.356692 | $3.569
+20:30:56 [INFO] [Eval #633] qwen3-30b-a3b-instruct-2507 ERROR (crossover_component_swap): too many values to unpack (expected 2)
+20:31:05 [INFO] [Status] Cost: $3.569 | Evals: 633 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9330s
+20:31:35 [INFO] [Status] Cost: $3.569 | Evals: 633 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9360s
+20:31:49 [INFO] [Eval #634] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: crossover_component_swap | score: 2.360112 | best: 2.360112 | | $3.577
+20:31:55 [INFO] [Eval #635] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.355883 | best: 2.356692 | $3.577
+20:31:57 [INFO] [Eval #636] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_targeted    | score: 2.346678 | best: 2.356692 | $3.577
+20:32:05 [INFO] [Status] Cost: $3.577 | Evals: 636 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9390s
+20:32:35 [INFO] [Status] Cost: $3.578 | Evals: 636 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9420s
+20:32:37 [INFO] [Eval #637] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): '<' not supported between instances of 'float' and 'generator'
+20:32:52 [INFO] [Eval #638] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+20:33:05 [INFO] [Status] Cost: $3.585 | Evals: 638 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9450s
+20:33:17 [INFO] [Eval #639] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.356593 | best: 2.356692 | $3.585
+20:33:18 [INFO] [BLADE analyzer] trigger #18 at eval=639 (analysing up to 3 uncached programs; cache=24)
+20:33:35 [INFO] [Status] Cost: $3.589 | Evals: 639 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9480s
+20:33:43 [INFO] [Eval #640] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.346678 | best: 2.356692 | $3.589
+20:33:44 [INFO] [BLADE PE] trigger #13 at eval=640 | stagnation=0.31 (global=0.31 local=0.05) | best=2.356692 | cells=50
+20:33:44 [INFO] [BLADE PE] mode=synthesis anchors=3 stagnation=0.31 best=2.3567
+20:34:05 [INFO] [Eval #641] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): worker exception: litellm.APIError: APIError: OpenrouterException - Unable to ge
+20:34:05 [INFO] [Status] Cost: $3.596 | Evals: 641 | Clients in-flight: 3 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9510s
+20:34:11 [INFO] [Eval #642] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.264843 | best: 2.356692 | $3.596
+20:34:13 [INFO] [Eval #643] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.340701 | best: 2.356692 | $3.596
+20:34:35 [INFO] [Status] Cost: $3.596 | Evals: 643 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9540s
+20:35:05 [INFO] [Status] Cost: $3.599 | Evals: 643 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9570s
+20:35:06 [INFO] [Eval #644] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.347180 | best: 2.356692 | $3.599
+20:35:21 [INFO] [Eval #645] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.339188 | best: 2.356692 | $3.605
+20:35:31 [INFO] [Eval #646] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.356418 | best: 2.356692 | $3.608
+20:35:35 [INFO] [Status] Cost: $3.608 | Evals: 646 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9600s
+20:35:37 [INFO] [Eval #647] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.270101 | best: 2.356692 | $3.608
+20:36:05 [INFO] [Status] Cost: $3.760 | Evals: 647 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9630s
+20:36:18 [INFO] [Eval #648] gpt-5                       rejected     | source: paradigm           | score: 2.329964 | best: 2.356692 | $3.760
+20:36:18 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.3300, accepted=False)
+20:36:23 [INFO] [Eval #649] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): cannot access free variable 'I2' where it is not associated with a value in encl
+20:36:35 [INFO] [Status] Cost: $3.766 | Evals: 649 | Clients in-flight: 7 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9660s
+20:36:41 [INFO] [Eval #650] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.313881 | best: 2.356692 | $3.766
+20:37:05 [INFO] [Status] Cost: $3.766 | Evals: 650 | Clients in-flight: 8 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9690s
+20:37:13 [INFO] [Eval #651] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.112623 | best: 2.356692 | $3.772
+20:37:19 [INFO] [Eval #652] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.297409 | best: 2.356692 | $3.775
+20:37:20 [INFO] [Eval #653] qwen3-30b-a3b-instruct-2507 accepted     | source: paradigm_variant   | score: 2.355282 | best: 2.356692 | $3.775
+20:37:31 [INFO] [Eval #654] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.235939 | best: 2.356692 | $3.777
+20:37:35 [INFO] [Status] Cost: $3.777 | Evals: 654 | Clients in-flight: 7 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9720s
+20:37:51 [INFO] [Eval #655] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.322321 | best: 2.356692 | $3.780
+20:38:05 [INFO] [Status] Cost: $3.780 | Evals: 655 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9750s
+20:38:31 [INFO] [Eval #656] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.310377 | best: 2.356692 | $3.786
+20:38:34 [INFO] [Eval #657] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.347180 | best: 2.356692 | $3.786
+20:38:35 [INFO] [Status] Cost: $3.786 | Evals: 657 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9780s
+20:38:50 [INFO] [Eval #658] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.347180 | best: 2.356692 | $3.789
+20:39:05 [INFO] [Status] Cost: $3.792 | Evals: 658 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9810s
+20:39:15 [INFO] [Eval #659] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.301791 | best: 2.356692 | $3.792
+20:39:35 [INFO] [Status] Cost: $3.796 | Evals: 659 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9840s
+20:39:39 [INFO] [Eval #660] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.338522 | best: 2.356692 | $3.796
+20:39:41 [INFO] [Eval #661] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.321282 | best: 2.356692 | $3.796
+20:39:51 [INFO] [Eval #662] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.272724 | best: 2.356692 | $3.804
+20:39:57 [INFO] [Eval #663] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.356692 | best: 2.356692 | $3.804
+20:40:05 [INFO] [Status] Cost: $3.804 | Evals: 663 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9870s
+20:40:24 [INFO] [Eval #664] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): name 'all_pairs_ok_for_i' is not defined
+20:40:28 [INFO] [Eval #665] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.108750 | best: 2.356692 | $3.807
+20:40:35 [INFO] [Status] Cost: $3.807 | Evals: 665 | Clients in-flight: 6 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9900s
+20:41:01 [INFO] [Eval #666] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.262132 | best: 2.356692 | $3.813
+20:41:05 [INFO] [Status] Cost: $3.813 | Evals: 666 | Clients in-flight: 5 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9930s
+20:41:12 [INFO] [Eval #667] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: mutate_targeted | score: 2.361062 | best: 2.361062 | $3.813
+20:41:29 [INFO] [Eval #668] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.298549 | best: 2.356692 | $3.825
+20:41:35 [INFO] [Status] Cost: $3.825 | Evals: 668 | Clients in-flight: 4 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9960s
+20:41:39 [INFO] [Eval #669] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.336621 | best: 2.356692 | $3.825
+20:41:40 [INFO] [BLADE analyzer] trigger #19 at eval=669 (analysing up to 3 uncached programs; cache=23)
+20:41:40 [INFO] [Eval #670] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.339742 | best: 2.356692 | $3.826
+20:42:03 [INFO] [Eval #671] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.272725 | best: 2.356692 | $3.831
+20:42:05 [INFO] [Status] Cost: $3.831 | Evals: 671 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 9990s
+20:42:35 [INFO] [Status] Cost: $3.832 | Evals: 671 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10020s
+20:42:48 [INFO] [Eval #672] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.258485 | best: 2.356692 | $3.836
+20:42:59 [INFO] [Eval #673] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.352352 | best: 2.356692 | $3.836
+20:43:01 [INFO] [Eval #674] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.279959 | best: 2.356692 | $3.836
+20:43:05 [INFO] [Status] Cost: $3.836 | Evals: 674 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10050s
+20:43:35 [INFO] [Eval #675] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.097278 | best: 2.356692 | $3.838
+20:43:35 [INFO] [Status] Cost: $3.838 | Evals: 675 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10080s
+20:43:51 [INFO] [Eval #676] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.244122 | best: 2.356692 | $3.842
+/home/runner/work/skydiscover/skydiscover/.venv/lib/python3.12/site-packages/scipy/optimize/_numdiff.py:686: RuntimeWarning: invalid value encountered in subtract
+  df = [f_eval - f0 for f_eval in f_evals]
+20:43:54 [INFO] [Eval #677] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.272724 | best: 2.356692 | $3.842
+20:44:05 [INFO] [Status] Cost: $3.845 | Evals: 677 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10110s
+20:44:12 [INFO] [Eval #678] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.356178 | best: 2.356692 | $3.845
+20:44:12 [INFO] [BLADE advisor] trigger #12 at eval=678
+20:44:14 [INFO] [BLADE advisor] new advice (967 chars) at eval=678
+20:44:22 [INFO] [Eval #679] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.272727 | best: 2.356692 | $3.848
+20:44:35 [INFO] [Status] Cost: $3.849 | Evals: 679 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10140s
+20:44:42 [INFO] [Eval #680] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.320193 | best: 2.356692 | $3.849
+20:44:55 [INFO] [Eval #681] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.272727 | best: 2.356692 | $3.855
+20:44:55 [INFO] [Eval #682] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.922185 | best: 2.356692 | $3.855
+20:44:58 [INFO] [Eval #683] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.356078 | best: 2.356692 | $3.855
+20:45:05 [INFO] [Status] Cost: $3.855 | Evals: 683 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10170s
+20:45:32 [INFO] [Eval #684] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.244122 | best: 2.356692 | $3.857
+20:45:35 [INFO] [Status] Cost: $3.858 | Evals: 684 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10200s
+20:45:44 [INFO] [Eval #685] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.286051 | best: 2.356692 | $3.861
+20:45:49 [INFO] [Eval #686] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_mechanism_swap | score: 2.336953 | best: 2.356692 | $3.861
+20:46:05 [INFO] [Status] Cost: $3.862 | Evals: 686 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10230s
+20:46:08 [INFO] [Eval #687] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.272727 | best: 2.356692 | $3.862
+20:46:35 [INFO] [Eval #688] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 0.989711 | best: 2.356692 | $3.864
+20:46:35 [INFO] [Status] Cost: $3.864 | Evals: 688 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10260s
+20:46:53 [INFO] [Eval #689] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.346678 | best: 2.356692 | $3.867
+20:46:55 [INFO] [Eval #690] qwen3-30b-a3b-instruct-2507 ERROR (mutate_mechanism_swap): circle_packing21.<locals>.feasible_all() takes 0 positional arguments but 3 were
+20:46:56 [INFO] [BLADE PE] trigger #14 at eval=690 | stagnation=0.81 (global=0.81 local=0.05) | best=2.356692 | cells=50
+20:46:56 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=0.81 best=2.3567
+20:47:05 [INFO] [Status] Cost: $3.867 | Evals: 690 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10290s
+20:47:16 [INFO] [Eval #691] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.272727 | best: 2.356692 | $3.868
+20:47:35 [INFO] [Status] Cost: $3.868 | Evals: 691 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10320s
+20:47:50 [INFO] [Eval #692] qwen3-30b-a3b-instruct-2507 ERROR (crossover_structural): axis 1 is out of bounds for array of dimension 1
+20:48:05 [INFO] [Status] Cost: $3.870 | Evals: 692 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10350s
+20:48:17 [INFO] [Eval #693] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): cannot access local variable 'build_conflict_graph' where it is not associated w
+20:48:33 [INFO] [Eval #694] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.284751 | best: 2.356692 | $3.876
+20:48:35 [INFO] [Status] Cost: $3.876 | Evals: 694 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10380s
+20:48:56 [INFO] [Eval #695] gpt-5                       rejected     | source: paradigm           | score: 2.217575 | best: 2.356692 | $4.029
+20:48:56 [INFO] [BLADE PE] fanout: 4 variants from paradigm seed (score=2.2176, accepted=False)
+20:49:04 [INFO] [Eval #696] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.356245 | best: 2.356692 | $4.029
+20:49:05 [INFO] [Status] Cost: $4.029 | Evals: 696 | Clients in-flight: 8 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10410s
+20:49:10 [INFO] [Eval #697] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.248029 | best: 2.356692 | $4.031
+20:49:23 [INFO] [Eval #698] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.255106 | best: 2.356692 | $4.037
+20:49:33 [INFO] [Eval #699] qwen3-30b-a3b-instruct-2507 NEW BEST ★   | source: mutate_targeted | score: 2.362617 | best: 2.362617 | $4.039
+20:49:34 [INFO] [BLADE analyzer] trigger #20 at eval=699 (analysing up to 3 uncached programs; cache=23)
+20:49:35 [INFO] [Eval #700] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.226400 | best: 2.356692 | $4.039
+20:49:35 [INFO] [Status] Cost: $4.039 | Evals: 700 | Clients in-flight: 7 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10440s
+20:49:36 [INFO] [Eval #701] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.356344 | best: 2.356692 | $4.039
+20:49:45 [INFO] [Eval #702] qwen3-30b-a3b-instruct-2507 rejected     | source: paradigm_variant   | score: 2.255106 | best: 2.356692 | $4.043
+20:49:56 [INFO] [Eval #703] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): name 'I_pairs' is not defined
+20:50:05 [INFO] [Status] Cost: $4.050 | Evals: 703 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10470s
+20:50:14 [INFO] [Eval #704] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.338176 | best: 2.356692 | $4.050
+20:50:35 [INFO] [Status] Cost: $4.052 | Evals: 704 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10500s
+20:50:57 [INFO] [Eval #705] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_component_swap | score: 2.356692 | best: 2.356692 | $4.059
+20:50:58 [INFO] [Eval #706] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.286051 | best: 2.356692 | $4.059
+20:51:02 [INFO] [Eval #707] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 0.381930 | best: 2.356692 | $4.059
+20:51:05 [INFO] [Status] Cost: $4.059 | Evals: 707 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10530s
+20:51:35 [INFO] [Status] Cost: $4.064 | Evals: 707 | Clients in-flight: 2 | Eval in-flight: 2 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10560s
+20:51:38 [INFO] [Eval #708] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.109655 | best: 2.356692 | $4.064
+20:51:42 [INFO] [Eval #709] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.355542 | best: 2.356692 | $4.065
+20:51:43 [INFO] [Eval #710] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): circle_packing21.<locals>.feasible_all() missing 3 required positional arguments
+20:52:05 [INFO] [Status] Cost: $4.067 | Evals: 710 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10590s
+20:52:08 [INFO] [Eval #711] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.267708 | best: 2.356692 | $4.067
+20:52:29 [INFO] [Eval #712] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.320193 | best: 2.356692 | $4.070
+20:52:33 [INFO] [Eval #713] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.346678 | best: 2.356692 | $4.070
+20:52:35 [INFO] [Status] Cost: $4.070 | Evals: 713 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10620s
+20:53:01 [INFO] [Eval #714] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.285918 | best: 2.356692 | $4.074
+<string>:63: RuntimeWarning: Method L-BFGS-B cannot handle constraints.
+20:53:03 [INFO] [Eval #715] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 0.026248 | best: 2.356692 | $4.074
+20:53:05 [INFO] [Status] Cost: $4.074 | Evals: 715 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10650s
+20:53:19 [INFO] [Eval #716] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_general     | score: 2.338424 | best: 2.356692 | $4.079
+20:53:22 [INFO] [Eval #717] qwen3-30b-a3b-instruct-2507 accepted     | source: mutate_focused_fix | score: 2.346678 | best: 2.356692 | $4.079
+20:53:35 [INFO] [Status] Cost: $4.079 | Evals: 717 | Clients in-flight: 4 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10680s
+20:53:48 [INFO] [Eval #718] qwen3-30b-a3b-instruct-2507 accepted     | source: crossover_structural | score: 2.274660 | best: 2.356692 | $4.083
+20:53:56 [INFO] [Eval #719] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.321282 | best: 2.356692 | $4.085
+20:54:03 [INFO] [Eval #720] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 1.507903 | best: 2.356692 | $4.086
+20:54:05 [INFO] [Status] Cost: $4.086 | Evals: 720 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10710s
+20:54:11 [INFO] [Eval #721] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_mechanism_swap | score: 2.051186 | best: 2.356692 | $4.087
+20:54:21 [INFO] [Eval #722] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 0.616838 | best: 2.356692 | $4.088
+20:54:21 [INFO] [BLADE PE] trigger #15 at eval=722 | stagnation=1.00 (global=1.00 local=0.20) | best=2.356692 | cells=50
+20:54:21 [INFO] [BLADE PE] mode=shift anchors=2 stagnation=1.00 best=2.3567
+20:54:23 [INFO] [Eval #723] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_targeted    | score: 2.320193 | best: 2.356692 | $4.088
+20:54:35 [INFO] [Status] Cost: $4.088 | Evals: 723 | Clients in-flight: 5 | Eval in-flight: 0 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10740s
+20:54:47 [INFO] [Eval #724] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_structural | score: 2.015309 | best: 2.356692 | $4.091
+20:54:50 [INFO] [Eval #725] qwen3-30b-a3b-instruct-2507 ERROR (mutate_general): could not broadcast input array from shape (8,) into shape (21,)
+20:55:05 [INFO] [Status] Cost: $4.092 | Evals: 725 | Clients in-flight: 4 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10770s
+20:55:14 [INFO] [Eval #726] qwen3-30b-a3b-instruct-2507 ERROR (mutate_targeted): Circles are not contained inside a rectangle of perimeter 4
+20:55:20 [INFO] [Eval #727] qwen3-30b-a3b-instruct-2507 rejected     | source: crossover_component_swap | score: 2.272724 | best: 2.356692 | $4.094
+20:55:35 [INFO] [Eval #728] qwen3-30b-a3b-instruct-2507 rejected     | source: mutate_focused_fix | score: 2.346530 | best: 2.356692 | $4.099
+20:55:35 [INFO] [Status] Cost: $4.099 | Evals: 728 | Clients in-flight: 3 | Eval in-flight: 1 | Archive: 50 (cells 50) | Best: 2.356692 | Elapsed: 10800s
+
+Best score        : 2.356692
+Evaluations used  : 728
+Total cost        : $4.0994
+Archive size      : 50
+Paradigm trials   : 14
+Runtime           : 10800.4s
+Output dir        : /home/runner/work/skydiscover/skydiscover/outputs/github-actions/blade_26653336920
