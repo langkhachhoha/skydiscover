@@ -1,53 +1,81 @@
 #!/usr/bin/env python3
 """
-Cost-vs-quality frontier plot for the circle-packing-rect experiment.
+Cost-vs-quality frontier plot — works for any benchmark task under result/.
 
-Differences from the reference figure (deliberate, to be clearer / nicer):
+Design (deliberate, to be clearer / nicer than the iteration-based reference):
   * x-axis is **cumulative cost ($)**, not iteration  -> shows efficiency.
-  * best-so-far is drawn as a true **step** curve (post-step), which is the
-    correct semantics of a "best found so far" frontier.
+  * best-so-far is drawn as a true **step** curve (post-step), the correct
+    semantics of a "best found so far" frontier.
   * the legend lives **inside** the axes.
-  * an **inset zoom** magnifies the near-SOTA region (where every method
-    crowds together) so the gap between LiteEvo and the baselines is legible.
-  * our method (LiteEvo) is emphasised: thicker line, higher z-order, markers,
-    a soft fill down to the next-best baseline to literally shade the gap.
+  * the y-axis is cropped to the near-SOTA band (auto-computed from the data)
+    so the gap between methods is legible.
+  * each curve ends at a dot marking the run's *total* cost (all money spent),
+    so a method is rewarded for reaching a high score *and* stopping cheaply.
+  * our method (LiteEvo / blade) is emphasised: thicker line, higher z-order.
 
-Run after extract_log.py has produced result/<task>/<method>/frontier.csv.
+Usage:
+  .venv/bin/python scripts/plots/plot_frontier.py [task]
+where [task] is a folder under result/ (default: circle_packing_rect).
+Run extract_log.py first to produce result/<task>/<method>/frontier.csv.
 """
 from __future__ import annotations
 
 import csv
+import re
+import sys
 from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
+from matplotlib.ticker import MaxNLocator
 
-BENCHMARK = 2.3658321334167627  # Human / SOTA reference
+ROOT = Path(__file__).resolve().parents[2]
+RESULT_ROOT = ROOT / "result"
+BENCH_ROOT = ROOT / "benchmarks" / "math"
 
-RESULT_ROOT = Path(__file__).resolve().parents[2] / "result"
-TASK = "circle_packing_rect"
-TASK_TITLE = "Circle Packing (n=26)"
+# shared palette / display names; folder aliases (ada vs adaevo) both map here
+STYLE = {
+    "blade":  ("LiteEvo", "#D6263A", True),    # our method
+    "ada":    ("AdaEvolve", "#8E44AD", False),
+    "adaevo": ("AdaEvolve", "#8E44AD", False),
+    "gepa":   ("GEPA", "#2E86C1", False),
+    "oe":     ("OpenEvolve", "#117A65", False),
+    "evox":   ("EvoX", "#B9770E", False),
+}
 
-# method dir -> (display name, colour, is_ours)
-METHODS = {
-    "blade": ("LiteEvo", "#D6263A", True),    # our method
-    "ada":   ("AdaEvolve", "#8E44AD", False),
-    "gepa":  ("GEPA", "#2E86C1", False),
-    "oe":    ("OpenEvolve", "#117A65", False),
-    "evox":  ("EvoX", "#B9770E", False),
+# per-task display config; y-limits/ticks are auto-derived if omitted
+TASKS = {
+    "circle_packing_rect": dict(title="Circle Packing (n=21)", ylabel="Sum of Radii"),
+    "heilbronn_triangle":  dict(title="Heilbronn Triangle (n=11)", ylabel="Min Area (normalized)"),
 }
 
 
-def load(method: str) -> tuple[list[float], list[float], float]:
+def task_benchmark(task: str) -> float | None:
+    """Read the SOTA reference (BENCHMARK constant) from the task evaluator."""
+    ev = BENCH_ROOT / task / "evaluator" / "evaluator.py"
+    if not ev.exists():
+        return None
+    m = re.search(r"^BENCHMARK\s*=\s*([-\d.eE]+)", ev.read_text(), re.MULTILINE)
+    return float(m.group(1)) if m else None
+
+
+def discover_methods(task: str) -> list[str]:
+    """Method folders present for this task, ordered baselines-first, ours-last."""
+    tdir = RESULT_ROOT / task
+    found = [p.name for p in tdir.iterdir()
+             if p.is_dir() and (p / "frontier.csv").exists()]
+    return sorted(found, key=lambda m: STYLE.get(m, ("", "", False))[2])
+
+
+def load(task: str, method: str) -> tuple[list[float], list[float], float]:
     """Return (cost, score, total_cost).
 
     The frontier is prepended with the origin (0,0) and extended with a final
     flat segment out to the run's *total* cost, so the curve ends at the real
     amount of money spent (rewarding methods that stop cheaply).
     """
-    base = RESULT_ROOT / TASK / method
+    base = RESULT_ROOT / task / method
     costs, scores = [0.0], [0.0]
     with (base / "frontier.csv").open() as f:
         for row in csv.DictReader(f):
@@ -55,7 +83,6 @@ def load(method: str) -> tuple[list[float], list[float], float]:
             scores.append(float(row["score"]))
     with (base / "summary.csv").open() as f:
         total = float(next(csv.DictReader(f))["total_cost"])
-    # extend the flat tail to the full run cost (wasted spend after last best)
     if total > costs[-1]:
         costs.append(total)
         scores.append(scores[-1])
@@ -70,33 +97,41 @@ def style_axes(ax):
     ax.tick_params(labelsize=11)
 
 
-def main() -> None:
+def main(task: str = "circle_packing_rect") -> None:
+    cfg = TASKS.get(task, dict(title=task, ylabel="Score"))
+    benchmark = task_benchmark(task)
+    methods = discover_methods(task)
+    if not methods:
+        raise SystemExit(f"No frontier.csv under result/{task}/ — run extract_log.py first.")
+
     plt.rcParams.update({
         "font.family": "DejaVu Sans",
         "axes.linewidth": 1.0,
         "figure.dpi": 130,
     })
 
-    data = {m: load(m) for m in METHODS}
+    data = {m: load(task, m) for m in methods}
     xmax = max(total for _, _, total in data.values()) * 1.05
 
-    # y-axis is cropped to the near-SOTA band so the curves spread out and the
-    # gap between methods is readable (lowest final score is GEPA ~2.285).
-    ymin, ymax = 2.27, 2.378
+    # crop the y-axis to the near-SOTA band so the curves spread out: from a
+    # little below the lowest final score up to a little above SOTA.
+    finals = [score[-1] for _, score, _ in data.values()]
+    lo, hi = min(finals), max(benchmark or max(finals), max(finals))
+    span = hi - lo
+    ymin = lo - 0.18 * span
+    ymax = hi + 0.10 * span
 
     fig, ax = plt.subplots(figsize=(7.4, 4.8))
     style_axes(ax)
 
     # --- SOTA reference line --------------------------------------------------
-    ax.axhline(BENCHMARK, ls=(0, (6, 4)), color="#555555", lw=1.4, zorder=2)
-    ax.text(xmax * 0.015, BENCHMARK - 0.004, "Human / SOTA",
-            ha="left", va="top", fontsize=11, color="#444444", style="italic")
+    if benchmark is not None:
+        ax.axhline(benchmark, ls=(0, (6, 4)), color="#555555", lw=1.4, zorder=2)
+        ax.text(xmax * 0.015, benchmark - 0.03 * span, "Human / SOTA",
+                ha="left", va="top", fontsize=11, color="#444444", style="italic")
 
-    # order: baselines first, our method last (on top)
-    draw_order = sorted(METHODS, key=lambda m: METHODS[m][2])
-
-    for m in draw_order:
-        _, color, ours = METHODS[m]
+    for m in methods:
+        _, color, ours = STYLE.get(m, (m, "#888888", False))
         cost, score, total = data[m]
         ax.step(
             cost, score, where="post",
@@ -117,29 +152,30 @@ def main() -> None:
     ax.set_xlim(0, xmax)
     ax.set_ylim(ymin, ymax)
     ax.set_xlabel("Cumulative Cost (USD)", fontsize=13, fontweight="bold")
-    ax.set_ylabel("Sum of Radii", fontsize=13, fontweight="bold")
-    ax.set_title(TASK_TITLE, fontsize=15, fontweight="bold", pad=12)
-    ax.yaxis.set_major_locator(MultipleLocator(0.02))
+    ax.set_ylabel(cfg["ylabel"], fontsize=13, fontweight="bold")
+    ax.set_title(cfg["title"], fontsize=15, fontweight="bold", pad=12)
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
 
     # --- compact legend inside the plot --------------------------------------
     handles = [
-        plt.Line2D([0], [0], color=METHODS[m][1],
-                   lw=3.0 if METHODS[m][2] else 1.8,
-                   label=METHODS[m][0])
-        for m in METHODS
+        plt.Line2D([0], [0], color=STYLE.get(m, (m, "#888888", False))[1],
+                   lw=3.0 if STYLE.get(m, (m, "", False))[2] else 1.8,
+                   label=STYLE.get(m, (m, "", False))[0])
+        for m in methods
     ]
     leg = ax.legend(
         handles=handles, loc="lower right", frameon=True, fontsize=11,
-        framealpha=0.95, edgecolor="#CCCCCC", borderpad=0.7,
+        framealpha=0.45, edgecolor="#CCCCCC", borderpad=0.7,
         labelspacing=0.4, handlelength=1.8,
     )
     leg.get_frame().set_linewidth(1.0)
+    leg.set_zorder(10)  # keep labels readable above the curves
     for txt in leg.get_texts():
-        if txt.get_text() == METHODS["blade"][0]:
+        if txt.get_text() == "LiteEvo":
             txt.set_fontweight("bold")
-            txt.set_color(METHODS["blade"][1])
+            txt.set_color(STYLE["blade"][1])
 
-    out = RESULT_ROOT / TASK / "frontier_cost_vs_score.pdf"
+    out = RESULT_ROOT / task / "frontier_cost_vs_score.pdf"
     fig.savefig(out, bbox_inches="tight")
     fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=200)
     print(f"saved -> {out}")
@@ -147,4 +183,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "circle_packing_rect")

@@ -166,10 +166,13 @@ def total_cost(method: str, lines: list[str]) -> float:
     return max(costs) if costs else 0.0
 
 
-# method dir name -> parser
+# method dir name -> parser.  Folder names vary slightly per task
+# (circle_packing_rect uses "ada", heilbronn_triangle uses "adaevo"); both
+# native-stack aliases map to the same parser.
 PARSERS = {
     "blade": parse_blade,
     "ada": parse_native,
+    "adaevo": parse_native,
     "oe": parse_native,
     "gepa": parse_native,
     "evox": parse_native,

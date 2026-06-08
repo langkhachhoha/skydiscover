@@ -10,11 +10,10 @@ This benchmark uses SkyDiscover to optimize the Expert Parallelism Load Balancer
    uv pip install torch
    ```
 
-2. **Download the workload file** from [Hugging Face](https://huggingface.co/datasets/abmfy/eplb-openevolve) into this directory:
+2. **Download the workload file** from [Hugging Face](https://huggingface.co/datasets/abmfy/eplb-openevolve). The evaluator reads `expert-load.json` from next to `evaluator.py`, so use the bundled script (it places the file in the right spot):
 
    ```bash
-   cd benchmarks/ADRS/eplb
-   wget https://huggingface.co/datasets/abmfy/eplb-openevolve/resolve/main/expert-load.json
+   bash benchmarks/ADRS/eplb/evaluator/download_dataset.sh
    ```
 
 3. **Set your API key:**

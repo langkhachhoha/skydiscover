@@ -97,6 +97,24 @@ jobs:
           uv run python scripts/install_benchmark_requirements.py \
             "${{ inputs.benchmark_dir }}"
 
+      - name: Download benchmark datasets
+        run: |
+          # Some benchmarks (e.g. ADRS cloudcast / llm_sql / eplb) keep their
+          # data out of git and ship a download_dataset.sh that fetches it next
+          # to the evaluator. Run every such script found under the benchmark
+          # dir; benchmarks that generate their data in-process have none and
+          # are skipped.
+          BD="${{ inputs.benchmark_dir }}"
+          found=0
+          while IFS= read -r script; do
+            found=1
+            echo "Running dataset download: $script"
+            bash "$script"
+          done < <(find "$BD" -name download_dataset.sh -type f | sort)
+          if [ "$found" -eq 0 ]; then
+            echo "No download_dataset.sh found under $BD — assuming self-contained data."
+          fi
+
       - name: Run ${{ inputs.baseline }} on ${{ inputs.benchmark_dir }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

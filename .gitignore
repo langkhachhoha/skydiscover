@@ -49,10 +49,13 @@ outputs_*/
 benchmarks/image_gen/sky_festival/sky_festival_output/
 benchmarks/image_gen/sky_festival/sky_festival_paradigm_output_*/
 benchmarks/frontier-cs-eval/Frontier-CS
-benchmarks/ADRS/eplb/expert-load.json
-benchmarks/ADRS/cloudcast/profiles/
-benchmarks/ADRS/cloudcast/examples/
-benchmarks/ADRS/llm_sql/datasets/
+benchmarks/ADRS/eplb/evaluator/expert-load.json
+benchmarks/ADRS/cloudcast/evaluator/profiles/
+benchmarks/ADRS/cloudcast/evaluator/examples/
+# Runtime artifacts written by the cloudcast evaluator.
+benchmarks/ADRS/cloudcast/evaluator/paths/
+benchmarks/ADRS/cloudcast/evaluator/evals/
+benchmarks/ADRS/llm_sql/evaluator/datasets/
 
 # Generated test outputs (re-generate with test_all_benchmarks.sh)
 tests/**/test_outputs_*/

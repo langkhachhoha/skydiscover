@@ -15,6 +15,19 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Portable download: prefer curl, fall back to wget. (CI uses ubuntu-latest
+# which has both; macOS ships curl but not wget.)
+fetch() {  # fetch <url> <out>
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$2" "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$2" "$1"
+    else
+        echo "Need curl or wget to download datasets." >&2
+        exit 1
+    fi
+}
+
 BASE_URL="https://huggingface.co/datasets/f20180301/adrs-data/resolve/main/llm_sql"
 
 echo "Downloading LLM-SQL benchmark datasets..."
@@ -22,7 +35,7 @@ echo "Downloading LLM-SQL benchmark datasets..."
 mkdir -p datasets
 for dataset in movies.csv beer.csv BIRD.csv PDMX.csv products.csv; do
     echo "  Downloading datasets/${dataset}..."
-    wget -q --show-progress -O "datasets/${dataset}" "${BASE_URL}/datasets/${dataset}"
+    fetch "${BASE_URL}/datasets/${dataset}" "datasets/${dataset}"
 done
 
 echo ""
