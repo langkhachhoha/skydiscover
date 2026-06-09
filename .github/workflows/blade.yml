@@ -272,6 +272,35 @@ jobs:
               sys.exit(1)
           " >> $GITHUB_ENV
 
+      - name: Download benchmark dataset
+        run: |
+          # ADRS examples (cloudcast, eplb, llm_sql) keep their datasets out of
+          # git (gitignored) and fetch them on demand via a download_dataset.sh
+          # next to the evaluator. The example problem.py modules resolve their
+          # data from benchmarks/ADRS/<name>/evaluator/, so download it here for
+          # whichever benchmark needs it. Examples with no such script are a
+          # no-op.
+          DATASET_NAME=""
+          case "$BENCHMARK_RAW" in
+            *cloudcast*) DATASET_NAME="cloudcast" ;;
+            *eplb*)      DATASET_NAME="eplb" ;;
+            *llm_sql*)   DATASET_NAME="llm_sql" ;;
+            *)           DATASET_NAME="" ;;
+          esac
+          if [ -z "$DATASET_NAME" ]; then
+            echo "No dataset download required for $BENCHMARK_RAW"
+            exit 0
+          fi
+          SCRIPT="benchmarks/ADRS/$DATASET_NAME/evaluator/download_dataset.sh"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "::error::Expected dataset script $SCRIPT (needed by $DATASET_NAME)"
+            exit 1
+          fi
+          echo "Downloading $DATASET_NAME dataset via $SCRIPT"
+          bash "$SCRIPT"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
       - name: Run BLADE on ${{ inputs.benchmark }}
         working-directory: levi
         run: |
