@@ -1,8 +1,19 @@
 from typing import List
+import os
 import networkx as nx
 import json
 from broadcast import *
 from utils import *
+
+# Verbose diagnostic output is opt-in (set CLOUDCAST_VERBOSE=1). By default the
+# evaluator stays quiet and only emits essential summary info, matching the
+# behaviour of the math benchmarks.
+VERBOSE = os.environ.get("CLOUDCAST_VERBOSE", "").lower() in ("1", "true", "yes")
+
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
 
 class BCSimulator:
     # Default variables
@@ -60,24 +71,24 @@ class BCSimulator:
             for p, limit in config["egress_limit"].items():
                 self.egress_limits[p] = self.default_vms_per_region * limit
         # print("Data vol (Gbit): ", self.data_vol * 8)
-        print("Ingress limits: ", self.ingress_limits)
-        print("Egress limits: ", self.egress_limits)
+        vprint("Ingress limits: ", self.ingress_limits)
+        vprint("Egress limits: ", self.egress_limits)
 
     def evaluate_path(self, path, config, write_to_file=False):
-        print(f"\n==============> Evaluation")
+        vprint(f"\n==============> Evaluation")
         self.initialization(path, config)
 
         # construct graph
-        print(f"\n--------- Algo: {self.algo}")
+        vprint(f"\n--------- Algo: {self.algo}")
         self.g = self.__construct_g()
-        print("\n=> Data path to dests")
+        vprint("\n=> Data path to dests")
         for path in self.__get_path():
-            print("--")
-            print(path)
+            vprint("--")
+            vprint(path)
             for i in range(len(path) - 1):
-                print(f"Flow: {self.g[path[i]][path[i+1]]['flow']}")
-                print(f"Actual throughput: {round(self.g[path[i]][path[i+1]]['throughput'], 4)}")
-                print(f"Cost: {self.g[path[i]][path[i+1]]['cost']}\n")
+                vprint(f"Flow: {self.g[path[i]][path[i+1]]['flow']}")
+                vprint(f"Actual throughput: {round(self.g[path[i]][path[i+1]]['throughput'], 4)}")
+                vprint(f"Cost: {self.g[path[i]][path[i+1]]['cost']}\n")
 
         # evaluate transfer time and total cost
         max_t, avg_t, last_dst = self.__transfer_time()
@@ -103,8 +114,8 @@ class BCSimulator:
         g = nx.DiGraph()
         for dst in self.dsts:
             for partition_id in range(self.num_partitions):
-                print(self.paths)
-                print("Num of partitions: ", self.num_partitions)
+                vprint(self.paths)
+                vprint("Num of partitions: ", self.num_partitions)
                 for edge in self.paths[dst][str(partition_id)]:
                     src, dst, edge_data = edge[0], edge[1], edge[2]
                     if not g.has_edge(src, dst):
@@ -114,7 +125,7 @@ class BCSimulator:
                         g[src][dst]["partitions"] = set()
                     g[src][dst]["partitions"].add(partition_id)
 
-        print(f"Default vms: {self.default_vms_per_region}")
+        vprint(f"Default vms: {self.default_vms_per_region}")
         # Proportionally share if exceed in/egress limit of any node
         for node in g.nodes:
             provider = node.split(":")[0]
@@ -146,7 +157,7 @@ class BCSimulator:
                     # or assign based on num of incoming flows
                     flow_proportion = 1 / len(list(out_edges))
 
-                    print(f"src: {src}, dst: {dst}, flow proportion: {flow_proportion}")
+                    vprint(f"src: {src}, dst: {dst}, flow proportion: {flow_proportion}")
                     g[src][dst]["flow"] = min(g[src][dst]["flow"], self.egress_limits[provider] * flow_proportion)
 
         return g

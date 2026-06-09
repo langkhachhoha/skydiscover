@@ -13,6 +13,15 @@ from simulator import *
 from broadcast import *
 import networkx as nx
 
+# Verbose diagnostic output is opt-in (set CLOUDCAST_VERBOSE=1). By default only
+# essential summary and error info is printed, matching the math benchmarks.
+VERBOSE = os.environ.get("CLOUDCAST_VERBOSE", "").lower() in ("1", "true", "yes")
+
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
+
 
 def validate_broadcast_topology(bc_t, source_node, terminal_nodes, num_partitions, G):
     """
@@ -170,7 +179,7 @@ def evaluate(program_path):
         # Process each configuration file
         for jsonfile in existing_configs:
             try:
-                print(f"Processing config: {os.path.basename(jsonfile)}")
+                vprint(f"Processing config: {os.path.basename(jsonfile)}")
                 
                 # Load configuration
                 with open(jsonfile, "r") as f:
@@ -201,7 +210,7 @@ def evaluate(program_path):
                 )
                 
                 if not is_valid:
-                    print(f"Validation failed for {config_name}: {validation_error}")
+                    vprint(f"Validation failed for {config_name}: {validation_error}")
                     # raise ValueError(f"Invalid broadcast topology: {validation_error}")
                     return {
                         "combined_score": 0.0,
@@ -238,10 +247,10 @@ def evaluate(program_path):
                 total_cost += cost
                 successful_configs += 1
                 
-                print(f"Config {config_name}: cost={cost:.2f}")
-                
+                vprint(f"Config {config_name}: cost={cost:.2f}")
+
             except Exception as e:
-                print(f"Failed to process {os.path.basename(jsonfile)}: {str(e)}")
+                vprint(f"Failed to process {os.path.basename(jsonfile)}: {str(e)}")
                 failed_configs += 1
                 break
         
@@ -257,8 +266,8 @@ def evaluate(program_path):
         avg_cost = total_cost / successful_configs
         success_rate = successful_configs / (successful_configs + failed_configs)
         
-        print(f"Summary: {successful_configs} successful, {failed_configs} failed")
-        print(f"Total cost: {total_cost:.2f}")
+        vprint(f"Summary: {successful_configs} successful, {failed_configs} failed")
+        vprint(f"Total cost: {total_cost:.2f}")
         
         # Calculate metrics for SkyDiscover
         # Normalize scores (higher is better)
@@ -279,8 +288,8 @@ def evaluate(program_path):
         }
 
     except Exception as e:
-        print(f"Evaluation failed: {str(e)}")
-        print(traceback.format_exc())
+        vprint(f"Evaluation failed: {str(e)}")
+        vprint(traceback.format_exc())
         return {
             "combined_score": 0.0,  # Required by SkyDiscover
             "runs_successfully": 0.0,

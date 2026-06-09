@@ -2,8 +2,21 @@ import sys
 import os
 import traceback
 import time
+import warnings
 
 import pandas as pd
+
+# The reorder() seed program assigns whole mixed-type rows back into columns
+# pandas inferred as int/float (e.g. df.loc[i] = row). On pandas 2.x this only
+# upcasts the column and emits a noisy per-assignment FutureWarning; the
+# requirements pin keeps us on 2.x (3.x turns the same op into a TypeError).
+# The behavior is intended for this benchmark, so silence just this warning to
+# keep evaluation logs readable instead of thousands of repeated lines.
+warnings.filterwarnings(
+    "ignore",
+    message="Setting an item of incompatible dtype is deprecated",
+    category=FutureWarning,
+)
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)

@@ -1,4 +1,13 @@
+import os
 from typing import Dict, List
+
+# Verbose diagnostic output is opt-in (set CLOUDCAST_VERBOSE=1).
+VERBOSE = os.environ.get("CLOUDCAST_VERBOSE", "").lower() in ("1", "true", "yes")
+
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
 
 
 class SingleDstPath(Dict):
@@ -21,7 +30,7 @@ class BroadCastTopology:
             self.paths = {dst: SingleDstPath().fromkeys(range(num_partitions)) for dst in dsts}
 
     def get_paths(self):
-        print(f"now the set path is: {self.paths}")
+        vprint(f"now the set path is: {self.paths}")
         return self.paths
 
     def set_num_partitions(self, num_partitions: int):

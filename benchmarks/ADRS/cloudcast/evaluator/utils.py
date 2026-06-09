@@ -8,6 +8,14 @@ import os
 
 GBIT_PER_GBYTE = 8
 
+# Verbose diagnostic output is opt-in (set CLOUDCAST_VERBOSE=1).
+VERBOSE = os.environ.get("CLOUDCAST_VERBOSE", "").lower() in ("1", "true", "yes")
+
+
+def vprint(*args, **kwargs):
+    if VERBOSE:
+        print(*args, **kwargs)
+
 
 class Timer:
     def __init__(self, print_desc=None):
@@ -77,7 +85,7 @@ def make_nx_graph(cost_path=None, throughput_path=None, num_vms=1):
         src, dst = edge[0], edge[1]
         if edge[-1]["cost"] is None:
             no_cost_pairs.append((src, dst))
-    print("Unable to get costs for: ", no_cost_pairs)
+    vprint("Unable to get costs for: ", no_cost_pairs)
 
     return G
 
