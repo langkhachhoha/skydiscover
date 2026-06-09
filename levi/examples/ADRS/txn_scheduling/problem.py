@@ -193,7 +193,13 @@ EFFECTIVE_OPTIMAL = OPTIMAL + 0.10 * (BASELINE - OPTIMAL)  # Shifted to make 100
 # --- Score Function ---
 
 def score_fn(get_best_schedule):
-    """Evaluate scheduling algorithm: returns 0-100 score based on total makespan."""
+    """Evaluate scheduling algorithm using the skydiscover scoring scheme.
+
+    Matches benchmarks/ADRS/txn_scheduling/evaluator/evaluator.py: the score
+    is the reciprocal-of-makespan transform ``1000 / (1 + makespan) * 1000``
+    (i.e. 1e6/(1+makespan)), summed over the same three workloads. Higher is
+    better; not normalized to [0, 100].
+    """
     try:
         total = 0
         for w in INPUTS:
@@ -202,13 +208,9 @@ def score_fn(get_best_schedule):
                 return {"error": "Invalid schedule: not a permutation"}
             total += w.get_opt_seq_cost(schedule)
 
-        if total >= BASELINE:
-            score = 0.0
-        elif total <= EFFECTIVE_OPTIMAL:
-            score = 100.0
-        else:
-            score = ((BASELINE - total) / (BASELINE - EFFECTIVE_OPTIMAL)) * 100
+        # skydiscover scoring: reciprocal scaling, higher makespan -> lower score
+        combined_score = 1000 / (1 + total) * 1000
 
-        return {"score": score, "makespan": total}
+        return {"score": float(combined_score), "makespan": total}
     except Exception as e:
         return {"error": str(e)}

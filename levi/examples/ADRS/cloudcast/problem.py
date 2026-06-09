@@ -400,9 +400,9 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
     if not math.isfinite(total_time) or total_time <= 0:
         return {"error": f"Invalid total transfer time: {total_time}"}
 
-    cost_clamped = max(min(total_cost, LOWER_COST), UPPER_COST)
-    normalized_cost = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST)
-    score = normalized_cost * 100.0
+    # skydiscover scoring (benchmarks/ADRS/cloudcast/evaluator/evaluator.py):
+    # reciprocal of the summed transfer cost. Higher is better; not [0, 100].
+    score = 1.0 / (1.0 + total_cost)
 
     return {
         "score": float(score),

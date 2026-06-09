@@ -357,23 +357,34 @@ def compute_theoretical_optimal(gpu_num, models):
 
 # --- Score Function (with strict validation to prevent reward hacking) ---
 def score_fn(compute_model_placement, inputs):
-    """Evaluate placement algorithm: returns 0-100 score with sqrt scaling.
+    """Evaluate placement algorithm using the skydiscover scoring scheme.
 
-    Includes strict validation to prevent reward hacking:
-    - All models must be placed exactly once
-    - No duplicate models allowed
-    - Placed models must match input models exactly
-    - Memory constraints must be satisfied
+    Matches benchmarks/ADRS/prism/evaluator/evaluator.py:
+    - combined_score = 1/avg(max_kvpr) + success_rate  (higher is better)
+    - validation failures (wrong shape / missing / duplicate / foreign model /
+      memory violation) reject the whole candidate (fail-fast, anti-reward-hack)
+    - a candidate that raises mid-run on a test is skipped; success_rate is the
+      fraction of test cases that ran successfully.
+
+    NOTE: this is NOT normalized to [0, 100]; it returns the raw reciprocal of
+    the mean per-test max-KVPR plus the success rate, exactly like skydiscover.
     """
     try:
-        all_scores = []
+        all_kvpr = []
         total_time = 0.0
+        successful_runs = 0
+        total_tests = len(inputs)
 
         for gpu_num, models in inputs:
-            # Run solution
-            start_time = time.perf_counter()
-            result = compute_model_placement(gpu_num, models)
-            total_time += time.perf_counter() - start_time
+            try:
+                # Run solution
+                start_time = time.perf_counter()
+                result = compute_model_placement(gpu_num, models)
+                total_time += time.perf_counter() - start_time
+            except Exception:
+                # skydiscover skips runtime failures and counts them against
+                # success_rate rather than rejecting the whole candidate.
+                continue
 
             # Validate return type
             if not isinstance(result, dict):
@@ -403,22 +414,25 @@ def score_fn(compute_model_placement, inputs):
                 if total_size > GPU_MEM_SIZE:
                     return {"error": f"GPU {gpu_id} exceeds memory: {total_size}GB > {GPU_MEM_SIZE}GB"}
 
-            # Compute scores
-            baseline_kvpr = calculate_kvpr(round_robin_placement(gpu_num, models))
-            optimal_kvpr = compute_theoretical_optimal(gpu_num, models)
-            solution_kvpr = calculate_kvpr(result)
+            # skydiscover metric: per-test max KVCache pressure
+            all_kvpr.append(calculate_kvpr(result))
+            successful_runs += 1
 
-            # Score with sqrt scaling
-            if baseline_kvpr > optimal_kvpr:
-                raw_ratio = (baseline_kvpr - solution_kvpr) / (baseline_kvpr - optimal_kvpr)
-                test_score = 100.0 * (max(0.0, min(1.0, raw_ratio)) ** 0.5)
-            else:
-                test_score = 100.0 if solution_kvpr <= optimal_kvpr else 0.0
+        if successful_runs == 0:
+            return {"max_kvpr": 0.0, "success_rate": 0.0, "score": 0.0, "error": "All test signals failed"}
 
-            all_scores.append(test_score)
+        avg_kvpr = sum(all_kvpr) / len(all_kvpr)
+        inv_avg_kvpr = 1.0 / avg_kvpr if avg_kvpr != 0 else 0.0
+        success_rate = successful_runs / total_tests
+        avg_time = total_time / successful_runs
 
-        avg_time = total_time / len(all_scores)
-        return {"score": sum(all_scores) / len(all_scores), "num_tests": len(all_scores), "execution_time": avg_time}
+        return {
+            "score": float(inv_avg_kvpr + success_rate),
+            "max_kvpr": float(inv_avg_kvpr),
+            "success_rate": float(success_rate),
+            "num_tests": successful_runs,
+            "execution_time": avg_time,
+        }
 
     except Exception as e:
         return {"error": str(e)}

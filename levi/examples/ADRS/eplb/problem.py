@@ -645,18 +645,16 @@ def score_fn(rebalance_experts, inputs):
         avg_balancedness_expert = sum(balancedness_scores_expert) / len(balancedness_scores_expert)
         avg_time = sum(times_algorithm) / len(times_algorithm)
 
-        # Scoring formula from evaluator
+        # skydiscover scoring (benchmarks/ADRS/eplb/evaluator/evaluator.py):
+        # combined_score = (expert balancedness + uncapped speed_score) / 2.
+        # NOTE: this differs from the BLADE-native formula not just in scale
+        # but in substance — it scores EXPERT balancedness (not GPU), has no
+        # speed cap and no slow penalty.
+        speed_score = 0.002 / avg_time if avg_time > 0 else 0.0
+        score = (avg_balancedness_expert + speed_score) / 2
+
+        # Retained for the per-config behaviour metrics reported below.
         balancedness_score = avg_balancedness_gpu * 90
-        speed_raw = 0.002 / avg_time if avg_time > 0 else 2.0
-        speed_capped = min(speed_raw, 2.0)
-        speed_score = speed_capped * 5
-
-        if avg_time > 0.01:  # > 10ms
-            slow_penalty = min(avg_time * 20, 20)
-        else:
-            slow_penalty = 0
-
-        score = balancedness_score + speed_score - slow_penalty
 
         # Per-workload behavioral dimensions (W8, W9 least correlated; W1-W7 cluster)
         workload_0 = balancedness_scores_gpu[0] if len(balancedness_scores_gpu) > 0 else 0.0
@@ -673,7 +671,6 @@ def score_fn(rebalance_experts, inputs):
             "execution_time": avg_time,
             "balancedness_score": balancedness_score,
             "speed_score": speed_score,
-            "slow_penalty": slow_penalty,
             "workload_0": workload_0,
             "workload_8": workload_8,
             "workload_9": workload_9,
