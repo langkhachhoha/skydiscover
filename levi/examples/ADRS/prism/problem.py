@@ -390,6 +390,19 @@ def score_fn(compute_model_placement, inputs):
             if not isinstance(result, dict):
                 return {"error": f"Expected dict, got {type(result).__name__}"}
 
+            # Validate GPU budget (anti reward-hack): the placement must use at
+            # most `gpu_num` GPUs with ids in [0, gpu_num). Without this a
+            # candidate can give each model its own GPU, ignoring gpu_num, which
+            # spreads load so thinly that max-KVPR collapses and 1/avg_kvpr is
+            # inflated far past any legitimate solution (the bug that produced
+            # best≈39 vs the real record of ~26). The skydiscover evaluator
+            # omits this check; we add it so the score stays meaningful.
+            if len(result) > gpu_num:
+                return {"error": f"Used {len(result)} GPUs but only {gpu_num} allowed"}
+            for gpu_id in result:
+                if not isinstance(gpu_id, int) or gpu_id < 0 or gpu_id >= gpu_num:
+                    return {"error": f"Invalid GPU id {gpu_id!r}; must be int in [0, {gpu_num})"}
+
             # Validate all models placed exactly once
             placed = []
             for gpu_id, gpu_models in result.items():
