@@ -548,6 +548,8 @@ class BladeOrchestrator:
         parts: list[str] = []
         # Known numeric fields, in skydiscover's reporting order. Only the
         # ones the problem actually returns are shown.
+        if "normalized_score" in metrics:
+            parts.append(f"normalized_score={float(metrics['normalized_score']):.2f}")
         if "total_cost" in metrics:
             parts.append(f"total_cost={float(metrics['total_cost']):.4f}")
         if "avg_cost" in metrics:

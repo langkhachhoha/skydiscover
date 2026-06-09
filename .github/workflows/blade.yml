@@ -274,15 +274,14 @@ jobs:
 
       - name: Download benchmark dataset
         run: |
-          # ADRS examples (cloudcast, eplb, llm_sql) keep their datasets out of
-          # git (gitignored) and fetch them on demand via a download_dataset.sh
-          # next to the evaluator. The example problem.py modules resolve their
-          # data from benchmarks/ADRS/<name>/evaluator/, so download it here for
-          # whichever benchmark needs it. Examples with no such script are a
-          # no-op.
+          # ADRS examples eplb and llm_sql keep their datasets out of git
+          # (gitignored) and fetch them on demand via a download_dataset.sh next
+          # to the evaluator; download it here for whichever benchmark needs it.
+          # cloudcast is intentionally absent: its dataset is bundled in-tree
+          # under levi/examples/ADRS/cloudcast/ (committed), so it self-contains
+          # and needs no download. Examples with no script are a no-op.
           DATASET_NAME=""
           case "$BENCHMARK_RAW" in
-            *cloudcast*) DATASET_NAME="cloudcast" ;;
             *eplb*)      DATASET_NAME="eplb" ;;
             *llm_sql*)   DATASET_NAME="llm_sql" ;;
             *)           DATASET_NAME="" ;;

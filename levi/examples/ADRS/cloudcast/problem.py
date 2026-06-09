@@ -173,44 +173,19 @@ CONFIG_NAMES = [
 ]
 
 _CONTEXT_CACHE: dict[str, Any] | None = None
-ADRS_EXAMPLE_DATA_ROOT_ENV = "ADRS_EXAMPLE_DATA_ROOT"
 
-
-def _repo_fallback_resources_dir() -> Path | None:
-    """Cloudcast resources bundled in this repo, if present.
-
-    Mirrors how ``benchmarks/ADRS/cloudcast`` ships its simulator modules
-    and datasets next to the evaluator, so Cloudcast runs without cloning
-    ADRS-Leaderboard or setting ``ADRS_EXAMPLE_DATA_ROOT``. The repo root
-    is located by walking up from this file.
-    """
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        bench = parent / "benchmarks" / "ADRS" / "cloudcast" / "evaluator"
-        if (bench / "simulator.py").exists():
-            return bench
-    return None
-
-
-def _resolve_resources_dir() -> Path:
-    """Resolve Cloudcast resources directory from ADRS_EXAMPLE_DATA_ROOT."""
-    root = os.getenv(ADRS_EXAMPLE_DATA_ROOT_ENV)
-    if root:
-        return Path(root).expanduser().resolve() / "problems" / "cloudcast" / "resources"
-
-    fallback = _repo_fallback_resources_dir()
-    if fallback is not None:
-        return fallback
-
-    raise FileNotFoundError(
-        f"{ADRS_EXAMPLE_DATA_ROOT_ENV} is not set and no bundled Cloudcast "
-        "resources were found under benchmarks/ADRS/cloudcast/evaluator/. "
-        "Set it to your ADRS-Leaderboard root directory."
-    )
+# Cloudcast is self-contained: the simulator modules (simulator.py, utils.py,
+# broadcast.py) and the dataset (profiles/*.csv, examples/config/*.json) live
+# right next to this file, so the example runs without cloning ADRS-Leaderboard
+# or depending on skydiscover's benchmarks/ tree.
+EXAMPLE_DIR = Path(__file__).resolve().parent
 
 
 def _import_cloudcast_modules() -> tuple[Any, Any, Any]:
-    """Import Cloudcast resource modules after their path is on sys.path."""
+    """Import the bundled Cloudcast simulator modules from EXAMPLE_DIR."""
+    example_str = str(EXAMPLE_DIR)
+    if example_str not in sys.path:
+        sys.path.insert(0, example_str)
     try:
         simulator_module = importlib.import_module("simulator")
         utils_module = importlib.import_module("utils")
@@ -226,52 +201,19 @@ def _import_cloudcast_modules() -> tuple[Any, Any, Any]:
 
 
 def _load_context() -> dict[str, Any]:
-    """Load and cache Cloudcast simulator resources."""
+    """Load and cache Cloudcast simulator resources bundled in EXAMPLE_DIR."""
     global _CONTEXT_CACHE
     if _CONTEXT_CACHE is not None:
         return _CONTEXT_CACHE
 
-    resources_dir = _resolve_resources_dir()
-    if not resources_dir.exists():
-        raise FileNotFoundError(
-            "Cloudcast resources not found under ADRS_EXAMPLE_DATA_ROOT. "
-            f"Set {ADRS_EXAMPLE_DATA_ROOT_ENV} correctly. Expected: "
-            f"resources at: {resources_dir}"
-        )
-
-    resources_str = str(resources_dir)
-    if resources_str not in sys.path:
-        sys.path.insert(0, resources_str)
-
     BCSimulator, make_nx_graph, BroadCastTopology = _import_cloudcast_modules()
 
-    # The ADRS-Leaderboard layout nests resources under a "datasets/"
-    # directory; the bundled benchmarks/ADRS/cloudcast layout omits it.
-    # Probe both so either source works.
-    def _first_existing_dir(*candidates: Path) -> Path:
-        for cand in candidates:
-            if cand.exists():
-                return cand
-        return candidates[0]
-
-    config_dir = _first_existing_dir(
-        resources_dir / "datasets" / "examples" / "config",
-        resources_dir / "examples" / "config",
-    )
-    profiles_dir = _first_existing_dir(
-        resources_dir / "datasets" / "profiles",
-        resources_dir / "profiles",
-    )
+    profiles_dir = EXAMPLE_DIR / "profiles"
+    config_dir = EXAMPLE_DIR / "examples" / "config"
     cost_csv = profiles_dir / "cost.csv"
     throughput_csv = profiles_dir / "throughput.csv"
 
-    config_files = {
-        "intra_aws": config_dir / "intra_aws.json",
-        "intra_azure": config_dir / "intra_azure.json",
-        "intra_gcp": config_dir / "intra_gcp.json",
-        "inter_agz": config_dir / "inter_agz.json",
-        "inter_gaz2": config_dir / "inter_gaz2.json",
-    }
+    config_files = {name: config_dir / f"{name}.json" for name in CONFIG_NAMES}
 
     missing = [str(path) for path in [cost_csv, throughput_csv, *config_files.values()] if not path.exists()]
     if missing:
@@ -400,9 +342,17 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
     if not math.isfinite(total_time) or total_time <= 0:
         return {"error": f"Invalid total transfer time: {total_time}"}
 
-    # skydiscover scoring (benchmarks/ADRS/cloudcast/evaluator/evaluator.py):
-    # reciprocal of the summed transfer cost. Higher is better; not [0, 100].
+    # Fitness used by the search (matches skydiscover's combined_score in
+    # benchmarks/ADRS/cloudcast/evaluator/evaluator.py): reciprocal of the
+    # summed transfer cost. Higher is better; tiny in magnitude (~1e-3).
     score = 1.0 / (1.0 + total_cost)
+
+    # Human-readable 0-100 score, as described in PROBLEM_DESCRIPTION. This is
+    # only a presentation/normalization of the same total_cost — the search
+    # still optimizes ``score`` above, which is monotonic in total_cost — so
+    # the two never disagree on ranking. Reported alongside for readability.
+    cost_clamped = max(min(total_cost, LOWER_COST), UPPER_COST)
+    normalized_score = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST) * 100.0
 
     # Mirror the metric set the skydiscover baseline evaluator reports so the
     # BLADE run log surfaces the same fields (total_cost / avg_cost / config
@@ -412,6 +362,7 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
 
     return {
         "score": float(score),
+        "normalized_score": float(normalized_score),
         "total_cost": float(total_cost),
         "avg_cost": float(total_cost / successful_configs) if successful_configs else 0.0,
         "total_time": float(total_time),
