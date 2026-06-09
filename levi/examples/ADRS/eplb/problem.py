@@ -468,22 +468,44 @@ Provide your lessons (150-200 words max):"""
 _WORKLOADS = None
 
 
+def _repo_fallback_workload_paths() -> list[Path]:
+    """Candidate expert-load.json locations bundled in this repo.
+
+    Mirrors how ``benchmarks/ADRS/eplb`` ships its dataset next to the
+    evaluator, so EPLB runs without cloning ADRS-Leaderboard or setting
+    ``ADRS_EXAMPLE_DATA_ROOT``. The repo root is located by walking up
+    from this file until a ``benchmarks/ADRS`` directory is found.
+    """
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+    for parent in here.parents:
+        bench = parent / "benchmarks" / "ADRS" / "eplb" / "evaluator" / "expert-load.json"
+        if bench.exists():
+            candidates.append(bench)
+            break
+    return candidates
+
+
 def _find_workload_path() -> str:
     """Find the expert-load.json file."""
     root = os.getenv(ADRS_EXAMPLE_DATA_ROOT_ENV)
-    if not root:
+    if root:
+        workload_path = Path(root).expanduser().resolve() / "datasets" / "eplb" / "expert-load.json"
+        if workload_path.exists():
+            return str(workload_path)
         raise FileNotFoundError(
-            f"{ADRS_EXAMPLE_DATA_ROOT_ENV} is not set. "
-            "Set it to your ADRS-Leaderboard root directory."
+            "expert-load.json not found under ADRS_EXAMPLE_DATA_ROOT. "
+            f"Checked: {workload_path}"
         )
 
-    workload_path = Path(root).expanduser().resolve() / "datasets" / "eplb" / "expert-load.json"
-    if workload_path.exists():
-        return str(workload_path)
+    # No env set: fall back to the dataset bundled in this repo.
+    for path in _repo_fallback_workload_paths():
+        return str(path)
 
     raise FileNotFoundError(
-        "expert-load.json not found under ADRS_EXAMPLE_DATA_ROOT. "
-        f"Checked: {workload_path}"
+        f"{ADRS_EXAMPLE_DATA_ROOT_ENV} is not set and no bundled "
+        "expert-load.json was found under benchmarks/ADRS/eplb/evaluator/. "
+        "Set it to your ADRS-Leaderboard root directory."
     )
 
 

@@ -907,6 +907,7 @@ dev = [
 ]
 example-cloudcast = [
     { name = "networkx" },
+    { name = "pandas" },
 ]
 example-eplb = [
     { name = "torch" },
@@ -986,6 +987,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.5" },
     { name = "packaging", marker = "extra == 'example-ifbench'", specifier = ">=24.0" },
     { name = "packaging", marker = "extra == 'examples'", specifier = ">=24.0" },
+    { name = "pandas", marker = "extra == 'example-cloudcast'", specifier = ">=2.3.3" },
     { name = "pandas", marker = "extra == 'example-llm-sql'", specifier = ">=2.3.3" },
     { name = "pandas", marker = "extra == 'examples'", specifier = ">=2.3.3" },
     { name = "pystemmer", marker = "extra == 'example-hover'", specifier = ">=3.0.0" },

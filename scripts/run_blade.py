@@ -308,6 +308,15 @@ def main() -> int:
 
     seed_program = getattr(problem, "SEED_PROGRAM", None)
     inputs = getattr(problem, "INPUTS", None)
+    # Some examples (e.g. ADRS/eplb) keep INPUTS = None as a placeholder and
+    # load the real inputs lazily via get_lazy_inputs()/get_inputs() — the
+    # run.py driver calls that explicitly. Mirror it here so BLADE receives
+    # the actual inputs instead of None (which would score the seed against
+    # an empty list and divide by zero).
+    if inputs is None:
+        loader = getattr(problem, "get_lazy_inputs", None) or getattr(problem, "get_inputs", None)
+        if callable(loader):
+            inputs = loader()
 
     evals = _opt_int(args.evals)
     dollars = _opt_float(args.dollars)

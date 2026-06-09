@@ -176,15 +176,37 @@ _CONTEXT_CACHE: dict[str, Any] | None = None
 ADRS_EXAMPLE_DATA_ROOT_ENV = "ADRS_EXAMPLE_DATA_ROOT"
 
 
+def _repo_fallback_resources_dir() -> Path | None:
+    """Cloudcast resources bundled in this repo, if present.
+
+    Mirrors how ``benchmarks/ADRS/cloudcast`` ships its simulator modules
+    and datasets next to the evaluator, so Cloudcast runs without cloning
+    ADRS-Leaderboard or setting ``ADRS_EXAMPLE_DATA_ROOT``. The repo root
+    is located by walking up from this file.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        bench = parent / "benchmarks" / "ADRS" / "cloudcast" / "evaluator"
+        if (bench / "simulator.py").exists():
+            return bench
+    return None
+
+
 def _resolve_resources_dir() -> Path:
     """Resolve Cloudcast resources directory from ADRS_EXAMPLE_DATA_ROOT."""
     root = os.getenv(ADRS_EXAMPLE_DATA_ROOT_ENV)
-    if not root:
-        raise FileNotFoundError(
-            f"{ADRS_EXAMPLE_DATA_ROOT_ENV} is not set. "
-            "Set it to your ADRS-Leaderboard root directory."
-        )
-    return Path(root).expanduser().resolve() / "problems" / "cloudcast" / "resources"
+    if root:
+        return Path(root).expanduser().resolve() / "problems" / "cloudcast" / "resources"
+
+    fallback = _repo_fallback_resources_dir()
+    if fallback is not None:
+        return fallback
+
+    raise FileNotFoundError(
+        f"{ADRS_EXAMPLE_DATA_ROOT_ENV} is not set and no bundled Cloudcast "
+        "resources were found under benchmarks/ADRS/cloudcast/evaluator/. "
+        "Set it to your ADRS-Leaderboard root directory."
+    )
 
 
 def _import_cloudcast_modules() -> tuple[Any, Any, Any]:
@@ -223,9 +245,25 @@ def _load_context() -> dict[str, Any]:
 
     BCSimulator, make_nx_graph, BroadCastTopology = _import_cloudcast_modules()
 
-    config_dir = resources_dir / "datasets" / "examples" / "config"
-    cost_csv = resources_dir / "datasets" / "profiles" / "cost.csv"
-    throughput_csv = resources_dir / "datasets" / "profiles" / "throughput.csv"
+    # The ADRS-Leaderboard layout nests resources under a "datasets/"
+    # directory; the bundled benchmarks/ADRS/cloudcast layout omits it.
+    # Probe both so either source works.
+    def _first_existing_dir(*candidates: Path) -> Path:
+        for cand in candidates:
+            if cand.exists():
+                return cand
+        return candidates[0]
+
+    config_dir = _first_existing_dir(
+        resources_dir / "datasets" / "examples" / "config",
+        resources_dir / "examples" / "config",
+    )
+    profiles_dir = _first_existing_dir(
+        resources_dir / "datasets" / "profiles",
+        resources_dir / "profiles",
+    )
+    cost_csv = profiles_dir / "cost.csv"
+    throughput_csv = profiles_dir / "throughput.csv"
 
     config_files = {
         "intra_aws": config_dir / "intra_aws.json",

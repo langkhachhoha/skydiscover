@@ -234,7 +234,24 @@ jobs:
 
       - name: Install LEVI (vendored in-repo)
         working-directory: levi
-        run: uv sync
+        run: |
+          # Core deps always; per-example extras are optional and NOT pulled
+          # by a bare `uv sync`. Map the selected benchmark to the extra that
+          # provides its heavy dependencies (torch, networkx+pandas, ...) so
+          # examples like ADRS/eplb and ADRS/cloudcast import cleanly on CI.
+          EXTRA=""
+          case "$BENCHMARK_RAW" in
+            *eplb*)     EXTRA="--extra example-eplb" ;;       # torch
+            *cloudcast*) EXTRA="--extra example-cloudcast" ;; # networkx + pandas
+            *llm_sql*)  EXTRA="--extra example-llm-sql" ;;    # pandas
+            *ifbench*)  EXTRA="--extra example-ifbench" ;;
+            *hover*)    EXTRA="--extra example-hover" ;;
+            *)          EXTRA="" ;;                            # prism, txn_scheduling, etc. need only core deps
+          esac
+          echo "Installing LEVI with extras: ${EXTRA:-<none>}"
+          uv sync $EXTRA
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
 
       - name: Parse advanced options
         if: inputs.advanced_options != ''

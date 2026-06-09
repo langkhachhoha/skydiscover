@@ -33,6 +33,7 @@ example-viz = [
 ]
 example-cloudcast = [
     "networkx>=3.0",
+    "pandas>=2.3.3",
 ]
 example-ifbench = [
     "nltk>=3.9",
