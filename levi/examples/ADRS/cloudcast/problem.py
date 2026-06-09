@@ -404,11 +404,20 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
     # reciprocal of the summed transfer cost. Higher is better; not [0, 100].
     score = 1.0 / (1.0 + total_cost)
 
+    # Mirror the metric set the skydiscover baseline evaluator reports so the
+    # BLADE run log surfaces the same fields (total_cost / avg_cost / config
+    # counts) rather than only the bare fitness ``score``.
+    successful_configs = len(per_config_costs)
+    failed_configs = len(CONFIG_NAMES) - successful_configs
+
     return {
         "score": float(score),
         "total_cost": float(total_cost),
+        "avg_cost": float(total_cost / successful_configs) if successful_configs else 0.0,
         "total_time": float(total_time),
-        "successful_configs": len(per_config_costs),
+        "successful_configs": successful_configs,
+        "failed_configs": failed_configs,
+        "success_rate": float(successful_configs / len(CONFIG_NAMES)),
         "per_config_costs": per_config_costs,
         "per_config_times": per_config_times,
         "intra_aws_score": per_config_scores.get("intra_aws", 0.0),

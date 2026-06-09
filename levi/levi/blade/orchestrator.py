@@ -529,11 +529,36 @@ class BladeOrchestrator:
         )
         return model_id.rsplit("/", 1)[-1]
 
-    def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None) -> None:
+    def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None, metrics: dict | None = None) -> None:
         self.monitor.record_eval(score=score, accepted=False)
         if error_msg:
             self._advisor_errors.append((source, error_msg))
-        self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg)
+        self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg, metrics=metrics)
+
+    @staticmethod
+    def _format_problem_metrics(metrics: dict | None) -> str:
+        """Render the problem-specific metrics tail, matching how the
+        skydiscover baselines report a run (e.g. cloudcast surfaces
+        ``total_cost`` / ``avg_cost`` / config counts rather than the bare
+        fitness ``score``). Returns "" when no such metrics are present, so
+        problems that only expose ``score`` log exactly as before.
+        """
+        if not isinstance(metrics, dict):
+            return ""
+        parts: list[str] = []
+        # Known numeric fields, in skydiscover's reporting order. Only the
+        # ones the problem actually returns are shown.
+        if "total_cost" in metrics:
+            parts.append(f"total_cost={float(metrics['total_cost']):.4f}")
+        if "avg_cost" in metrics:
+            parts.append(f"avg_cost={float(metrics['avg_cost']):.4f}")
+        if "successful_configs" in metrics:
+            parts.append(f"successful_configs={int(metrics['successful_configs'])}")
+        if "failed_configs" in metrics:
+            parts.append(f"failed_configs={int(metrics['failed_configs'])}")
+        if "total_time" in metrics:
+            parts.append(f"total_time={float(metrics['total_time']):.4f}")
+        return (" | " + ", ".join(parts)) if parts else ""
 
     def _log_eval(
         self,
@@ -543,6 +568,7 @@ class BladeOrchestrator:
         accepted: bool,
         is_new_best: bool,
         error_msg: str | None = None,
+        metrics: dict | None = None,
     ) -> None:
         model = self._model_label(source)
         if error_msg is not None:
@@ -561,8 +587,9 @@ class BladeOrchestrator:
         best_str = f"{best:.6f}" if best != float("-inf") else "n/a"
         score_str = f"{score:.6f}" if score != float("-inf") else "n/a"
         logger.info(
-            "[Eval #%d] %-27s %-12s | source: %-18s | score: %s | best: %s | $%.3f",
-            self.monitor.eval_count, model, status, source, score_str, best_str, self.cost.cost,
+            "[Eval #%d] %-27s %-12s | source: %-18s | score: %s | best: %s | $%.3f%s",
+            self.monitor.eval_count, model, status, source, score_str, best_str,
+            self.cost.cost, self._format_problem_metrics(metrics),
         )
 
     async def _admit(
@@ -574,6 +601,7 @@ class BladeOrchestrator:
         source: str,
         parent_score: float | None,
         force_on_drop: bool = False,
+        metrics: dict | None = None,
     ) -> tuple[bool, str]:
         """Admit a candidate into the archive.
 
@@ -602,7 +630,7 @@ class BladeOrchestrator:
         is_new_best = accepted and score > prev_best
         if accepted:
             self._advisor_admits.append((source, score, parent_score))
-        self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best)
+        self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best, metrics=metrics)
         if not accepted and reason == "dropped_worse":
             logger.debug("[BLADE] dropped score=%.4f did not beat cell incumbent", score)
         if accepted and reason == "forced":
@@ -711,14 +739,14 @@ class BladeOrchestrator:
                 if not parsed.has_code:
                     self._record_reject(source=op, error_msg="parse_miss (no code in output)")
                     return
-                score, _scores_dict, err = await self._evaluate_code(parsed.code)
+                score, scores_dict, err = await self._evaluate_code(parsed.code)
                 if err is not None:
                     self._record_reject(source=op, score=score, error_msg=err)
                     return
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
                 await self._admit(
                     code=parsed.code, description=description, score=score,
-                    source=op, parent_score=parent_score,
+                    source=op, parent_score=parent_score, metrics=scores_dict,
                 )
             except asyncio.CancelledError:
                 raise
@@ -993,7 +1021,7 @@ class BladeOrchestrator:
             self._record_reject(source=source_label, error_msg="parse_miss (no code in output)")
             return
 
-        score, _scores, err = await self._evaluate_code(parsed.code)
+        score, scores, err = await self._evaluate_code(parsed.code)
         description = await self._summarize_if_needed(parsed.code, parsed.description)
         accepted = False
         if err is None:
@@ -1008,7 +1036,7 @@ class BladeOrchestrator:
                 code=parsed.code, description=description, score=score,
                 source="paradigm",
                 parent_score=prev_best if prev_best != float("-inf") else None,
-                force_on_drop=force_on_drop,
+                force_on_drop=force_on_drop, metrics=scores,
             )
         else:
             self._record_reject(source=source_label, score=score, error_msg=err)
@@ -1076,14 +1104,14 @@ class BladeOrchestrator:
             if not parsed_v.has_code:
                 self._record_reject(source="paradigm_variant", error_msg="parse_miss (no code in output)")
                 return
-            v_score, _vscores, v_err = await self._evaluate_code(parsed_v.code)
+            v_score, v_scores, v_err = await self._evaluate_code(parsed_v.code)
             if v_err is not None:
                 self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err)
                 return
             v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
             await self._admit(
                 code=parsed_v.code, description=v_description, score=v_score,
-                source="paradigm_variant", parent_score=base_score,
+                source="paradigm_variant", parent_score=base_score, metrics=v_scores,
             )
 
         await asyncio.gather(*(_one_paradigm_variant(i) for i in range(n_variants)))
@@ -1097,12 +1125,12 @@ class BladeOrchestrator:
         diverse_seeds: list[tuple[str, float, str]] = []
 
         if cfg.seed_program:
-            score, _scores, err = await self._evaluate_code(cfg.seed_program)
+            score, scores, err = await self._evaluate_code(cfg.seed_program)
             if err is None:
                 description = await self._summarize_if_needed(cfg.seed_program, "")
                 await self._admit(
                     code=cfg.seed_program, description=description, score=score,
-                    source="init", parent_score=None,
+                    source="init", parent_score=None, metrics=scores,
                 )
                 diverse_seeds.append((cfg.seed_program, score, description))
                 logger.info("[BLADE init] seed_program admitted (score=%.4f)", score)
@@ -1141,14 +1169,14 @@ class BladeOrchestrator:
                 if not parsed.has_code:
                     self._record_reject(source="init", error_msg="parse_miss (no code in output)")
                     continue
-                score, _scores, err = await self._evaluate_code(parsed.code)
+                score, scores, err = await self._evaluate_code(parsed.code)
                 if err is not None:
                     self._record_reject(source="init", score=score, error_msg=err)
                     continue
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
                 await self._admit(
                     code=parsed.code, description=description, score=score,
-                    source="init", parent_score=None,
+                    source="init", parent_score=None, metrics=scores,
                 )
                 diverse_seeds.append((parsed.code, score, description))
                 logger.info("[BLADE init] %s OK (score=%.4f)", tag, score)
@@ -1196,14 +1224,14 @@ class BladeOrchestrator:
             if not parsed.has_code:
                 self._record_reject(source="init", error_msg="parse_miss (no code in output)")
                 return
-            score, _scores, err = await self._evaluate_code(parsed.code)
+            score, scores, err = await self._evaluate_code(parsed.code)
             if err is not None:
                 self._record_reject(source="init", score=score, error_msg=err)
                 return
             description = await self._summarize_if_needed(parsed.code, parsed.description)
             await self._admit(
                 code=parsed.code, description=description, score=score,
-                source="init", parent_score=None,
+                source="init", parent_score=None, metrics=scores,
             )
 
         await asyncio.gather(*(_one_variant(p) for p in prompts))
