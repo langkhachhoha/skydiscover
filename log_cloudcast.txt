@@ -1,23 +1,30 @@
-00:15:58 [search.utils] Logging to outputs/github-actions/baseline_adaevolve_27175400269/run/logs/adaevolve_20260609_001558.log
-00:15:58 [search.adaevolve] AdaEvolveDatabase initialized: num_islands=2, decay=0.9, intensity=[0.15, 0.5], migration=True (interval=15), unified_archive=True, adaptive_search=True, ucb_selection=True, dynamic_islands=True, paradigm_breakthrough=True, multiobjective=False
-00:15:58 [runner] Runner ready: search=adaevolve, program=benchmarks/ADRS/cloudcast/initial_program.py
-00:15:58 [llm] OpenRouter LLM: openai/gpt-5
-00:16:00 WARNING [evaluator] cascade_evaluation is true but benchmarks/ADRS/cloudcast/evaluator/evaluator.py has no evaluate_stage1 — will fall back to direct evaluation
-00:16:00 [evaluator] Initialized evaluator with benchmarks/ADRS/cloudcast/evaluator/evaluator.py
-00:16:00 [default_discovery_controller] DiscoveryController initialized: num_context_programs=4
-00:16:00 [search.adaevolve] Paradigm LLM: using guide_models [openai/gpt-5]
-00:16:00 [search.adaevolve] AdaEvolveController initialized (language=python, paradigm_breakthrough=True)
-00:16:00 [runner] Adding initial program to database
-Active models:
-  1. openai/gpt-5 (provider: openai, weight: 1.0)
-Using search algorithm: adaevolve
-Processing config: intra_aws.json
-Unable to get costs for:  []
 
-==============> Evaluation
-Ingress limits:  {'aws': 20, 'gcp': 32, 'azure': 32}
-Egress limits:  {'aws': 10, 'gcp': 14, 'azure': 32}
-
---------- Algo: search_algorithm
-{'aws:me-south-1': {'0': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '1': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '2': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '3': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '4': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '5': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '6': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '7': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '8': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]], '9': [['aws:ap-northeast-1', 'aws:me-south-1', {'cost': 0.09, 'throughput': 10.557467263786224}]]}, 'aws:eu-south-1': {'0': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '1': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '2': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '3': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '4': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '5': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '6': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '7': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '8': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]], '9': [['aws:ap-northeast-1', 'aws:eu-south-1', {'cost': 0.09, 'throughput': 10.223635844524665}]]}, 'aws:us-west-2': {'0': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '1': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '2': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '3': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '4': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '5': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '6': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '7': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '8': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]], '9': [['aws:ap-northeast-1', 'aws:us-west-2', {'cost': 0.09, 'throughput': 10.243881096462228}]]}, 'aws:us-east-1': {'0': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '1': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '2': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '3': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '4': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '5': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '6': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '7': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '8': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]], '9': [['aws:ap-northeast-1', 'aws:us-east-1', {'cost': 0.09, 'throughput': 10.0827102664079}]]}, 'aws:sa-east-1': {'0': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '1': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '2': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '3': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '4': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '5': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '6': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '7': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '8': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]], '9': [['aws:ap-northeast-1', 'aws:sa-east-1', {'cost': 0.09, 'throughput': 8.528211673819124}]]}, 'aws:ap-southeast-1': {'0': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '1': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '2': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '3': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '4': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '5': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '6': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '7': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '8': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]], '9': [['aws:ap-northeast-1', 'aws:ap-southeast-1', {'cost': 0.09, 'throughput': 10.371182211115013}]]}}
-Num of partitions:  10
+Run PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
+  
+Installed 82 packages in 123ms
+Traceback (most recent call last):
+  File "/home/runner/work/skydiscover/skydiscover/levi/examples/ADRS/cloudcast/problem.py", line 22, in <module>
+    import networkx as nx
+ModuleNotFoundError: No module named 'networkx'
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/home/runner/work/skydiscover/skydiscover/levi/../scripts/run_blade.py", line 491, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/runner/work/skydiscover/skydiscover/levi/../scripts/run_blade.py", line 299, in main
+    problem = importlib.import_module(args.problem_module)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/runner/work/skydiscover/skydiscover/levi/examples/ADRS/cloudcast/problem.py", line 25, in <module>
+    raise RuntimeError(
+RuntimeError: Cloudcast requires networkx. From the repo root, run:
+  uv sync --extra example-cloudcast
+Error: Process completed with exit code 1.

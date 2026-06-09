@@ -250,6 +250,10 @@ jobs:
           esac
           echo "Installing LEVI with extras: ${EXTRA:-<none>}"
           uv sync $EXTRA
+          # Persist the extra so the Run step's `uv run` syncs the SAME
+          # environment. Without this, `uv run` re-resolves to base deps only
+          # and drops the example extras (e.g. networkx), breaking imports.
+          echo "BENCHMARK_EXTRA=$EXTRA" >> "$GITHUB_ENV"
         env:
           BENCHMARK_RAW: ${{ inputs.benchmark }}
 
@@ -316,7 +320,7 @@ jobs:
             full|*)              ;;
           esac
 
-          uv run --active python ../scripts/run_blade.py \
+          uv run --active $BENCHMARK_EXTRA python ../scripts/run_blade.py \
             --example-dir "${{ inputs.benchmark }}" \
             --problem-module "$PROBLEM_MODULE" \
             --mutation-model "${{ inputs.mutation_model }}" \
