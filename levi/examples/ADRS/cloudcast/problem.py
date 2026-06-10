@@ -34,7 +34,8 @@ PROBLEM_DESCRIPTION = """
 
 ## Problem
 Optimize broadcast topology for multi-cloud data distribution. Find optimal paths from a
-source to multiple destinations across AWS, Azure, and GCP to minimize transfer cost and time.
+source to multiple destinations across AWS, Azure, and GCP to minimize total transfer COST.
+(Transfer time is reported for information only — the score depends solely on cost.)
 
 ## Key Concepts
 - Graph G has edge attributes: `cost` ($/GB) and `throughput` (Gbps)
@@ -46,22 +47,6 @@ source to multiple destinations across AWS, Azure, and GCP to minimize transfer 
 Minimize total transfer cost ($/GB) across 5 network configurations:
 - intra_aws, intra_azure, intra_gcp (single cloud)
 - inter_agz, inter_gaz2 (cross-cloud)
-
-## Scoring (0-100)
-```
-LOWER_COST = 1199.00  # worst case
-UPPER_COST = 626.24   # best known
-cost_clamped = max(min(total_cost, LOWER_COST), UPPER_COST)
-normalized_cost = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST)
-score = normalized_cost * 100
-```
-
-## APIs
-- `G.nodes` - All nodes (cloud regions)
-- `G.edges(data=True)` - All edges with attributes
-- `G[src][dst]['cost']` - Cost per GB for edge
-- `G[src][dst]['throughput']` - Throughput in Gbps
-- `nx.dijkstra_path(G, src, dst, weight='cost')` - Shortest path by cost
 
 ## BroadCastTopology — USE THE PROVIDED CLASS, DO NOT REDEFINE IT
 `BroadCastTopology` is already available in scope (do NOT write your own
@@ -79,12 +64,35 @@ attributes/methods directly, so your returned object MUST support all of them:
 The simplest correct approach is to use the provided `BroadCastTopology`
 unchanged and only evolve the path-finding logic inside `search_algorithm`.
 
-## CRITICAL CONSTRAINTS
-- All destinations must be reachable for all partitions
-- Every (dst, partition) pair must have a non-empty path of valid G edges
-- Paths must use valid edges in graph G
-- Return the BroadCastTopology object (filled in), not a dict or raw paths
-- Algorithm should run quickly (under 10 seconds total)
+## Scoring (0-100)
+```
+LOWER_COST = 1199.00  # worst case
+UPPER_COST = 626.24   # best known
+cost_clamped = max(min(total_cost, LOWER_COST), UPPER_COST)
+normalized_cost = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST)
+score = normalized_cost * 100
+```
+
+## APIs
+- `G.nodes` - All nodes (cloud regions)
+- `G.edges(data=True)` - All edges with attributes
+- `G[src][dst]['cost']` - Cost per GB for edge
+- `G[src][dst]['throughput']` - Throughput in Gbps
+- `nx.dijkstra_path(G, src, dst, weight='cost')` - Shortest path by cost
+- `BroadCastTopology(src, dsts, num_partitions)` - Create topology
+- `bc_topology.append_dst_partition_path(dst, partition, [src, tgt, edge_data])` - Add path segment
+
+## CRITICAL CONSTRAINTS (the evaluator REJECTS any topology that violates these)
+- Cover EVERY (destination, partition) pair: each must have a non-empty path.
+  Missing or empty partitions => the whole candidate is rejected (score 0).
+- Each path must be a CONTINUOUS chain of edges from `src` to that destination:
+  the segments for one (dst, partition) must connect end-to-end starting at `src`
+  and ending at `dst` (segment k's target == segment k+1's source). A path that
+  starts mid-graph or has a gap is rejected as "path discontinuity".
+- Every segment must be a real edge of G (use `G[s][t]` as its `edge_data`).
+- Do not add, drop, or duplicate destinations; keep `bc.src == src`.
+- RETURN the filled `BroadCastTopology` object itself — not a dict, not raw paths.
+- Algorithm should run quickly (under 10 seconds total).
 """
 
 FUNCTION_SIGNATURE = """
@@ -114,6 +122,7 @@ ONLY evolve `search_algorithm` below. `BroadCastTopology` is provided by the
 environment (already in scope) — do NOT redefine it, rename it, or write your
 own topology class. Just construct it with `BroadCastTopology(src, dsts,
 num_partitions)`, fill it via `append_dst_partition_path(...)`, and return it.
+Every (dst, partition) must get a continuous path of valid G edges from src to dst.
 """
 
 import networkx as nx
@@ -134,6 +143,49 @@ def search_algorithm(src, dsts, G, num_partitions):
                 bc_topology.append_dst_partition_path(dst, j, [s, t, G[s][t]])
 
     return bc_topology
+
+
+class SingleDstPath(Dict):
+    partition: int
+    edges: List[List]  # [[src, dst, edge data]]
+
+
+class BroadCastTopology:
+    def __init__(self, src: str, dsts: List[str], num_partitions: int = 4, paths: Dict[str, SingleDstPath] = None):
+        self.src = src  # single str
+        self.dsts = dsts  # list of strs
+        self.num_partitions = num_partitions
+
+        # dict(dst) --> dict(partition) --> list(nx.edges)
+        # example: {dst1: {partition1: [src->node1, node1->dst1], partition 2: [src->dst1]}}
+        if paths is not None:
+            self.paths = paths
+            self.set_graph()
+        else:
+            self.paths = {dst: {str(i): None for i in range(num_partitions)} for dst in dsts}
+
+    def get_paths(self):
+        return self.paths
+
+    def set_num_partitions(self, num_partitions: int):
+        self.num_partitions = num_partitions
+
+    def set_dst_partition_paths(self, dst: str, partition: int, paths: List[List]):
+        """
+        Set paths for partition = partition to reach dst
+        """
+        partition = str(partition)
+        self.paths[dst][partition] = paths
+
+    def append_dst_partition_path(self, dst: str, partition: int, path: List):
+        """
+        Append path for partition = partition to reach dst
+        """
+        partition = str(partition)
+        if self.paths[dst][partition] is None:
+            self.paths[dst][partition] = []
+        self.paths[dst][partition].append(path)
+
 '''
 
 
@@ -154,10 +206,10 @@ CONFIG_NAMES = [
 
 _CONTEXT_CACHE: dict[str, Any] | None = None
 
-# Cloudcast is self-contained: the simulator modules (simulator.py, utils.py,
-# broadcast.py) and the dataset (profiles/*.csv, examples/config/*.json) live
-# right next to this file, so the example runs without cloning ADRS-Leaderboard
-# or depending on skydiscover's benchmarks/ tree.
+# Cloudcast is fully self-contained: the simulator modules (simulator.py,
+# utils.py, broadcast.py) and the dataset (examples/config/*.json,
+# profiles/*.csv) are committed next to this file, so the example runs on CI
+# with no external clone and no ADRS_EXAMPLE_DATA_ROOT.
 EXAMPLE_DIR = Path(__file__).resolve().parent
 
 
@@ -229,6 +281,111 @@ def _compute_config_score(cost: float) -> float:
     return (per_config_baseline - cost) / (per_config_baseline - per_config_optimal)
 
 
+def _validate_broadcast_topology(
+    bc_t: Any,
+    source_node: str,
+    terminal_nodes: list[str],
+    num_partitions: int,
+    G: Any,
+) -> tuple[bool, str | None]:
+    """
+    Validate that a broadcast topology is complete and correct.
+
+    Ported verbatim from the canonical ADRS evaluator
+    (benchmarks/ADRS/cloudcast/evaluator/evaluator.py::validate_broadcast_topology)
+    so this example scores identically to the leaderboard. Without this gate a
+    degenerate topology (missing destinations, empty/partial partitions, or
+    discontinuous paths) is silently costed by the simulator on whatever few
+    edges it does contain, yielding an artificially tiny cost (e.g. ~189) and a
+    bogus top score. The simulator does NOT check coverage, so the check must
+    live here.
+
+    Returns (is_valid, error_message).
+    """
+    # Check 1: all destinations present, no extras.
+    if set(bc_t.dsts) != set(terminal_nodes):
+        missing_dsts = set(terminal_nodes) - set(bc_t.dsts)
+        extra_dsts = set(bc_t.dsts) - set(terminal_nodes)
+        return False, f"Destination mismatch: missing={missing_dsts}, extra={extra_dsts}"
+
+    # Check 2: source matches.
+    if bc_t.src != source_node:
+        return False, f"Source mismatch: expected={source_node}, got={bc_t.src}"
+
+    # Check 3 & 4: every (dst, partition) exists, is non-empty, and forms a
+    # continuous route from source to destination over valid graph edges.
+    missing_partitions: list[tuple[str, int]] = []
+    empty_partitions: list[tuple[str, int]] = []
+    invalid_paths: list[tuple[str, int, str]] = []
+
+    for dst in terminal_nodes:
+        if dst not in bc_t.paths:
+            return False, f"Missing destination '{dst}' in paths"
+
+        for partition_id in range(num_partitions):
+            partition_key = str(partition_id)
+
+            if partition_key not in bc_t.paths[dst]:
+                missing_partitions.append((dst, partition_id))
+                continue
+
+            partition_paths = bc_t.paths[dst][partition_key]
+            if partition_paths is None or len(partition_paths) == 0:
+                empty_partitions.append((dst, partition_id))
+                continue
+
+            path_nodes = [source_node]
+            path_valid = True
+            for edge in partition_paths:
+                if len(edge) < 3:
+                    invalid_paths.append((dst, partition_id, "edge format invalid"))
+                    path_valid = False
+                    break
+
+                edge_src, edge_dst = edge[0], edge[1]
+                if not G.has_edge(edge_src, edge_dst):
+                    invalid_paths.append((dst, partition_id, f"edge {edge_src}->{edge_dst} not in graph"))
+                    path_valid = False
+                    break
+
+                if path_nodes[-1] != edge_src:
+                    invalid_paths.append((dst, partition_id, f"path discontinuity: expected {path_nodes[-1]}, got {edge_src}"))
+                    path_valid = False
+                    break
+
+                path_nodes.append(edge_dst)
+
+            if path_valid and path_nodes[-1] != dst:
+                invalid_paths.append((dst, partition_id, f"path does not reach destination: ends at {path_nodes[-1]}, expected {dst}"))
+
+    errors: list[str] = []
+    if missing_partitions:
+        errors.append(f"Missing partitions: {missing_partitions}")
+    if empty_partitions:
+        errors.append(f"Empty partitions: {empty_partitions}")
+    if invalid_paths:
+        errors.append(f"Invalid paths: {invalid_paths}")
+    if errors:
+        return False, "Validation failed: " + "; ".join(errors)
+
+    # Check 5: no data loss — every (dst, partition) pair is actually present.
+    expected_total_partitions = len(terminal_nodes) * num_partitions
+    actual_partitions = 0
+    for dst in terminal_nodes:
+        for partition_id in range(num_partitions):
+            partition_key = str(partition_id)
+            if (
+                partition_key in bc_t.paths[dst]
+                and bc_t.paths[dst][partition_key] is not None
+                and len(bc_t.paths[dst][partition_key]) > 0
+            ):
+                actual_partitions += 1
+    if actual_partitions != expected_total_partitions:
+        return False, f"Data loss detected: expected {expected_total_partitions} partitions, got {actual_partitions}"
+
+    return True, None
+
+
 def _inject_runtime_globals(search_algorithm: Any, broad_cast_topology_cls: Any) -> list[str]:
     """Inject common globals so candidate code can run without boilerplate imports."""
     runtime_globals = search_algorithm.__globals__
@@ -295,16 +452,23 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
                         context["graph"],
                         config["num_partitions"],
                     )
-                    # Ensure num_partitions is set without requiring the
-                    # candidate to keep a specific setter method. Many evolved
-                    # topologies redefine BroadCastTopology and drop
-                    # set_num_partitions(); since this only stores the value the
-                    # candidate already received, set it directly when the
-                    # setter is absent rather than failing the whole config.
-                    if hasattr(bc_topology, "set_num_partitions"):
-                        bc_topology.set_num_partitions(config["num_partitions"])
-                    else:
-                        bc_topology.num_partitions = config["num_partitions"]
+                    bc_topology.set_num_partitions(config["num_partitions"])
+
+                    # Reject incomplete / discontinuous topologies BEFORE costing,
+                    # matching the canonical ADRS evaluator. The simulator only
+                    # costs the edges it is handed, so without this gate a
+                    # partial topology gets a bogus tiny cost (the ~189 score-100
+                    # artifact). A failed config is a hard reject for the whole
+                    # candidate, exactly as the leaderboard evaluator does.
+                    is_valid, validation_error = _validate_broadcast_topology(
+                        bc_topology,
+                        config["source_node"],
+                        config["dest_nodes"],
+                        config["num_partitions"],
+                        context["graph"],
+                    )
+                    if not is_valid:
+                        return {"error": f"Invalid broadcast topology for {config_name}: {validation_error}"}
 
                     simulator = context["BCSimulator"](num_vms=NUM_VMS, output_dir="evals")
                     with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull):
@@ -331,33 +495,15 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
     if not math.isfinite(total_time) or total_time <= 0:
         return {"error": f"Invalid total transfer time: {total_time}"}
 
-    # Fitness used by the search (matches skydiscover's combined_score in
-    # benchmarks/ADRS/cloudcast/evaluator/evaluator.py): reciprocal of the
-    # summed transfer cost. Higher is better; tiny in magnitude (~1e-3).
-    score = 1.0 / (1.0 + total_cost)
-
-    # Human-readable 0-100 score, as described in PROBLEM_DESCRIPTION. This is
-    # only a presentation/normalization of the same total_cost — the search
-    # still optimizes ``score`` above, which is monotonic in total_cost — so
-    # the two never disagree on ranking. Reported alongside for readability.
     cost_clamped = max(min(total_cost, LOWER_COST), UPPER_COST)
-    normalized_score = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST) * 100.0
-
-    # Mirror the metric set the skydiscover baseline evaluator reports so the
-    # BLADE run log surfaces the same fields (total_cost / avg_cost / config
-    # counts) rather than only the bare fitness ``score``.
-    successful_configs = len(per_config_costs)
-    failed_configs = len(CONFIG_NAMES) - successful_configs
+    normalized_cost = (LOWER_COST - cost_clamped) / (LOWER_COST - UPPER_COST)
+    score = normalized_cost * 100.0
 
     return {
         "score": float(score),
-        "normalized_score": float(normalized_score),
         "total_cost": float(total_cost),
-        "avg_cost": float(total_cost / successful_configs) if successful_configs else 0.0,
         "total_time": float(total_time),
-        "successful_configs": successful_configs,
-        "failed_configs": failed_configs,
-        "success_rate": float(successful_configs / len(CONFIG_NAMES)),
+        "successful_configs": len(per_config_costs),
         "per_config_costs": per_config_costs,
         "per_config_times": per_config_times,
         "intra_aws_score": per_config_scores.get("intra_aws", 0.0),
