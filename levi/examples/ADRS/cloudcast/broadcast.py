@@ -27,7 +27,12 @@ class BroadCastTopology:
             self.paths = paths
             self.set_graph()
         else:
-            self.paths = {dst: SingleDstPath().fromkeys(range(num_partitions)) for dst in dsts}
+            # Partition ids are stored as strings ("0", "1", ...) to match how
+            # they are looked up everywhere else (append_dst_partition_path /
+            # set_dst_partition_paths str()-ify the partition, and the
+            # simulator indexes self.paths[dst][str(partition_id)]). Using
+            # range(num_partitions) here produced int keys and a KeyError.
+            self.paths = {dst: {str(i): None for i in range(num_partitions)} for dst in dsts}
 
     def get_paths(self):
         vprint(f"now the set path is: {self.paths}")

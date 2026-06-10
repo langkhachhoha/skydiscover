@@ -62,12 +62,28 @@ score = normalized_cost * 100
 - `G[src][dst]['cost']` - Cost per GB for edge
 - `G[src][dst]['throughput']` - Throughput in Gbps
 - `nx.dijkstra_path(G, src, dst, weight='cost')` - Shortest path by cost
-- `BroadCastTopology(src, dsts, num_partitions)` - Create topology
-- `bc_topology.append_dst_partition_path(dst, partition, [src, tgt, edge_data])` - Add path segment
+
+## BroadCastTopology — USE THE PROVIDED CLASS, DO NOT REDEFINE IT
+`BroadCastTopology` is already available in scope (do NOT write your own
+class — redefining it will break evaluation). Construct and fill it via:
+- `bc = BroadCastTopology(src, dsts, num_partitions)` - create topology
+- `bc.append_dst_partition_path(dst, partition, [src, tgt, edge_data])` - add a
+  path segment for one (destination, partition). `edge_data` must be `G[src][tgt]`.
+
+The object you RETURN is consumed by an external simulator that reads these
+attributes/methods directly, so your returned object MUST support all of them:
+- attribute `bc.src` (str), `bc.dsts` (list[str]), `bc.num_partitions` (int)
+- attribute `bc.paths`: dict[dst][str(partition)] -> list of [src, tgt, edge_data]
+- method `bc.set_num_partitions(n)`
+- method `bc.append_dst_partition_path(dst, partition, segment)`
+The simplest correct approach is to use the provided `BroadCastTopology`
+unchanged and only evolve the path-finding logic inside `search_algorithm`.
 
 ## CRITICAL CONSTRAINTS
 - All destinations must be reachable for all partitions
+- Every (dst, partition) pair must have a non-empty path of valid G edges
 - Paths must use valid edges in graph G
+- Return the BroadCastTopology object (filled in), not a dict or raw paths
 - Algorithm should run quickly (under 10 seconds total)
 """
 
@@ -92,13 +108,20 @@ def search_algorithm(src: str, dsts: List[str], G: nx.DiGraph, num_partitions: i
 """
 
 SEED_PROGRAM = '''
-"""Broadcast optimization algorithm for minimizing transfer cost across multi-cloud networks"""
+"""Broadcast optimization algorithm for minimizing transfer cost across multi-cloud networks.
+
+ONLY evolve `search_algorithm` below. `BroadCastTopology` is provided by the
+environment (already in scope) — do NOT redefine it, rename it, or write your
+own topology class. Just construct it with `BroadCastTopology(src, dsts,
+num_partitions)`, fill it via `append_dst_partition_path(...)`, and return it.
+"""
 
 import networkx as nx
 from typing import Dict, List
 
 
 def search_algorithm(src, dsts, G, num_partitions):
+    # `BroadCastTopology` is supplied by the environment — use it as-is.
     h = G.copy()
     h.remove_edges_from(list(h.in_edges(src)) + list(nx.selfloop_edges(h)))
     bc_topology = BroadCastTopology(src, dsts, num_partitions)
@@ -111,49 +134,6 @@ def search_algorithm(src, dsts, G, num_partitions):
                 bc_topology.append_dst_partition_path(dst, j, [s, t, G[s][t]])
 
     return bc_topology
-
-
-class SingleDstPath(Dict):
-    partition: int
-    edges: List[List]  # [[src, dst, edge data]]
-
-
-class BroadCastTopology:
-    def __init__(self, src: str, dsts: List[str], num_partitions: int = 4, paths: Dict[str, SingleDstPath] = None):
-        self.src = src  # single str
-        self.dsts = dsts  # list of strs
-        self.num_partitions = num_partitions
-
-        # dict(dst) --> dict(partition) --> list(nx.edges)
-        # example: {dst1: {partition1: [src->node1, node1->dst1], partition 2: [src->dst1]}}
-        if paths is not None:
-            self.paths = paths
-            self.set_graph()
-        else:
-            self.paths = {dst: {str(i): None for i in range(num_partitions)} for dst in dsts}
-
-    def get_paths(self):
-        return self.paths
-
-    def set_num_partitions(self, num_partitions: int):
-        self.num_partitions = num_partitions
-
-    def set_dst_partition_paths(self, dst: str, partition: int, paths: List[List]):
-        """
-        Set paths for partition = partition to reach dst
-        """
-        partition = str(partition)
-        self.paths[dst][partition] = paths
-
-    def append_dst_partition_path(self, dst: str, partition: int, path: List):
-        """
-        Append path for partition = partition to reach dst
-        """
-        partition = str(partition)
-        if self.paths[dst][partition] is None:
-            self.paths[dst][partition] = []
-        self.paths[dst][partition].append(path)
-
 '''
 
 
@@ -315,7 +295,16 @@ def score_fn(search_algorithm: Any, _inputs: list[Any] | None = None) -> dict:
                         context["graph"],
                         config["num_partitions"],
                     )
-                    bc_topology.set_num_partitions(config["num_partitions"])
+                    # Ensure num_partitions is set without requiring the
+                    # candidate to keep a specific setter method. Many evolved
+                    # topologies redefine BroadCastTopology and drop
+                    # set_num_partitions(); since this only stores the value the
+                    # candidate already received, set it directly when the
+                    # setter is absent rather than failing the whole config.
+                    if hasattr(bc_topology, "set_num_partitions"):
+                        bc_topology.set_num_partitions(config["num_partitions"])
+                    else:
+                        bc_topology.num_partitions = config["num_partitions"]
 
                     simulator = context["BCSimulator"](num_vms=NUM_VMS, output_dir="evals")
                     with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull):
