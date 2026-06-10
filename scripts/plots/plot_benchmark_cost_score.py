@@ -118,6 +118,8 @@ KIMI_K2 = Suite(
         "heilbronn_convex",
         "heilbronn_triangle",
         "MinMax Distance (n=16, d=2)",
+        "MinMax Distance (n=14, d=3)",
+        "signal processing",
     ),
     methods=("OpenEvolve", "GEPA", "AdaEvolve", "EvoX", "LiteEvo"),
     data={
@@ -155,6 +157,20 @@ KIMI_K2 = Suite(
             "AdaEvolve": (0.0745, 1.4600),
             "EvoX": (0.0705, 1.4570),
             "LiteEvo": (0.0776, 1.3401),
+        },
+        "MinMax Distance (n=14, d=3)": {
+            "OpenEvolve": (0.2103, 1.6733),
+            "GEPA": (0.2113, 1.5141),
+            "AdaEvolve": (0.2214, 1.4140),
+            "EvoX": (0.2113, 2.1089),
+            "LiteEvo": (0.2358, 0.7214),
+        },
+        "signal processing": {
+            "OpenEvolve": (0.6965, 2.5747),
+            "GEPA": (0.6514, 2.2495),
+            "AdaEvolve": (0.6333, 2.1871),
+            "EvoX": (0.6192, 2.3201),
+            "LiteEvo": (0.7030, 1.2502),
         },
     },
     default_out=ROOT / "paper" / "figures" / "benchmark_cost_score_kimi_k2.pdf",
@@ -238,7 +254,7 @@ def main() -> None:
         "--suite",
         choices=sorted(SUITES),
         default="gpt-5",
-        help="gpt-5: 5 methods × 7 benchmarks; kimi-k2: 5 methods × 5 benchmarks",
+        help="gpt-5: 5 methods × 7 benchmarks; kimi-k2: 5 methods × 7 benchmarks",
     )
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
