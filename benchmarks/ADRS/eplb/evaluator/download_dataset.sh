@@ -14,9 +14,11 @@ cd "$(dirname "$0")"
 # which has both; macOS ships curl but not wget.)
 fetch() {  # fetch <url> <out>
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$2" "$1"
+        curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "$2" "$1"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" "$1"
+        wget -q --tries=5 --waitretry=5 --retry-on-http-error=429,500,502,503,504 \
+            -O "$2" "$1"
     else
         echo "Need curl or wget to download datasets." >&2
         exit 1

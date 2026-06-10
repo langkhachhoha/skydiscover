@@ -16,10 +16,14 @@ cd "$(dirname "$0")"
 # Portable download: prefer curl, fall back to wget. (CI uses ubuntu-latest
 # which has both; macOS ships curl but not wget.)
 fetch() {  # fetch <url> <out>
+    # HuggingFace rate-limits bursty/unauthenticated downloads with HTTP 429.
+    # Retry with exponential backoff so transient 429/5xx don't abort the run.
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$2" "$1"
+        curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "$2" "$1"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" "$1"
+        wget -q --tries=5 --waitretry=5 --retry-on-http-error=429,500,502,503,504 \
+            -O "$2" "$1"
     else
         echo "Need curl or wget to download datasets." >&2
         exit 1
