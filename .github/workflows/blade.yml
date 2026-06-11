@@ -132,10 +132,6 @@ on:
         default: ""
 
 
-concurrency:
-  group: blade-${{ github.run_id }}-${{ inputs.benchmark }}
-  cancel-in-progress: false
-
   workflow_call:
     inputs:
       benchmark:
@@ -189,6 +185,11 @@ concurrency:
         required: false
         type: string
         default: ""
+
+
+concurrency:
+  group: blade-${{ github.run_id }}-${{ inputs.benchmark }}
+  cancel-in-progress: false
 
 jobs:
   blade:
