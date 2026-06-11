@@ -664,7 +664,12 @@ class Config:
     human_feedback_mode: str = "append"  # "append" or "replace"
 
     # Generation settings
-    diff_based_generation: bool = True
+    # Hard-disabled across all search methods: reasoning models routinely emit a
+    # full rewritten program instead of SEARCH/REPLACE diffs, which the strict
+    # diff parser rejects ("No valid diffs found in LLM response"), stalling
+    # every iteration at score 0. Config.from_dict() force-overrides this to
+    # False even when a YAML sets it True (see _FORCE_FULL_REWRITE).
+    diff_based_generation: bool = False
     max_solution_length: int = 60000
 
     # Parallelism — how many iterations run concurrently.
@@ -781,6 +786,20 @@ class Config:
             config.benchmark = BenchmarkConfig(**benchmark_known, params=benchmark_params)
         if "monitor" in config_dict:
             config.monitor = MonitorConfig(**config_dict["monitor"])
+
+        # Force full-rewrite generation across every search method, regardless of
+        # what the YAML requested. The strict SEARCH/REPLACE diff parser rejects
+        # the full-program rewrites that reasoning models routinely emit ("No
+        # valid diffs found in LLM response"), stalling runs at score 0. To
+        # re-enable diffs for a specific run, set the SKYDISCOVER_ALLOW_DIFF=1
+        # environment variable.
+        if os.environ.get("SKYDISCOVER_ALLOW_DIFF") != "1":
+            if config_dict.get("diff_based_generation"):
+                logger.info(
+                    "Config: forcing diff_based_generation=False (full-rewrite). "
+                    "Set SKYDISCOVER_ALLOW_DIFF=1 to keep diff-based generation."
+                )
+            config.diff_based_generation = False
 
         return config
 

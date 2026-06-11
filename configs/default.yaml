@@ -34,5 +34,8 @@ evaluator:
   cascade_evaluation: false
 
 # Generation settings
-diff_based_generation: true
+# Full-rewrite instead of SEARCH/REPLACE diffs: reasoning models often emit a
+# whole rewritten program, which the strict diff parser rejects ("No valid
+# diffs found in LLM response"), stalling every iteration at score 0.
+diff_based_generation: false
 max_solution_length: 60000
