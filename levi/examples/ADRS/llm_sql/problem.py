@@ -343,7 +343,7 @@ def score_fn(solve_fn, inputs):
     import warnings
     warnings.filterwarnings("ignore")
 
-    _cap_address_space()
+    # _cap_address_space()
 
     try:
         hit_rates = []
