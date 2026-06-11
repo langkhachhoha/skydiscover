@@ -35,9 +35,10 @@ on:
         required: false
         default: "openrouter/openai/gpt-5"
 
+
 concurrency:
-  group: baseline-${{ github.ref }}-${{ inputs.baseline }}-${{ inputs.benchmark_dir }}
-  cancel-in-progress: true
+  group: baseline-${{ github.run_id }}-${{ inputs.baseline }}-${{ inputs.benchmark_dir }}
+  cancel-in-progress: false
 
 jobs:
   baseline:
