@@ -84,20 +84,20 @@ df["col1_col2"] = df[["col1", "col2"]].apply(lambda x: "".join([f"{val}" for val
 df = df.drop(columns=["col1", "col2"])
 ```
 
-## Scoring
+## Scoring (matches ADRS-Leaderboard evaluator exactly)
 
 ```
-baseline_hit_rate = Average prefix hit rate using original column order (after merging)
-avg_hit_rate = Your solution's average prefix hit rate
-avg_runtime = Average runtime per dataset (seconds)
+avg_hit_rate = Your solution's average prefix hit rate (a fraction in [0, 1])
+avg_runtime  = Average runtime per dataset (seconds)
 
-normalized_hit_score = ((avg_hit_rate - baseline_hit_rate) / (1.0 - baseline_hit_rate)) * 100
-normalized_hit_score = clamp(normalized_hit_score, 0, 100)
-
-runtime_component = (10.0 - min(10.0, avg_runtime)) / 10.0 * 100
-
-final_score = 0.95 * normalized_hit_score + 0.05 * runtime_component
+# Raw hit rate is used directly — there is NO baseline normalization.
+# The runtime term divides by 12.
+final_score = 0.95 * avg_hit_rate + 0.05 * (12 - min(12, avg_runtime)) / 12
 ```
+
+Higher prefix hit rate dominates the score (0.95 weight); runtime is a small
+tie-breaker (0.05 weight, saturates at 12s). Losing rows or characters during
+reordering => score 0.
 """
 
 FUNCTION_SIGNATURE = """
@@ -181,9 +181,15 @@ def solve(
 ) -> pd.DataFrame:
 ```
 
+## OBJECTIVE
+Maximize the average prefix hit rate (fraction in [0, 1]); runtime is a small
+tie-breaker. Score (matches ADRS-Leaderboard):
+`0.95 * avg_hit_rate + 0.05 * (12 - min(12, avg_runtime)) / 12`.
+There is NO baseline normalization — raw hit rate is used directly.
+
 ## RULES (violations = score 0)
 1. MUST apply col_merge first: merge specified column groups into single columns
-2. Return DataFrame with SAME rows (same count)
+2. Return DataFrame with SAME rows (same count) and no fewer characters
 3. After merging, only change column order and row order
 4. No iterrows() or apply(axis=1) on large data - too slow
 
@@ -228,20 +234,6 @@ DATASET_SPECS = [
     ("PDMX.csv", [["path", "metadata"], ["hasmetadata", "isofficial", "isuserpublisher", "isdraft", "hasannotations", "subsetall"]], None),
     ("products.csv", [["product_title", "parent_asin"]], None),
 ]
-
-
-def _merge_columns(df, col_merge):
-    """Apply column merging - matches ADRS-Leaderboard evaluator.py exactly."""
-    df = df.copy()
-    if col_merge:
-        for cols_to_merge in col_merge:
-            if all(col in df.columns for col in cols_to_merge):
-                merged_name = "_".join(cols_to_merge)
-                df[merged_name] = df[cols_to_merge].apply(
-                    lambda x: "".join([f"{val}" for val in x]), axis=1
-                )
-                df = df.drop(columns=cols_to_merge)
-    return df
 
 
 def load_datasets(sample_size: int = None):
@@ -300,45 +292,6 @@ INPUTS = LazyDatasets()
 INPUTS_SAMPLED = LazyDatasets(sample_size=1500)
 
 
-# --- Baseline Calculation ---
-
-_BASELINE_HIT_RATE = None
-
-def _calculate_baseline_hit_rate(inputs):
-    """Calculate baseline using original column order after merging.
-
-    Matches ADRS-Leaderboard evaluator.py _process_baseline_dataset().
-    """
-    baseline_hit_rates = []
-    for df, filename, col_merge in inputs:
-        # Apply column merges (same as evaluator does for baseline)
-        df_merged = _merge_columns(df, col_merge)
-        _, hit_rate = evaluate_df_prefix_hit_cnt(df_merged)
-        baseline_hit_rates.append(hit_rate / 100.0)
-    return sum(baseline_hit_rates) / len(baseline_hit_rates) if baseline_hit_rates else 0.0
-
-
-def _get_baseline_hit_rate(inputs):
-    global _BASELINE_HIT_RATE
-    if _BASELINE_HIT_RATE is None:
-        _BASELINE_HIT_RATE = _calculate_baseline_hit_rate(inputs)
-    return _BASELINE_HIT_RATE
-
-
-def _get_expected_columns_after_merge(df, col_merge):
-    """Get expected column set after applying col_merge."""
-    expected_cols = set(df.columns)
-    if col_merge:
-        for cols_to_merge in col_merge:
-            valid_cols = [c for c in cols_to_merge if c in df.columns]
-            if len(valid_cols) > 1:
-                # Remove original columns, add merged column
-                for c in valid_cols:
-                    expected_cols.discard(c)
-                expected_cols.add("_".join(valid_cols))
-    return expected_cols
-
-
 # --- Score Function ---
 
 def score_fn(solve_fn, inputs):
@@ -360,8 +313,12 @@ def score_fn(solve_fn, inputs):
             df_copy = df.copy()
             original_row_count = len(df_copy)
 
-            # Expected columns after merging
-            expected_cols = _get_expected_columns_after_merge(df_copy, col_merge)
+            # Character count of the original DataFrame, used by the canonical
+            # evaluator as a data-loss guard (the reordered df must not drop
+            # characters). Matches evaluator.py::evaluate total_chars_before.
+            total_chars_before = (
+                df_copy.astype(str).apply(lambda x: x.str.len().sum(), axis=1).sum()
+            )
 
             # Call solve() with all parameters - matches ADRS-Leaderboard exactly
             start = time.time()
@@ -382,41 +339,46 @@ def score_fn(solve_fn, inputs):
             if not isinstance(reordered, pd.DataFrame):
                 return {"error": f"Expected DataFrame, got {type(reordered).__name__}"}
 
-            # Validate row count
+            # Validate row count (canonical: data lost / duplicated => score 0).
             if len(reordered) != original_row_count:
-                return {"error": f"Row count mismatch: {len(reordered)} vs {original_row_count}"}
+                diff = len(reordered) - original_row_count
+                if diff < 0:
+                    return {"error": f"Evaluation failed: row count decreases by {abs(diff)} rows."}
+                return {"error": f"Evaluation failed: row count increases by {diff} rows."}
 
-            # Validate columns - must match expected after merging
-            result_cols = set(reordered.columns)
-            if result_cols != expected_cols:
-                missing = expected_cols - result_cols
-                extra = result_cols - expected_cols
-                if missing:
-                    return {"error": f"Missing columns after merge: {missing}"}
-                if extra:
-                    return {"error": f"Extra columns: {extra}"}
+            # Validate character count: reordered must not lose characters.
+            # Matches evaluator.py's total_chars_after >= total_chars_before gate.
+            total_chars_after = (
+                reordered.astype(str).apply(lambda x: x.str.len().sum(), axis=1).sum()
+            )
+            if total_chars_after < total_chars_before:
+                char_diff_pct = (
+                    (total_chars_before - total_chars_after) / total_chars_before * 100
+                    if total_chars_before > 0 else 0
+                )
+                return {"error": f"Evaluation failed: character decreases by {char_diff_pct:.2f}%."}
 
             _, hit_rate = evaluate_df_prefix_hit_cnt(reordered)
             hit_rates.append(hit_rate / 100.0)
 
+        # Canonical scoring (benchmarks/ADRS/llm_sql/evaluator/evaluator.py):
+        # combined_score = 0.95 * average_hit_rate + 0.05 * (12 - min(12, rt)) / 12
+        # NOTE: the canonical formula uses the RAW average hit rate (a fraction
+        # in [0, 1]) directly — it does NOT normalize against a baseline, and
+        # the runtime term divides by 12 (not 10). This reproduces leaderboard
+        # numbers exactly. `score` is the fitness key LEVI/BLADE read
+        # (utils.coerce_score / orchestrator) — keep it equal to combined_score.
         avg_hit_rate = sum(hit_rates) / len(hit_rates)
         avg_runtime = sum(runtimes) / len(runtimes)
-        baseline_hit_rate = _get_baseline_hit_rate(inputs)
-
-        if baseline_hit_rate >= 1.0:
-            normalized_hit_score = 100.0 if avg_hit_rate >= 1.0 else 0.0
-        else:
-            normalized_hit_score = ((avg_hit_rate - baseline_hit_rate) / (1.0 - baseline_hit_rate)) * 100
-            normalized_hit_score = max(0, min(100, normalized_hit_score))
-
-        runtime_component = (10.0 - min(10.0, avg_runtime)) / 10.0 * 100
-        score = 0.95 * normalized_hit_score + 0.05 * runtime_component
+        score = 0.95 * avg_hit_rate + 0.05 * (12 - min(12, avg_runtime)) / 12
 
         return {
             "score": score,
+            "combined_score": score,
+            "runs_successfully": 1.0,
+            "hit_rates": hit_rates,
             "hit_rate": avg_hit_rate * 100,
-            "normalized_hit_score": normalized_hit_score,
-            "baseline_hit_rate": baseline_hit_rate * 100,
+            "total_runtime": sum(runtimes),
             "runtime": avg_runtime,
         }
     except MemoryError:
