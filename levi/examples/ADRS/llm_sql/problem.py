@@ -294,6 +294,44 @@ INPUTS_SAMPLED = LazyDatasets(sample_size=1500)
 
 # --- Score Function ---
 
+def _cap_address_space() -> None:
+    """Hard-cap this evaluation's virtual memory so a runaway candidate raises
+    MemoryError instead of OOM-killing the whole run.
+
+    score_fn runs inside an isolated worker process (levi's ResilientProcessPool),
+    so capping RLIMIT_AS here only bounds the candidate's solve(), never the
+    orchestrator. LLM-generated solve() functions can allocate unboundedly
+    (huge intermediate frames / combinatorial blow-ups); on a ~7 GB CI runner
+    with several eval processes in parallel that triggers the OS OOM-killer,
+    which takes down the run. With the cap, the over-allocation fails cleanly and
+    the candidate is rejected via the existing `except MemoryError` below.
+
+    Tunable via LEVI_EVAL_MEMORY_LIMIT_MB ("0" disables). POSIX-only and a no-op
+    where unenforced (e.g. macOS / no `resource` module) so local dev is
+    unaffected.
+    """
+    import os
+
+    try:
+        limit_mb = int(os.environ.get("LEVI_EVAL_MEMORY_LIMIT_MB", "1500"))
+    except ValueError:
+        limit_mb = 1500
+    if limit_mb <= 0:
+        return
+    try:
+        import resource
+    except ImportError:
+        return
+    nbytes = limit_mb * 1024 * 1024
+    try:
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        if hard != resource.RLIM_INFINITY:
+            nbytes = min(nbytes, hard)
+        resource.setrlimit(resource.RLIMIT_AS, (nbytes, hard))
+    except (ValueError, OSError):
+        pass
+
+
 def score_fn(solve_fn, inputs):
     """Score function matching ADRS-Leaderboard evaluator.py exactly.
 
@@ -304,6 +342,8 @@ def score_fn(solve_fn, inputs):
     import time
     import warnings
     warnings.filterwarnings("ignore")
+
+    _cap_address_space()
 
     try:
         hit_rates = []
