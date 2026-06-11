@@ -32,8 +32,8 @@ on:
         default: "openrouter/moonshotai/kimi-k2-thinking"
 
 concurrency:
-  group: gepa-native-${{ github.ref }}-${{ inputs.benchmark_dir }}
-  cancel-in-progress: true
+  group: gepa-native-${{ github.run_id }}-${{ inputs.benchmark_dir }}
+  cancel-in-progress: false
 
 jobs:
   gepa_native:
