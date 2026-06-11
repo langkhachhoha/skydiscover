@@ -260,17 +260,40 @@ def load_datasets(sample_size: int = None):
     return datasets
 
 
+# Per-process dataset cache, keyed by sample_size. BLADE evaluates candidates
+# in spawned worker processes (levi's ResilientProcessPool) and pickles `inputs`
+# across the process boundary on every candidate. If LazyDatasets carried its
+# loaded DataFrames, each candidate would pickle + copy the entire dataset into
+# the worker — with several eval processes in parallel that is N full copies of
+# a multi-hundred-MB frame, which is what exhausts the ~7 GB CI runner (other
+# frameworks avoid this: evox shares one in-process copy across threads,
+# adaevolve keeps the data inside the container). Instead each worker loads the
+# CSVs once and caches them at module scope, mirroring that shared-once model.
+_DATASET_CACHE: dict[int | None, list] = {}
+
+
+def _cached_datasets(sample_size: int | None) -> list:
+    cached = _DATASET_CACHE.get(sample_size)
+    if cached is None:
+        cached = load_datasets(sample_size=sample_size)
+        _DATASET_CACHE[sample_size] = cached
+    return cached
+
+
 class LazyDatasets:
-    """Lazily load heavy CSV inputs on first use."""
+    """Lazily load heavy CSV inputs on first use, cached per process.
+
+    Pickles only ``sample_size`` — never the loaded DataFrames — so crossing the
+    BLADE worker-process boundary stays cheap and each worker materialises the
+    data once via the module-level cache instead of receiving a fresh copy per
+    candidate.
+    """
 
     def __init__(self, sample_size: int | None = None):
         self._sample_size = sample_size
-        self._datasets = None
 
     def _load(self):
-        if self._datasets is None:
-            self._datasets = load_datasets(sample_size=self._sample_size)
-        return self._datasets
+        return _cached_datasets(self._sample_size)
 
     def __iter__(self):
         return iter(self._load())
@@ -283,6 +306,13 @@ class LazyDatasets:
 
     def __repr__(self):
         return repr(self._load())
+
+    def __getstate__(self):
+        # Cross the spawn boundary carrying only the cheap config, not data.
+        return {"_sample_size": self._sample_size}
+
+    def __setstate__(self, state):
+        self._sample_size = state["_sample_size"]
 
 
 # Full datasets for final evaluation

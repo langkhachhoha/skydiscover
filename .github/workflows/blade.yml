@@ -311,7 +311,15 @@ jobs:
         run: |
           PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
           EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
-          EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
+          # Default eval-process count is 4, but llm_sql ships large CSV inputs
+          # that get pickled into every worker process; on the ~7 GB CI runner
+          # 4 parallel copies risk OOM. Halve the default for llm_sql (still
+          # overridable via advanced_options.eval_processes).
+          EVAL_PROCESSES_DEFAULT="4"
+          case "${{ inputs.benchmark }}" in
+            *llm_sql*) EVAL_PROCESSES_DEFAULT="2" ;;
+          esac
+          EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-$EVAL_PROCESSES_DEFAULT}"
 
           EXTRA_OPTS=""
           [ -n "$ADV_TARGET_SCORE" ]    && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
