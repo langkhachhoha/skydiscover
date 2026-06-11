@@ -260,40 +260,17 @@ def load_datasets(sample_size: int = None):
     return datasets
 
 
-# Per-process dataset cache, keyed by sample_size. BLADE evaluates candidates
-# in spawned worker processes (levi's ResilientProcessPool) and pickles `inputs`
-# across the process boundary on every candidate. If LazyDatasets carried its
-# loaded DataFrames, each candidate would pickle + copy the entire dataset into
-# the worker — with several eval processes in parallel that is N full copies of
-# a multi-hundred-MB frame, which is what exhausts the ~7 GB CI runner (other
-# frameworks avoid this: evox shares one in-process copy across threads,
-# adaevolve keeps the data inside the container). Instead each worker loads the
-# CSVs once and caches them at module scope, mirroring that shared-once model.
-_DATASET_CACHE: dict[int | None, list] = {}
-
-
-def _cached_datasets(sample_size: int | None) -> list:
-    cached = _DATASET_CACHE.get(sample_size)
-    if cached is None:
-        cached = load_datasets(sample_size=sample_size)
-        _DATASET_CACHE[sample_size] = cached
-    return cached
-
-
 class LazyDatasets:
-    """Lazily load heavy CSV inputs on first use, cached per process.
-
-    Pickles only ``sample_size`` — never the loaded DataFrames — so crossing the
-    BLADE worker-process boundary stays cheap and each worker materialises the
-    data once via the module-level cache instead of receiving a fresh copy per
-    candidate.
-    """
+    """Lazily load heavy CSV inputs on first use."""
 
     def __init__(self, sample_size: int | None = None):
         self._sample_size = sample_size
+        self._datasets = None
 
     def _load(self):
-        return _cached_datasets(self._sample_size)
+        if self._datasets is None:
+            self._datasets = load_datasets(sample_size=self._sample_size)
+        return self._datasets
 
     def __iter__(self):
         return iter(self._load())
@@ -307,13 +284,6 @@ class LazyDatasets:
     def __repr__(self):
         return repr(self._load())
 
-    def __getstate__(self):
-        # Cross the spawn boundary carrying only the cheap config, not data.
-        return {"_sample_size": self._sample_size}
-
-    def __setstate__(self, state):
-        self._sample_size = state["_sample_size"]
-
 
 # Full datasets for final evaluation
 INPUTS = LazyDatasets()
@@ -323,44 +293,6 @@ INPUTS_SAMPLED = LazyDatasets(sample_size=1500)
 
 
 # --- Score Function ---
-
-def _cap_address_space() -> None:
-    """Hard-cap this evaluation's virtual memory so a runaway candidate raises
-    MemoryError instead of OOM-killing the whole run.
-
-    score_fn runs inside an isolated worker process (levi's ResilientProcessPool),
-    so capping RLIMIT_AS here only bounds the candidate's solve(), never the
-    orchestrator. LLM-generated solve() functions can allocate unboundedly
-    (huge intermediate frames / combinatorial blow-ups); on a ~7 GB CI runner
-    with several eval processes in parallel that triggers the OS OOM-killer,
-    which takes down the run. With the cap, the over-allocation fails cleanly and
-    the candidate is rejected via the existing `except MemoryError` below.
-
-    Tunable via LEVI_EVAL_MEMORY_LIMIT_MB ("0" disables). POSIX-only and a no-op
-    where unenforced (e.g. macOS / no `resource` module) so local dev is
-    unaffected.
-    """
-    import os
-
-    try:
-        limit_mb = int(os.environ.get("LEVI_EVAL_MEMORY_LIMIT_MB", "1500"))
-    except ValueError:
-        limit_mb = 1500
-    if limit_mb <= 0:
-        return
-    try:
-        import resource
-    except ImportError:
-        return
-    nbytes = limit_mb * 1024 * 1024
-    try:
-        _, hard = resource.getrlimit(resource.RLIMIT_AS)
-        if hard != resource.RLIM_INFINITY:
-            nbytes = min(nbytes, hard)
-        resource.setrlimit(resource.RLIMIT_AS, (nbytes, hard))
-    except (ValueError, OSError):
-        pass
-
 
 def score_fn(solve_fn, inputs):
     """Score function matching ADRS-Leaderboard evaluator.py exactly.
@@ -372,8 +304,6 @@ def score_fn(solve_fn, inputs):
     import time
     import warnings
     warnings.filterwarnings("ignore")
-
-    # _cap_address_space()
 
     try:
         hit_rates = []

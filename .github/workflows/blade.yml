@@ -313,11 +313,12 @@ jobs:
           EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
           # Default eval-process count is 4, but llm_sql ships large CSV inputs
           # that get pickled into every worker process; on the ~7 GB CI runner
-          # 4 parallel copies risk OOM. Halve the default for llm_sql (still
+          # multiple parallel copies exhaust memory. Run llm_sql with a single
+          # eval process so only one copy of the dataset is resident (still
           # overridable via advanced_options.eval_processes).
           EVAL_PROCESSES_DEFAULT="4"
           case "${{ inputs.benchmark }}" in
-            *llm_sql*) EVAL_PROCESSES_DEFAULT="2" ;;
+            *llm_sql*) EVAL_PROCESSES_DEFAULT="1" ;;
           esac
           EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-$EVAL_PROCESSES_DEFAULT}"
 
