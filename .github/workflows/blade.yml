@@ -1,5 +1,5 @@
 name: BLADE
-run-name: BLADE — ${{ inputs.benchmark }} (${{ inputs.ablation }})
+run-name: BLADE — ${{ inputs.benchmark }} (${{ inputs.ablation }}) · seed ${{ inputs.seed }}
 
 # Run BLADE Lite — adaptive MAP-Elites with hybrid AST + description-embedding
 # behavior signature — on a self-contained LEVI example under
@@ -130,6 +130,11 @@ on:
         required: false
         type: string
         default: ""
+      seed:
+        description: "Experiment seed label (e.g. 1, 2, 3) — tags the run name and artifacts only; does not change execution"
+        required: false
+        type: string
+        default: "1"
 
 
   workflow_call:
@@ -185,6 +190,10 @@ on:
         required: false
         type: string
         default: ""
+      seed:
+        required: false
+        type: string
+        default: "1"
 
 
 concurrency:
@@ -318,7 +327,7 @@ jobs:
           # overridable via advanced_options.eval_processes).
           EVAL_PROCESSES_DEFAULT="4"
           case "${{ inputs.benchmark }}" in
-            *llm_sql*) EVAL_PROCESSES_DEFAULT="1" ;;
+            *llm_sql*) EVAL_PROCESSES_DEFAULT="4" ;;
           esac
           EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-$EVAL_PROCESSES_DEFAULT}"
 
@@ -385,7 +394,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: blade-${{ env.BENCHMARK_SAFE }}-${{ inputs.ablation }}-${{ github.run_id }}
+          name: blade-${{ env.BENCHMARK_SAFE }}-${{ inputs.ablation }}-seed${{ inputs.seed }}-${{ github.run_id }}
           path: ${{ env.OUTPUT_DIR }}
           if-no-files-found: warn
           retention-days: 14

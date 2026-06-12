@@ -1,5 +1,5 @@
 name: GEPA Native Smoke
-run-name: GEPA Native Smoke — ${{ inputs.benchmark_dir }} · ${{ inputs.model }}
+run-name: GEPA Native Smoke — ${{ inputs.benchmark_dir }} · ${{ inputs.model }} · seed ${{ inputs.seed }}
 
 # Run the native GEPA strategy (skydiscover `gepa_native`: reflective
 # prompting, acceptance gating, LLM-mediated merge) on any benchmark directory
@@ -30,6 +30,10 @@ on:
         description: "OpenRouter model id routed through SkyDiscover"
         required: false
         default: "openrouter/moonshotai/kimi-k2-thinking"
+      seed:
+        description: "Experiment seed label (e.g. 1, 2, 3) — tags the run name and artifacts only; does not change execution"
+        required: false
+        default: "1"
 
 concurrency:
   group: gepa-native-${{ github.run_id }}-${{ inputs.benchmark_dir }}
@@ -153,6 +157,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gepa-native-${{ github.run_id }}
+          name: gepa-native-seed${{ inputs.seed }}-${{ github.run_id }}
           path: outputs/github-actions/
           if-no-files-found: warn
