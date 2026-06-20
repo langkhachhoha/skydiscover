@@ -4,6 +4,7 @@ PRISM (GPU Model Placement) Problem Definition.
 Contains problem description, prompts, scoring function, and test inputs.
 """
 
+import random
 import time
 import concurrent.futures
 from dataclasses import dataclass
@@ -363,12 +364,36 @@ def score_fn(compute_model_placement, inputs):
     - combined_score = 1/avg(max_kvpr) + success_rate  (higher is better)
     - validation failures (wrong shape / missing / duplicate / foreign model /
       memory violation) reject the whole candidate (fail-fast, anti-reward-hack)
-    - a candidate that raises mid-run on a test is skipped; success_rate is the
-      fraction of test cases that ran successfully.
 
     NOTE: this is NOT normalized to [0, 100]; it returns the raw reciprocal of
     the mean per-test max-KVPR plus the success rate, exactly like skydiscover.
+
+    Reproducibility / anti-fluke fixes (see git history):
+
+    1. RNG is seeded once per candidate.  Some candidates use the ``random``
+       module without seeding it, so their placement — and therefore their
+       score — was non-deterministic.  BLADE evaluates each candidate exactly
+       once and freezes that score in the archive, so an unseeded candidate
+       could be admitted on a lucky draw and never reproduce.  Seeding here
+       makes every candidate's score deterministic for a fixed test set.
+
+    2. ``avg_kvpr`` is averaged over ALL ``total_tests`` cases, with a test
+       that raises (or violates a constraint) contributing a large penalty
+       KVPR rather than being silently dropped.  The previous code divided the
+       summed KVPR by the number of *passing* tests only: a candidate that
+       crashed on 49/50 cases but happened to leave a single very-low-KVPR
+       placement on the survivor scored 1/0.0233 + 0.02 ≈ 42.9 — far past the
+       legitimate record of ~26.26 — purely because the lone survivor was
+       averaged against itself.  Penalising failed tests in the mean closes
+       this hole; a candidate that crashes on most cases can no longer be
+       inflated by one lucky survivor.
     """
+    # FIX 1 — determinism: seed the stdlib + numpy RNGs that candidates may use
+    # without seeding themselves.  Matches the seed the test cases are built
+    # with so the whole evaluation is reproducible.
+    random.seed(42)
+    np.random.seed(42)
+
     try:
         all_kvpr = []
         total_time = 0.0
@@ -382,8 +407,11 @@ def score_fn(compute_model_placement, inputs):
                 result = compute_model_placement(gpu_num, models)
                 total_time += time.perf_counter() - start_time
             except Exception:
-                # skydiscover skips runtime failures and counts them against
-                # success_rate rather than rejecting the whole candidate.
+                # FIX 2 — a test that raises is penalised, not skipped: it
+                # contributes a large KVPR to the mean (same sentinel the KVPR
+                # helper uses for an over-full GPU) so a candidate cannot be
+                # rewarded for crashing on most cases.
+                all_kvpr.append(1_000_000.0)
                 continue
 
             # Validate return type
@@ -434,7 +462,11 @@ def score_fn(compute_model_placement, inputs):
         if successful_runs == 0:
             return {"max_kvpr": 0.0, "success_rate": 0.0, "score": 0.0, "error": "All test signals failed"}
 
-        avg_kvpr = sum(all_kvpr) / len(all_kvpr)
+        # FIX 3 — average over ALL tests, not just the passing ones.  With the
+        # penalty pushed into all_kvpr above, len(all_kvpr) == total_tests, so a
+        # candidate that crashed on most cases sees its mean KVPR dominated by
+        # the penalties and cannot be inflated by a lucky survivor.
+        avg_kvpr = sum(all_kvpr) / total_tests
         inv_avg_kvpr = 1.0 / avg_kvpr if avg_kvpr != 0 else 0.0
         success_rate = successful_runs / total_tests
         avg_time = total_time / successful_runs

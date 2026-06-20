@@ -115,6 +115,18 @@ def evaluate(program_path):
         # Generate test gpu and models
         test_gpu_models = generate_test_gpu_models()
 
+        # Reproducibility fix: seed the RNGs that a candidate may use without
+        # seeding them itself.  Without this, an unseeded candidate's placement
+        # — and therefore its score — is non-deterministic, so it can be
+        # admitted on a lucky draw and never reproduce.  See the prism
+        # problem.py score_fn for the full rationale.
+        np.random.seed(42)
+        try:
+            import random as _random
+            _random.seed(42)
+        except Exception:
+            pass
+
         # Collect metrics across all tests
         all_kvpr = []
         all_metrics = []
@@ -210,9 +222,14 @@ def evaluate(program_path):
 
             except TimeoutError:
                 print(f"Placement {i}: Timeout")
+                # Penalise rather than skip: a timed-out test contributes a
+                # large KVPR to the mean so a candidate cannot be rewarded for
+                # crashing / hanging on most cases (see problem.py FIX 2).
+                all_kvpr.append(1_000_000.0)
                 continue
             except Exception as e:
                 print(f"Placement {i}: Error - {str(e)}")
+                all_kvpr.append(1_000_000.0)
                 continue
 
         # If no successful runs, return minimal scores
@@ -225,11 +242,15 @@ def evaluate(program_path):
                 }
 
         print(all_metrics)
-        # Calculate aggregate metrics
-        avg_kvpr = np.mean(all_kvpr)
+        # Calculate aggregate metrics.  Average KVPR over ALL test cases (not
+        # just the passing ones): with failed tests penalised above,
+        # len(all_kvpr) == len(test_gpu_models), so one lucky low-KVPR survivor
+        # can no longer inflate the score of a candidate that fails most cases
+        # (the bug that produced 42.8950 vs the real record ~26.256).
+        avg_kvpr = sum(all_kvpr) / len(test_gpu_models)
         if avg_kvpr != 0:
             avg_kvpr = 1.0 / avg_kvpr
-        avg_execution_time = np.mean([m['execution_time'] for m in all_metrics])
+        avg_execution_time = np.mean([m['execution_time'] for m in all_metrics]) if all_metrics else 0.0
         success_rate = successful_runs / len(test_gpu_models)
 
         return {
