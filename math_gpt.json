@@ -1,0 +1,543 @@
+{
+  "dataset": "Mathematical Discovery Task",
+  "model": "GPT-5",
+  "description": "Results from 3 different seed runs comparing 5 methods: OpenEvolve, GEPA, AdaEvolve, EvoX, and SpecEvo",
+  "methods": ["OpenEvolve", "GEPA", "AdaEvolve", "EvoX", "SpecEvo"],
+  "tasks": [
+    "Circle Packing",
+    "Circle Packing Rect",
+    "heilbronn_convex",
+    "heilbronn_triangle",
+    "MinMax Distance (n=16, d=2)",
+    "MinMax Distance (n=14, d=3)",
+    "signal processing"
+  ],
+  "seeds": [
+    {
+      "seed_id": 1,
+      "results": [
+        {
+          "task": "Circle Packing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.5414,
+            "cost": 7.4216
+          },
+          "GEPA": {
+            "score": 2.5414,
+            "cost": 8.3565
+          },
+          "AdaEvolve": {
+            "score": 2.5414,
+            "cost": 9.0096
+          },
+          "EvoX": {
+            "score": 2.5414,
+            "cost": 7.3669
+          },
+          "SpecEvo": {
+            "score": 2.5562,
+            "cost": 4.3031
+          }
+        },
+        {
+          "task": "Circle Packing Rect",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.3540,
+            "cost": 8.0661
+          },
+          "GEPA": {
+            "score": 2.3267,
+            "cost": 4.5427
+          },
+          "AdaEvolve": {
+            "score": 2.2713,
+            "cost": 5.9386
+          },
+          "EvoX": {
+            "score": 2.3480,
+            "cost": 6.9358
+          },
+          "SpecEvo": {
+            "score": 2.3259,
+            "cost": 1.8623
+          }
+        },
+        {
+          "task": "heilbronn_convex",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0223,
+            "cost": 7.3330
+          },
+          "GEPA": {
+            "score": 0.0214,
+            "cost": 7.7738
+          },
+          "AdaEvolve": {
+            "score": 0.0218,
+            "cost": 8.5874
+          },
+          "EvoX": {
+            "score": 0.0271,
+            "cost": 9.0517
+          },
+          "SpecEvo": {
+            "score": 0.0301,
+            "cost": 1.4124
+          }
+        },
+        {
+          "task": "heilbronn_triangle",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0322,
+            "cost": 8.5182
+          },
+          "GEPA": {
+            "score": 0.0320,
+            "cost": 8.3746
+          },
+          "AdaEvolve": {
+            "score": 0.0290,
+            "cost": 8.4312
+          },
+          "EvoX": {
+            "score": 0.0322,
+            "cost": 10.0269
+          },
+          "SpecEvo": {
+            "score": 0.0328,
+            "cost": 1.4277
+          }
+        },
+        {
+          "task": "MinMax Distance (n=16, d=2)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0769,
+            "cost": 8.1418
+          },
+          "GEPA": {
+            "score": 0.0769,
+            "cost": 8.6321
+          },
+          "AdaEvolve": {
+            "score": 0.0769,
+            "cost": 7.8112
+          },
+          "EvoX": {
+            "score": 0.0776,
+            "cost": 7.8313
+          },
+          "SpecEvo": {
+            "score": 0.0774,
+            "cost": 1.6815
+          }
+        },
+        {
+          "task": "MinMax Distance (n=14, d=3)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.2240,
+            "cost": 6.6235
+          },
+          "GEPA": {
+            "score": 0.2270,
+            "cost": 8.4088
+          },
+          "AdaEvolve": {
+            "score": 0.2369,
+            "cost": 8.5852
+          },
+          "EvoX": {
+            "score": 0.2389,
+            "cost": 6.7826
+          },
+          "SpecEvo": {
+            "score": 0.2400,
+            "cost": 2.8216
+          }
+        },
+        {
+          "task": "signal processing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.5982,
+            "cost": 8.8996
+          },
+          "GEPA": {
+            "score": 0.5708,
+            "cost": 10.752
+          },
+          "AdaEvolve": {
+            "score": 0.7337,
+            "cost": 8.4392
+          },
+          "EvoX": {
+            "score": 0.6806,
+            "cost": 9.9108
+          },
+          "SpecEvo": {
+            "score": 0.7175,
+            "cost": 3.8830
+          }
+        }
+      ]
+    },
+    {
+      "seed_id": 2,
+      "results": [
+        {
+          "task": "Circle Packing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.5414,
+            "cost": 7.4216
+          },
+          "GEPA": {
+            "score": 2.5414,
+            "cost": 8.3565
+          },
+          "AdaEvolve": {
+            "score": 2.5414,
+            "cost": 9.0096
+          },
+          "EvoX": {
+            "score": 2.5414,
+            "cost": 7.3669
+          },
+          "SpecEvo": {
+            "score": 2.5562,
+            "cost": 4.3031
+          }
+        },
+        {
+          "task": "Circle Packing Rect",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.3540,
+            "cost": 8.0661
+          },
+          "GEPA": {
+            "score": 2.3267,
+            "cost": 4.5427
+          },
+          "AdaEvolve": {
+            "score": 2.2713,
+            "cost": 5.9386
+          },
+          "EvoX": {
+            "score": 2.3480,
+            "cost": 6.9358
+          },
+          "SpecEvo": {
+            "score": 2.3259,
+            "cost": 1.8623
+          }
+        },
+        {
+          "task": "heilbronn_convex",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0223,
+            "cost": 7.3330
+          },
+          "GEPA": {
+            "score": 0.0214,
+            "cost": 7.7738
+          },
+          "AdaEvolve": {
+            "score": 0.0218,
+            "cost": 8.5874
+          },
+          "EvoX": {
+            "score": 0.0271,
+            "cost": 9.0517
+          },
+          "SpecEvo": {
+            "score": 0.0301,
+            "cost": 1.4124
+          }
+        },
+        {
+          "task": "heilbronn_triangle",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0322,
+            "cost": 8.5182
+          },
+          "GEPA": {
+            "score": 0.0320,
+            "cost": 8.3746
+          },
+          "AdaEvolve": {
+            "score": 0.0290,
+            "cost": 8.4312
+          },
+          "EvoX": {
+            "score": 0.0322,
+            "cost": 10.0269
+          },
+          "SpecEvo": {
+            "score": 0.0328,
+            "cost": 1.4277
+          }
+        },
+        {
+          "task": "MinMax Distance (n=16, d=2)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0769,
+            "cost": 8.1418
+          },
+          "GEPA": {
+            "score": 0.0769,
+            "cost": 8.6321
+          },
+          "AdaEvolve": {
+            "score": 0.0769,
+            "cost": 7.8112
+          },
+          "EvoX": {
+            "score": 0.0776,
+            "cost": 7.8313
+          },
+          "SpecEvo": {
+            "score": 0.0774,
+            "cost": 1.6815
+          }
+        },
+        {
+          "task": "MinMax Distance (n=14, d=3)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.2240,
+            "cost": 6.6235
+          },
+          "GEPA": {
+            "score": 0.2270,
+            "cost": 8.4088
+          },
+          "AdaEvolve": {
+            "score": 0.2369,
+            "cost": 8.5852
+          },
+          "EvoX": {
+            "score": 0.2389,
+            "cost": 6.7826
+          },
+          "SpecEvo": {
+            "score": 0.2400,
+            "cost": 2.8216
+          }
+        },
+        {
+          "task": "signal processing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.5982,
+            "cost": 8.8996
+          },
+          "GEPA": {
+            "score": 0.5708,
+            "cost": 10.752
+          },
+          "AdaEvolve": {
+            "score": 0.7337,
+            "cost": 8.4392
+          },
+          "EvoX": {
+            "score": 0.6806,
+            "cost": 9.9108
+          },
+          "SpecEvo": {
+            "score": 0.7175,
+            "cost": 3.8830
+          }
+        }
+      ]
+    },
+    {
+      "seed_id": 3,
+      "results": [
+        {
+          "task": "Circle Packing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.5414,
+            "cost": 8.1094
+          },
+          "GEPA": {
+            "score": 2.5240,
+            "cost": 8.5237
+          },
+          "AdaEvolve": {
+            "score": 2.6061,
+            "cost": 8.4721
+          },
+          "EvoX": {
+            "score": 2.4808,
+            "cost": 8.2327
+          },
+          "SpecEvo": {
+            "score": 2.6272,
+            "cost": 1.5073
+          }
+        },
+        {
+          "task": "Circle Packing Rect",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 2.3163,
+            "cost": 9.8134
+          },
+          "GEPA": {
+            "score": 2.2852,
+            "cost": 6.5190
+          },
+          "AdaEvolve": {
+            "score": 2.3447,
+            "cost": 8.1753
+          },
+          "EvoX": {
+            "score": 2.3596,
+            "cost": 8.1220
+          },
+          "SpecEvo": {
+            "score": 2.3626,
+            "cost": 4.0994
+          }
+        },
+        {
+          "task": "heilbronn_convex",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0223,
+            "cost": 11.6245
+          },
+          "GEPA": {
+            "score": 0.0288,
+            "cost": 9.5738
+          },
+          "AdaEvolve": {
+            "score": 0.0234,
+            "cost": 8.6866
+          },
+          "EvoX": {
+            "score": 0.0274,
+            "cost": 9.4314
+          },
+          "SpecEvo": {
+            "score": 0.0298,
+            "cost": 2.0219
+          }
+        },
+        {
+          "task": "heilbronn_triangle",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0361,
+            "cost": 8.5446
+          },
+          "GEPA": {
+            "score": 0.0317,
+            "cost": 11.3371
+          },
+          "AdaEvolve": {
+            "score": 0.0295,
+            "cost": 9.9287
+          },
+          "EvoX": {
+            "score": 0.0337,
+            "cost": 7.2926
+          },
+          "SpecEvo": {
+            "score": 0.0361,
+            "cost": 1.1077
+          }
+        },
+        {
+          "task": "MinMax Distance (n=16, d=2)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.0769,
+            "cost": 8.6347
+          },
+          "GEPA": {
+            "score": 0.0769,
+            "cost": 6.1959
+          },
+          "AdaEvolve": {
+            "score": 0.0772,
+            "cost": 8.2558
+          },
+          "EvoX": {
+            "score": 0.0776,
+            "cost": 8.7980
+          },
+          "SpecEvo": {
+            "score": 0.0776,
+            "cost": 1.5806
+          }
+        },
+        {
+          "task": "MinMax Distance (n=14, d=3)",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.2381,
+            "cost": 8.1190
+          },
+          "GEPA": {
+            "score": 0.2240,
+            "cost": 7.4516
+          },
+          "AdaEvolve": {
+            "score": 0.2324,
+            "cost": 8.5647
+          },
+          "EvoX": {
+            "score": 0.2390,
+            "cost": 7.9468
+          },
+          "SpecEvo": {
+            "score": 0.2398,
+            "cost": 1.3329
+          }
+        },
+        {
+          "task": "signal processing",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.5897,
+            "cost": 7.7906
+          },
+          "GEPA": {
+            "score": 0.6363,
+            "cost": 7.7180
+          },
+          "AdaEvolve": {
+            "score": 0.7316,
+            "cost": 6.8654
+          },
+          "EvoX": {
+            "score": 0.7031,
+            "cost": 6.352
+          },
+          "SpecEvo": {
+            "score": 0.6970,
+            "cost": 3.8694
+          }
+        }
+      ]
+    }
+  ],
+  "summary_statistics": {
+    "total_runs": 3,
+    "total_tasks": 7,
+    "total_methods": 5,
+    "metrics": ["score", "cost"],
+    "note": "All tasks use maximize optimization (↑). Scores represent performance (higher is better), costs represent computational expense. Seed 1 and Seed 2 have identical results."
+  }
+}

@@ -1,0 +1,324 @@
+{
+  "dataset": "System Engineering Task",
+  "model": "KIMI K2",
+  "description": "Results from 3 different seed runs comparing 5 methods: OpenEvolve, GEPA, AdaEvolve, EvoX, and SpecEvo",
+  "methods": ["OpenEvolve", "GEPA", "AdaEvolve", "EvoX", "SpecEvo"],
+  "tasks": [
+    "EPLB",
+    "LLM-SQL",
+    "Transaction",
+    "PRISM"
+  ],
+  "seeds": [
+    {
+      "seed_id": 1,
+      "results": [
+        {
+          "task": "EPLB",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.1276,
+            "cost": 2.1364
+          },
+          "GEPA": {
+            "score": 0.1297,
+            "cost": 2.1968
+          },
+          "AdaEvolve": {
+            "score": 0.1278,
+            "cost": 2.0838
+          },
+          "EvoX": {
+            "score": 0.1283,
+            "cost": 2.2110
+          },
+          "SpecEvo": {
+            "score": 0.1465,
+            "cost": 0.8071
+          }
+        },
+        {
+          "task": "LLM-SQL",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.7010,
+            "cost": 1.5864
+          },
+          "GEPA": {
+            "score": 0.7050,
+            "cost": 1.5393
+          },
+          "AdaEvolve": {
+            "score": 0.7139,
+            "cost": 1.4496
+          },
+          "EvoX": {
+            "score": 0.7181,
+            "cost": 1.7851
+          },
+          "SpecEvo": {
+            "score": 0.7201,
+            "cost": 0.5462
+          }
+        },
+        {
+          "task": "Transaction",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 4237.2,
+            "cost": 0.9490
+          },
+          "GEPA": {
+            "score": 3891.0,
+            "cost": 0.7102
+          },
+          "AdaEvolve": {
+            "score": 3663.0,
+            "cost": 0.9330
+          },
+          "EvoX": {
+            "score": 3610.1,
+            "cost": 0.9224
+          },
+          "SpecEvo": {
+            "score": 4255.3,
+            "cost": 0.3651
+          }
+        },
+        {
+          "task": "PRISM",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 23.037,
+            "cost": 2.2502
+          },
+          "GEPA": {
+            "score": 22.420,
+            "cost": 1.5452
+          },
+          "AdaEvolve": {
+            "score": 26.221,
+            "cost": 2.0426
+          },
+          "EvoX": {
+            "score": 24.021,
+            "cost": 2.2580
+          },
+          "SpecEvo": {
+            "score": 26.256,
+            "cost": 0.6521
+          }
+        }
+      ]
+    },
+    {
+      "seed_id": 2,
+      "results": [
+        {
+          "task": "EPLB",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.1289,
+            "cost": 2.6126
+          },
+          "GEPA": {
+            "score": 0.1285,
+            "cost": 1.6409
+          },
+          "AdaEvolve": {
+            "score": 0.1285,
+            "cost": 1.9614
+          },
+          "EvoX": {
+            "score": 0.1278,
+            "cost": 2.3013
+          },
+          "SpecEvo": {
+            "score": 0.1470,
+            "cost": 1.1998
+          }
+        },
+        {
+          "task": "LLM-SQL",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.7012,
+            "cost": 1.6871
+          },
+          "GEPA": {
+            "score": 0.7007,
+            "cost": 1.5154
+          },
+          "AdaEvolve": {
+            "score": 0.6754,
+            "cost": 1.9836
+          },
+          "EvoX": {
+            "score": 0.6875,
+            "cost": 1.8992
+          },
+          "SpecEvo": {
+            "score": 0.6891,
+            "cost": 0.5122
+          }
+        },
+        {
+          "task": "Transaction",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 3546.0,
+            "cost": 0.7262
+          },
+          "GEPA": {
+            "score": 3649.6,
+            "cost": 1.2656
+          },
+          "AdaEvolve": {
+            "score": 3984.0,
+            "cost": 1.1261
+          },
+          "EvoX": {
+            "score": 3759.3,
+            "cost": 1.4925
+          },
+          "SpecEvo": {
+            "score": 4237.2,
+            "cost": 0.2134
+          }
+        },
+        {
+          "task": "PRISM",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 24.498,
+            "cost": 1.7226
+          },
+          "GEPA": {
+            "score": 24.120,
+            "cost": 1.7552
+          },
+          "AdaEvolve": {
+            "score": 26.249,
+            "cost": 1.7908
+          },
+          "EvoX": {
+            "score": 26.054,
+            "cost": 2.0623
+          },
+          "SpecEvo": {
+            "score": 26.256,
+            "cost": 0.6482
+          }
+        }
+      ]
+    },
+    {
+      "seed_id": 3,
+      "results": [
+        {
+          "task": "EPLB",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.1453,
+            "cost": 1.9959
+          },
+          "GEPA": {
+            "score": 0.1279,
+            "cost": 1.7885
+          },
+          "AdaEvolve": {
+            "score": 0.1373,
+            "cost": 2.0749
+          },
+          "EvoX": {
+            "score": 0.1451,
+            "cost": 2.2022
+          },
+          "SpecEvo": {
+            "score": 0.1458,
+            "cost": 0.9554
+          }
+        },
+        {
+          "task": "LLM-SQL",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 0.6917,
+            "cost": 1.6318
+          },
+          "GEPA": {
+            "score": 0.7071,
+            "cost": 1.5967
+          },
+          "AdaEvolve": {
+            "score": 0.7094,
+            "cost": 1.7702
+          },
+          "EvoX": {
+            "score": 0.7057,
+            "cost": 1.6391
+          },
+          "SpecEvo": {
+            "score": 0.7010,
+            "cost": 0.5262
+          }
+        },
+        {
+          "task": "Transaction",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 4115.2,
+            "cost": 1.0172
+          },
+          "GEPA": {
+            "score": 3703.7,
+            "cost": 1.0822
+          },
+          "AdaEvolve": {
+            "score": 3636.3,
+            "cost": 1.3936
+          },
+          "EvoX": {
+            "score": 3472.2,
+            "cost": 1.0172
+          },
+          "SpecEvo": {
+            "score": 3937.0,
+            "cost": 0.5964
+          }
+        },
+        {
+          "task": "PRISM",
+          "optimization": "maximize",
+          "OpenEvolve": {
+            "score": 22.794,
+            "cost": 1.9415
+          },
+          "GEPA": {
+            "score": 22.608,
+            "cost": 1.7549
+          },
+          "AdaEvolve": {
+            "score": 26.256,
+            "cost": 2.0399
+          },
+          "EvoX": {
+            "score": 26.233,
+            "cost": 2.1703
+          },
+          "SpecEvo": {
+            "score": 26.125,
+            "cost": 0.6532
+          }
+        }
+      ]
+    }
+  ],
+  "summary_statistics": {
+    "total_runs": 3,
+    "total_tasks": 4,
+    "total_methods": 5,
+    "metrics": ["score", "cost"],
+    "note": "All tasks use maximize optimization (↑). Scores represent performance (higher is better), costs represent computational expense. Note: Seed 1 uses 'Best' metric label in original table while Seeds 2-3 use 'Score', but all represent the same performance metric."
+  }
+}

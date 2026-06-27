@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -55,13 +56,8 @@ __all__ = [
     "build_init_variant_prompt",
     "build_paradigm_variant_prompt",
     "build_meta_advice_prompt",
-    "classify_error",
+    "error_signature",
 ]
-
-
-def classify_error(msg: str) -> str:
-    """Public wrapper around :func:`_classify_error`. See module docs."""
-    return _classify_error(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -344,10 +340,9 @@ Score: {parent_score:.4f}
 {meta_advice_block}\
 ## Your task
 
-Read the analysis above and choose exactly **ONE** suggested change —
-the one most likely to improve the score on this problem. Do not invent
-a new direction; select from the existing analysis and implement it
-cleanly.
+Read the analysis above and choose exactly ONE suggested change — the one
+most likely to improve the score on this problem. Do not invent a new
+direction; select from the existing analysis and implement it cleanly.
 
 First, write a short ``## Analysis`` section with exactly three
 sub-sections:
@@ -359,11 +354,10 @@ sub-sections:
 3. **What stays unchanged.** List the main routines, constants, or
    control-flow blocks that will remain unchanged.
 
-Then write the complete improved program. Make exactly **ONE** structural
-change. Do not rewrite the algorithm, add unrelated improvements, retune
-unrelated constants, rename variables, reformat code, or change only the
-random seed. The rest of the parent is assumed to be working and should
-remain stable.
+Then write the complete improved program. Make exactly ONE structural change.
+Do not rewrite the algorithm, add unrelated improvements, retune unrelated
+constants, rename variables, reformat code, or change only the random seed.
+The rest of the parent is assumed to be working and should remain stable.
 
 ### Critical requirements
 1. Function signature MUST match exactly: `{function_signature}`
@@ -814,18 +808,20 @@ def build_init_variant_prompt(
 
 
 # ---------------------------------------------------------------------------
-# Meta-advisor
+# Meta-advisor ("Advisor")
 #
-# The advisor periodically writes a short prescriptive note that future
-# mutation prompts include verbatim. The prompt is split into three
-# sections by design (What's working / What to try next / What to avoid)
-# because earlier versions that only fed in raw failure messages produced
-# defensive-only output ("avoid X", "clamp Y") and never told the model
-# which existing approach to amplify. By forcing a "what's working"
-# bucket and feeding in (a) descriptions of the top archived programs,
-# (b) recent admits with their parent-delta and source operator, and
-# (c) a small typed error taxonomy, the advisor sees both success and
-# failure signal and can issue actionable forward-looking guidance.
+# The Advisor periodically writes a short prescriptive note that future
+# mutation prompts include verbatim. Credit is assigned by **behavioural
+# niche (archive cell)**, never by which prompt-template produced a program:
+# the template is a uniform random draw and carries no actionable signal.
+# Each cycle the Advisor reads, per niche — LEADING (top-score incumbents),
+# IMPROVING (niches whose cell incumbent advanced this window: what just
+# paid off), SATURATED (niches still attracting attempts but whose frontier
+# has not moved: mined out), UNDER-EXPLORED (occupied niches with few recent
+# attempts) — plus an *accumulated* failure-knowledge base (every error seen
+# so far, grouped by a domain-agnostic signature and counted by recurrence)
+# that feeds AVOID. There is no score-delta threshold: "improving vs
+# saturated" is decided purely by whether a niche's frontier moved.
 # ---------------------------------------------------------------------------
 
 
@@ -836,10 +832,10 @@ You are reviewing the search trajectory on this optimisation problem and
 writing a short prescriptive note that the mutation model will read
 verbatim before SOME future attempts (roughly one in three). Your job is
 NOT to restate the problem or repeat constraints the grader already
-enforces — it is to amplify what is working, name strategy families
-that have *saturated* (admit but no longer improve), point at the next
-concrete thing to try, and call out anti-patterns that are actually
-costing evaluations.
+enforces — it is to amplify what is working, name behavioural niches that
+have *saturated* (still attract attempts but no longer improve), point at
+the next concrete thing to try, and call out failure modes that are
+actually costing evaluations.
 
 ## Problem
 {problem_description}
@@ -855,17 +851,20 @@ costing evaluations.
 - Accept rate (last window): {accept_rate}
 - Stagnation level: {stagnation_level} (0=fresh, 1=plateaued)
 
-## Top archived programs (descriptions only — these are the leaders)
-{top_descriptions_block}
+## Leaders — current niche champions (description + score)
+{leaders_block}
 
-## Recent admits, IMPROVING (Δ vs parent > 0; what is actually paying off)
-{improving_admits_block}
+## IMPROVING niches — frontier advanced this window (what is actually paying off)
+{improving_block}
 
-## Recent admits, SATURATED (Δ vs parent ≈ 0; same family, no progress)
-{saturated_admits_block}
+## SATURATED niches — many recent attempts but frontier stuck (mined out)
+{saturated_block}
 
-## Recent failure taxonomy (errors grouped by type, this window)
-{error_taxonomy_block}
+## Under-explored niches — few recent attempts (room to push)
+{under_explored_block}
+
+## Accumulated failure knowledge — every error seen so far, by recurrence
+{error_knowledge_block}
 
 ## Previous advice (carried over so you can refine, not repeat)
 {previous_advice_block}
@@ -874,26 +873,26 @@ costing evaluations.
 Write the new advice block using EXACTLY these four short sections, in
 this order, with these literal headers and no other markdown:
 
-WORKING: <1-2 sentences naming the concrete approach / structure / trick
-that the IMPROVING admits and leaders share. Cite the operator
-(mutate_focused_fix, crossover_component_swap, …) when one is clearly
-dominating improving admits. If nothing is clearly working yet, say so
-plainly.>
+WORKING: <1-2 sentences naming the concrete approach / structure / mechanism
+that the IMPROVING niches and leaders share — read their descriptions and
+describe the algorithm itself, not any meta-process. If nothing is clearly
+working yet, say so plainly.>
 
-SATURATED: <1-2 sentences naming any strategy family / operator that is
-producing admits but no longer producing IMPROVEMENT — i.e. the
-SATURATED admits list above. Future prompts should de-emphasise this
-direction. If no clear saturation, write "none".>
+SATURATED: <1-2 sentences naming any behavioural niche / strategy family
+that keeps attracting attempts but no longer improves — i.e. the SATURATED
+niches above. Future prompts should de-emphasise this direction. If no
+clear saturation, write "none".>
 
 TRY NEXT: <2-3 short imperative suggestions, ordered by priority. Be
 code-shaped (mention specific data structures, algorithms, numerical
-ranges, library calls). Build on WORKING and EXPLICITLY move away from
-SATURATED — do NOT propose more of the same.>
+ranges, library calls). Build on WORKING, push into the under-explored
+niches, and EXPLICITLY move away from SATURATED — do NOT propose more of
+the same.>
 
-AVOID: <1-2 anti-patterns that have actually shown up in this window's
-failures, referencing the taxonomy. Skip generic defensive advice
+AVOID: <1-2 anti-patterns drawn from the accumulated failure knowledge
+above, prioritising the most recurrent ones. Skip generic defensive advice
 (constraint checks that the grader already enforces, type validations,
-etc.) unless they appear repeatedly here.>
+etc.) unless they recur heavily here.>
 
 Total length: under 140 words. No preamble. No extra headers. No bullet
 characters — write each section as a single short paragraph after its
@@ -901,129 +900,68 @@ header.
 """
 
 
-_ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("timeout", ("timeout", "exceeded", "timed out")),
-    ("syntax", ("syntaxerror", "invalid syntax", "invalid character", "unexpected eof")),
-    ("constraint", ("overlap", "not contained", "negative radius", "infeasible", "violat")),
-    ("shape_mismatch", ("broadcast", "shape", "dimension", "size mismatch", "too many indices", "at least 2-d")),
-    ("numpy_api", ("minimum() takes", "minimum() got", "unexpected keyword", "positional argument", "ufunc")),
-    ("name_or_attr", ("not defined", "has no attribute", "is not associated", "nonetype")),
-    ("type_error", ("unsupported operand", "must be", "expected", "argument", "cannot")),
-)
+def error_signature(msg: str) -> str:
+    """Domain-agnostic recurrence key for an error message.
 
-
-def _classify_error(msg: str) -> str:
-    low = msg.lower()
-    for label, keys in _ERROR_PATTERNS:
-        for k in keys:
-            if k in low:
-                return label
-    return "other"
-
-
-def _error_taxonomy_block(errors_by_source: Sequence[tuple[str, str]]) -> str:
-    """Group errors into (kind, source) buckets with counts + one example.
-
-    ``errors_by_source`` is a sequence of ``(source, error_message)`` tuples
-    from the current window. We aggregate counts per error kind and remember
-    the most-recent message of each kind as the human-readable example.
+    Lower-cases, strips digits and punctuation, collapses whitespace and
+    keeps the leading words, so that e.g. ``"Overlap between circles 0 and
+    2"`` and ``"Overlap between circles 3 and 5"`` map to the same signature
+    and are counted as one recurring failure mode. There is no hard-coded,
+    benchmark-specific keyword table — the recurring text *is* the taxonomy,
+    which keeps the Advisor portable across problems.
     """
-    if not errors_by_source:
-        return "(no failures in this window)"
-    buckets: dict[str, dict[str, object]] = {}
-    for src, msg in errors_by_source:
-        kind = _classify_error(msg or "")
-        b = buckets.setdefault(kind, {"count": 0, "sources": {}, "example": ""})
-        b["count"] = int(b["count"]) + 1
-        srcs = b["sources"]
-        assert isinstance(srcs, dict)
-        srcs[src] = int(srcs.get(src, 0)) + 1
-        clean = (msg or "").strip().replace("\n", " ")
-        if len(clean) > 160:
-            clean = clean[:160].rstrip() + "…"
-        b["example"] = clean
-    rows = sorted(buckets.items(), key=lambda kv: -int(kv[1]["count"]))
-    lines: list[str] = []
-    for kind, b in rows:
-        srcs = b["sources"]
-        assert isinstance(srcs, dict)
-        src_str = ", ".join(f"{s}×{c}" for s, c in sorted(srcs.items(), key=lambda kv: -kv[1]))
-        lines.append(f"- {kind} ×{b['count']}  [{src_str}]  e.g.: {b['example']}")
-    return "\n".join(lines)
+    s = (msg or "").lower().strip()
+    s = re.sub(r"[0-9]+(\.[0-9]+)?", "", s)   # drop numbers (indices, sizes)
+    s = re.sub(r"[^a-z\s]", " ", s)            # drop punctuation
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return "unknown error"
+    return " ".join(s.split()[:8])
 
 
-def _top_descriptions_block(top_descriptions: Sequence[tuple[str, float]]) -> str:
-    """Render top-K archived programs by score, descriptions only."""
-    if not top_descriptions:
-        return "(archive empty)"
+def _niche_block(
+    niches: Sequence[tuple[str, float]], empty: str = "(none in this window)"
+) -> str:
+    """Render ``[(description, score), ...]`` niches, one per line."""
+    if not niches:
+        return empty
     parts: list[str] = []
-    for i, (desc, score) in enumerate(top_descriptions, start=1):
+    for desc, score in niches:
         d = (desc or "").strip().replace("\n", " ")
         if len(d) > 280:
             d = d[:280].rstrip() + "…"
-        parts.append(f"{i}. (score={score:.4f}) {d}")
+        parts.append(f"- (score={score:.4f}) {d}")
     return "\n".join(parts)
 
 
-# Δ-vs-parent values whose absolute magnitude falls inside this tolerance
-# are treated as "saturated" — the operator admitted (i.e. beat its
-# cell's incumbent in at least the secondary archive sense) but did not
-# meaningfully improve over its own parent. We deliberately use an
-# absolute, score-scale tolerance rather than a relative one so this
-# threshold is interpretable across benchmarks. 1e-3 is small enough to
-# rule out actual breakthroughs on the benchmarks we care about (circle
-# packing deltas at the breakthroughs were ≥ 0.01) while still catching
-# the long tails of "+0.0001" admits that signal a family is mined out.
-_SATURATED_DELTA_TOL: float = 1e-3
-
-
-def _split_admits_by_progress(
-    recent_admits: Sequence[tuple[str, float, float | None]],
-) -> tuple[
-    list[tuple[str, float, float | None]],
-    list[tuple[str, float, float | None]],
-]:
-    """Partition admits into (improving, saturated) lists.
-
-    Improving := Δ vs parent > _SATURATED_DELTA_TOL.
-    Saturated := Δ vs parent is finite AND |Δ| ≤ _SATURATED_DELTA_TOL.
-    Admits with Δ = None (no parent score / non-finite parent score)
-    fall into ``improving`` — we cannot judge them and would rather
-    over-report progress than over-report saturation.
-    """
-    improving: list[tuple[str, float, float | None]] = []
-    saturated: list[tuple[str, float, float | None]] = []
-    for src, score, delta in recent_admits:
-        if delta is None or not math.isfinite(delta):
-            improving.append((src, score, delta))
-            continue
-        if abs(delta) <= _SATURATED_DELTA_TOL:
-            saturated.append((src, score, delta))
-        elif delta > 0:
-            improving.append((src, score, delta))
-        else:
-            # delta < -tol: the admit was a regression (cell-replace
-            # case). Treat as saturated for the advisor's purposes —
-            # the family is producing accepted-but-not-better moves.
-            saturated.append((src, score, delta))
-    return improving, saturated
-
-
-def _recent_admits_block(
-    recent_admits: Sequence[tuple[str, float, float | None]],
-) -> str:
-    """Render recent admits as ``source | score | Δ vs parent``."""
-    if not recent_admits:
-        return "(none in this window)"
+def _saturated_block(niches: Sequence[tuple[str, float, int]]) -> str:
+    """Render busy-but-stale niches with their recent-attempt count."""
+    if not niches:
+        return "(none — no niche is both stuck and busy)"
     parts: list[str] = []
-    for source, score, delta in recent_admits:
-        if delta is None or not math.isfinite(delta):
-            delta_str = "Δ=n/a"
-        else:
-            sign = "+" if delta >= 0 else ""
-            delta_str = f"Δ={sign}{delta:.4f}"
-        parts.append(f"- {source:<26}  score={score:.4f}  {delta_str}")
+    for desc, score, attempts in niches:
+        d = (desc or "").strip().replace("\n", " ")
+        if len(d) > 240:
+            d = d[:240].rstrip() + "…"
+        parts.append(f"- ({attempts} recent attempts, score={score:.4f}) {d}")
     return "\n".join(parts)
+
+
+def _error_knowledge_block(error_knowledge: Sequence[tuple[str, int, str]]) -> str:
+    """Render the accumulated failure knowledge, most-recurrent first.
+
+    ``error_knowledge`` is ``[(signature, count, example_message), ...]``
+    accumulated across the *whole* run (not just the current window)."""
+    if not error_knowledge:
+        return "(no failures recorded yet)"
+    rows = sorted(error_knowledge, key=lambda t: -t[1])[:8]
+    lines: list[str] = []
+    for _sig, count, example in rows:
+        clean = (example or "").strip().replace("\n", " ")
+        if len(clean) > 160:
+            clean = clean[:160].rstrip() + "…"
+        lines.append(f"- ×{count}  {clean}")
+    return "\n".join(lines)
 
 
 def build_meta_advice_prompt(
@@ -1034,19 +972,25 @@ def build_meta_advice_prompt(
     n_evaluations: int,
     accept_rate: float,
     stagnation_level: float,
-    top_descriptions: Sequence[tuple[str, float]] = (),
-    recent_admits: Sequence[tuple[str, float, float | None]] = (),
-    errors_by_source: Sequence[tuple[str, str]] = (),
+    leaders: Sequence[tuple[str, float]] = (),
+    improving: Sequence[tuple[str, float]] = (),
+    saturated: Sequence[tuple[str, float, int]] = (),
+    under_explored: Sequence[tuple[str, float]] = (),
+    error_knowledge: Sequence[tuple[str, int, str]] = (),
     previous_advice: str | None = None,
 ) -> str:
-    """Build the advisor prompt.
+    """Build the Advisor prompt from region-based trajectory signals.
 
-    ``top_descriptions``  -- ``[(description, score), ...]`` for the top-K
-                              archived programs (typically K=3).
-    ``recent_admits``     -- ``[(source, score, delta_vs_parent or None),
-                              ...]`` for the last few admits in this window.
-    ``errors_by_source``  -- ``[(source, error_message), ...]`` from this
-                              window; will be classified and aggregated.
+    ``leaders``        -- ``[(description, score), ...]`` top niche champions.
+    ``improving``      -- ``[(description, score), ...]`` niches whose frontier
+                          (cell incumbent) advanced in the current window.
+    ``saturated``      -- ``[(description, score, n_recent_attempts), ...]``
+                          niches that keep attracting attempts but whose
+                          frontier has not moved.
+    ``under_explored`` -- ``[(description, score), ...]`` occupied niches with
+                          the fewest recent attempts.
+    ``error_knowledge``-- ``[(signature, count, example), ...]`` accumulated
+                          across the whole run; rendered most-recurrent first.
     """
     if best_score == float("-inf") or not math.isfinite(best_score):
         best_score_str = "n/a"
@@ -1054,7 +998,6 @@ def build_meta_advice_prompt(
         best_score_str = f"{best_score:.4f}"
     previous = (previous_advice or "").strip()
     previous_block = previous if previous else "(none yet — this is the first cycle)"
-    improving, saturated = _split_admits_by_progress(recent_admits)
     return META_ADVICE_PROMPT.format(
         problem_description=problem_description,
         function_signature=function_signature,
@@ -1062,10 +1005,11 @@ def build_meta_advice_prompt(
         n_evaluations=n_evaluations,
         accept_rate=f"{accept_rate:.2f}",
         stagnation_level=f"{stagnation_level:.2f}",
-        top_descriptions_block=_top_descriptions_block(top_descriptions),
-        improving_admits_block=_recent_admits_block(improving),
-        saturated_admits_block=_recent_admits_block(saturated),
-        error_taxonomy_block=_error_taxonomy_block(errors_by_source),
+        leaders_block=_niche_block(leaders, empty="(archive empty)"),
+        improving_block=_niche_block(improving),
+        saturated_block=_saturated_block(saturated),
+        under_explored_block=_niche_block(under_explored),
+        error_knowledge_block=_error_knowledge_block(error_knowledge),
         previous_advice_block=previous_block,
     )
 
@@ -1099,8 +1043,11 @@ def build_paradigm_variant_prompt(
 #                  deep tuning of the current champion.
 #
 # The orchestrator picks the mode based on stagnation level (low →
-# synthesis, mid → shift, high → surgical) and supplies the right
-# number of anchors.
+# synthesis, mid → surgical, high → shift) and supplies the right
+# number of anchors. See ``BladeConfig.paradigm_*_max_stagnation`` and
+# ``BladeOrchestrator._pick_paradigm_mode`` for the authoritative routing:
+# deepest stagnation routes to ``shift`` (a genuinely new paradigm is the
+# most reliable way out of a plateau), the mid band to ``surgical``.
 
 
 SYNTHESIS_PROMPT = """\

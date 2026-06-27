@@ -1,28 +1,29 @@
-"""Tests for the BLADE meta-advisor prompt + error taxonomy.
+"""Tests for the BLADE meta-advisor ("Advisor") prompt + error signatures.
 
-The meta-advisor receives, on each trigger:
+The Advisor assigns credit by **behavioural niche (archive cell)**, never by
+which prompt-template produced a program. On each trigger it receives:
 
-* The top-K archived programs (descriptions + scores).
-* Recent admits as ``(source, score, delta_vs_parent)`` triples,
-  internally split into IMPROVING (Δ > tol) and SATURATED (|Δ| ≤ tol
-  or Δ < -tol) buckets so the advisor can name a stuck strategy
-  family.
-* A typed taxonomy of recent errors grouped by ``classify_error``.
+* LEADING niches — the top-score cell incumbents (description + score).
+* IMPROVING niches — cells whose frontier advanced in the current window.
+* SATURATED niches — cells that keep attracting attempts but whose frontier
+  has not moved, with their recent-attempt count.
+* UNDER-EXPLORED niches — occupied cells with few recent attempts.
+* An *accumulated* failure-knowledge base: every error seen so far, grouped
+  by a domain-agnostic :func:`error_signature` and counted by recurrence.
 
-These tests pin (a) that all signal streams flow through the prompt
-verbatim, (b) that the four-section ``WORKING / SATURATED / TRY NEXT /
-AVOID`` contract is announced to the model, (c) that the error
-classifier maps real-world failure messages to the right buckets,
-(d) that ``errors_only`` ablation parity is achievable by passing
-empty success-side sequences, and (e) that the improving/saturated
-split correctly routes admits by score delta.
+These tests pin (a) that all signal streams flow through the prompt verbatim,
+(b) that the four-section ``WORKING / SATURATED / TRY NEXT / AVOID`` contract
+is announced in order, (c) that ``error_signature`` collapses the same failure
+with different numbers into one key, (d) that ``errors_only`` ablation parity
+is achievable by passing empty success-side sequences, and (e) that long
+descriptions / error examples are truncated.
 """
 
 from __future__ import annotations
 
 from levi.blade.prompts import (
     build_meta_advice_prompt,
-    classify_error,
+    error_signature,
 )
 
 
@@ -31,48 +32,31 @@ SIGNATURE = "def solve(x): ..."
 
 
 # ---------------------------------------------------------------------------
-# Error classifier
+# Error signature (domain-agnostic recurrence key)
 # ---------------------------------------------------------------------------
 
 
-def test_classify_error_buckets_real_world_messages() -> None:
-    """Every message below was observed in the production run log; the
-    classifier must route each to its intended bucket so the advisor's
-    taxonomy is meaningful."""
-    cases: list[tuple[str, str]] = [
-        # constraint
-        ("Overlap between circles 0 and 2", "constraint"),
-        ("Circles are not contained inside a rectangle of perimeter 4", "constraint"),
-        ("Negative radius for circle 3", "constraint"),
-        # shape mismatch
-        ("operands could not be broadcast together with shapes (21,) (21,2)", "shape_mismatch"),
-        ("array must be at least 2-d", "shape_mismatch"),
-        ("too many indices for array: array is 2-dimensional, but 3 were indexed", "shape_mismatch"),
-        # numpy api
-        ("minimum() takes from 2 to 3 positional arguments but 4 were given", "numpy_api"),
-        ("minimum() got an unexpected keyword argument 'initial'", "numpy_api"),
-        # name / attr
-        ("cannot access local variable 'ys' where it is not associated with a value", "name_or_attr"),
-        ("'NoneType' object is not subscriptable", "name_or_attr"),
-        # type error
-        ("unsupported operand type(s) for -: 'float' and 'list'", "type_error"),
-        ("too many values to unpack (expected 3)", "type_error"),
-        # syntax
-        ("Syntax error: invalid character '×' (U+00D7)", "syntax"),
-        # timeout
-        ("executor error: Process exceeded 600.0s timeout", "timeout"),
-    ]
-    misses: list[tuple[str, str, str]] = []
-    for msg, expected in cases:
-        got = classify_error(msg)
-        if got != expected:
-            misses.append((msg, expected, got))
-    assert not misses, f"Misclassified: {misses}"
+def test_error_signature_collapses_same_failure_with_different_numbers() -> None:
+    """The same failure mode with different indices/sizes must map to one
+    signature so it aggregates into a single counted entry."""
+    a = error_signature("Overlap between circles 0 and 2")
+    b = error_signature("Overlap between circles 3 and 5")
+    assert a == b
+    # And a structurally different failure must NOT collide with it.
+    c = error_signature("operands could not be broadcast together with shapes (21,) (21,2)")
+    assert c != a
 
 
-def test_classify_error_fallback() -> None:
-    assert classify_error("") == "other"
-    assert classify_error("totally unrelated gibberish kw9zXZ") == "other"
+def test_error_signature_handles_empty_and_numeric_only() -> None:
+    assert error_signature("") == "unknown error"
+    # A message that is only digits/punctuation reduces to the empty key.
+    assert error_signature("12345 -- 67.8") == "unknown error"
+
+
+def test_error_signature_is_bounded() -> None:
+    """Signatures keep only the leading words so they stay compact keys."""
+    sig = error_signature("alpha beta gamma delta epsilon zeta eta theta iota kappa")
+    assert len(sig.split()) <= 8
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +65,9 @@ def test_classify_error_fallback() -> None:
 
 
 def test_prompt_announces_four_section_contract() -> None:
-    """The model must be told to emit WORKING / SATURATED / TRY NEXT /
-    AVOID — this is the structural contract the orchestrator later
-    parses and the operators consume verbatim. The SATURATED bucket
-    (added to mirror SeaEvo's notion of mined-out strategy families)
-    lets the advisor explicitly name a direction that keeps producing
-    admits but no longer makes progress."""
+    """The model must be told to emit WORKING / SATURATED / TRY NEXT / AVOID
+    in that order — this is the structural contract the operators consume
+    verbatim."""
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
         function_signature=SIGNATURE,
@@ -94,25 +75,30 @@ def test_prompt_announces_four_section_contract() -> None:
         n_evaluations=100,
         accept_rate=0.4,
         stagnation_level=0.2,
-        top_descriptions=[("hex lattice", 1.23)],
-        recent_admits=[("mutate_focused_fix", 1.23, 0.05)],
-        errors_by_source=[("mutate_general", "Overlap between circles 0 and 2")],
+        leaders=[("hex lattice", 1.23)],
+        improving=[("hex lattice", 1.23)],
+        saturated=[],
+        under_explored=[],
+        error_knowledge=[("overlap between circles and", 2, "Overlap between circles 0 and 2")],
         previous_advice=None,
     )
     assert "WORKING:" in p
     assert "SATURATED:" in p
     assert "TRY NEXT:" in p
     assert "AVOID:" in p
-    # Order matters: WORKING < SATURATED < TRY NEXT < AVOID.
     assert (
         p.index("WORKING:")
         < p.index("SATURATED:")
         < p.index("TRY NEXT:")
         < p.index("AVOID:")
     )
+    # Credit is by niche, not by template: the prompt must not solicit
+    # operator names or a score-delta threshold.
+    assert "Cite the operator" not in p
+    assert "mutate_focused_fix" not in p
 
 
-def test_prompt_includes_all_signal_streams() -> None:
+def test_prompt_includes_all_region_signal_streams() -> None:
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
         function_signature=SIGNATURE,
@@ -120,64 +106,50 @@ def test_prompt_includes_all_signal_streams() -> None:
         n_evaluations=200,
         accept_rate=0.3,
         stagnation_level=0.6,
-        top_descriptions=[
+        leaders=[
             ("hexagonal lattice with Adam relaxation", 2.50),
             ("simulated annealing with aspect-ratio sweeps", 2.45),
         ],
-        recent_admits=[
-            ("mutate_focused_fix", 2.50, 0.02),
-            ("crossover_component_swap", 2.45, -0.01),
-            ("mutate_targeted", 2.40, None),
+        improving=[("greedy insertion then local polish", 2.50)],
+        saturated=[("pure gradient descent on coordinates", 2.40, 7)],
+        under_explored=[("power-diagram packing", 2.10)],
+        error_knowledge=[
+            ("overlap between circles and", 20, "Overlap between circles 1 and 2"),
+            ("operands could not be broadcast", 3, "operands could not be broadcast together with shapes (21,) (21,2)"),
         ],
-        errors_by_source=[
-            ("mutate_general", "Overlap between circles 1 and 2"),
-            ("mutate_general", "Overlap between circles 3 and 5"),
-            ("repair", "operands could not be broadcast together with shapes (21,) (21,2)"),
-        ],
-        previous_advice="prior wisdom about constraints",
+        previous_advice="prior wisdom about relaxation",
     )
-    # Top descriptions appear verbatim with score.
+    # Leaders flow through with score formatting.
     assert "hexagonal lattice" in p
     assert "2.5000" in p
-    # Admits show source + delta sign. The improving / saturated split
-    # routes them to different blocks but both must surface.
-    assert "mutate_focused_fix" in p
-    assert "crossover_component_swap" in p
-    assert "+0.0200" in p
-    assert "-0.0100" in p
-    # ``None`` delta renders as Δ=n/a and is treated as improving
-    # (we cannot judge it negatively, so we surface it as progress).
-    assert "Δ=n/a" in p
-    # Routing check: the +0.02 admit must appear above the SATURATED
-    # header (i.e. in the IMPROVING block), and the -0.01 admit must
-    # appear below the IMPROVING block header (i.e. in SATURATED). We
-    # use the block headers from the prompt itself as anchors.
-    improving_header = "Recent admits, IMPROVING"
-    saturated_header = "Recent admits, SATURATED"
-    assert improving_header in p and saturated_header in p
-    improving_pos = p.index(improving_header)
-    saturated_pos = p.index(saturated_header)
-    # +0.02 admit (mutate_focused_fix) is between the IMPROVING header
-    # and the SATURATED header — i.e. it lives in the IMPROVING block.
-    plus_pos = p.index("+0.0200")
-    assert improving_pos < plus_pos < saturated_pos
-    # -0.01 admit (crossover_component_swap) is after the SATURATED
-    # header.
-    minus_pos = p.index("-0.0100")
-    assert minus_pos > saturated_pos
-    # Error taxonomy buckets, with counts.
-    assert "constraint ×2" in p
-    assert "shape_mismatch ×1" in p
-    # Per-source breakdown inside the bucket.
-    assert "mutate_general×2" in p
-    assert "repair×1" in p
-    # Previous advice is carried over.
+    # Improving niche content flows through.
+    assert "greedy insertion then local polish" in p
+    # Saturated niche flows through WITH its attempt count.
+    assert "pure gradient descent on coordinates" in p
+    assert "7 recent attempts" in p
+    # Under-explored niche flows through.
+    assert "power-diagram packing" in p
+    # Accumulated error knowledge: example + recurrence count, most-recurrent
+    # first.
+    assert "×20" in p
+    assert "×3" in p
+    assert p.index("×20") < p.index("×3")
+    # Previous advice carried over.
     assert "prior wisdom" in p
+    # Section ordering: leaders < improving < saturated < under-explored <
+    # error knowledge.
+    assert (
+        p.index("## Leaders")
+        < p.index("## IMPROVING niches")
+        < p.index("## SATURATED niches")
+        < p.index("## Under-explored niches")
+        < p.index("## Accumulated failure knowledge")
+    )
 
 
 def test_prompt_handles_empty_signals_gracefully() -> None:
-    """First trigger of a fresh run: archive is empty, no admits yet, no
-    errors. Prompt must still render without raising."""
+    """First trigger of a fresh run: archive empty, no improving/saturated/
+    under-explored niches, no errors. Prompt must render with placeholders."""
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
         function_signature=SIGNATURE,
@@ -185,26 +157,27 @@ def test_prompt_handles_empty_signals_gracefully() -> None:
         n_evaluations=0,
         accept_rate=0.0,
         stagnation_level=0.0,
-        top_descriptions=[],
-        recent_admits=[],
-        errors_by_source=[],
+        leaders=[],
+        improving=[],
+        saturated=[],
+        under_explored=[],
+        error_knowledge=[],
         previous_advice=None,
     )
-    assert "n/a" in p
-    assert "(archive empty)" in p
-    # Both improving and saturated admit blocks render the empty
-    # placeholder when no admits have flowed yet.
+    assert "n/a" in p  # best score
+    assert "(archive empty)" in p  # leaders
+    # improving + under_explored both render the same "(none in this window)".
     assert p.count("(none in this window)") >= 2
-    assert "(no failures in this window)" in p
-    assert "(none yet" in p
+    assert "(none — no niche is both stuck and busy)" in p  # saturated
+    assert "(no failures recorded yet)" in p  # error knowledge
+    assert "(none yet" in p  # previous advice
 
 
 def test_prompt_errors_only_mode_parity() -> None:
-    """The ``meta_advice_mode='errors_only'`` ablation is implemented at
-    the orchestrator layer by passing empty top_descriptions + empty
-    recent_admits to this builder. Verify the prompt still renders and
-    explicitly shows the empty-state placeholders so the model isn't
-    confused into hallucinating successes."""
+    """The ``meta_advice_mode='errors_only'`` ablation is implemented at the
+    orchestrator layer by passing empty success-side (region) sequences to
+    this builder. Verify the prompt still renders the empty-state placeholders
+    while the accumulated failure knowledge still flows through."""
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
         function_signature=SIGNATURE,
@@ -212,17 +185,19 @@ def test_prompt_errors_only_mode_parity() -> None:
         n_evaluations=200,
         accept_rate=0.3,
         stagnation_level=0.6,
-        top_descriptions=[],
-        recent_admits=[],
-        errors_by_source=[
-            ("mutate_general", "Overlap between circles 1 and 2"),
-        ],
+        leaders=[],
+        improving=[],
+        saturated=[],
+        under_explored=[],
+        error_knowledge=[("overlap between circles and", 4, "Overlap between circles 1 and 2")],
         previous_advice=None,
     )
     assert "(archive empty)" in p
     assert p.count("(none in this window)") >= 2
-    # Errors still flow through.
-    assert "constraint ×1" in p
+    assert "(none — no niche is both stuck and busy)" in p
+    # Errors still flow.
+    assert "×4" in p
+    assert "Overlap between circles" in p
 
 
 def test_prompt_truncates_long_descriptions() -> None:
@@ -234,18 +209,18 @@ def test_prompt_truncates_long_descriptions() -> None:
         n_evaluations=10,
         accept_rate=0.1,
         stagnation_level=0.0,
-        top_descriptions=[(long_desc, 1.0)],
-        recent_admits=[],
-        errors_by_source=[],
+        leaders=[(long_desc, 1.0)],
+        improving=[],
+        saturated=[],
+        under_explored=[],
+        error_knowledge=[],
         previous_advice=None,
     )
-    # Truncation marker present.
     assert "…" in p
-    # Not full 1000 chars repeated.
     assert "x" * 500 not in p
 
 
-def test_prompt_truncates_long_error_messages() -> None:
+def test_prompt_truncates_long_error_examples() -> None:
     long_msg = "Overlap " + "x" * 1000
     p = build_meta_advice_prompt(
         problem_description=PROBLEM,
@@ -254,73 +229,12 @@ def test_prompt_truncates_long_error_messages() -> None:
         n_evaluations=10,
         accept_rate=0.1,
         stagnation_level=0.0,
-        top_descriptions=[],
-        recent_admits=[],
-        errors_by_source=[("mutate_general", long_msg)],
+        leaders=[],
+        improving=[],
+        saturated=[],
+        under_explored=[],
+        error_knowledge=[("overlap x", 1, long_msg)],
         previous_advice=None,
     )
     assert "…" in p
-    # Bucket still constraint despite truncation.
-    assert "constraint ×1" in p
-
-
-def test_prompt_saturation_split_uses_delta_tolerance() -> None:
-    """A near-zero Δ admit must land in SATURATED, not IMPROVING.
-
-    The split uses an absolute tolerance of 1e-3 against the score
-    delta vs parent. This is the signal SeaEvo's SLN concept calls out:
-    an operator that keeps producing accepted-but-non-improving moves
-    is *converted*, not *making progress*, and the advisor needs to be
-    able to name that pattern so future TRY NEXT suggestions can
-    de-emphasise it.
-    """
-    p = build_meta_advice_prompt(
-        problem_description=PROBLEM,
-        function_signature=SIGNATURE,
-        best_score=2.5,
-        n_evaluations=200,
-        accept_rate=0.3,
-        stagnation_level=0.6,
-        top_descriptions=[("hex lattice", 2.50)],
-        recent_admits=[
-            # Improving — beats parent by 2 cents of score.
-            ("mutate_general", 2.50, 0.02),
-            # Saturated — 0.0001 < 1e-3 tolerance ⇒ no real progress.
-            ("crossover_structural", 2.49, 0.0001),
-            # Saturated — exact zero delta is the canonical case.
-            ("mutate_targeted", 2.48, 0.0),
-            # Saturated — slight regression (still got admitted because
-            # it beat its cell's incumbent, but it is not progress).
-            ("mutate_focused_fix", 2.47, -0.005),
-        ],
-        errors_by_source=[],
-        previous_advice=None,
-    )
-    improving_pos = p.index("Recent admits, IMPROVING")
-    saturated_pos = p.index("Recent admits, SATURATED")
-    # The +0.02 admit must be in the IMPROVING block.
-    assert improving_pos < p.index("+0.0200") < saturated_pos
-    # The three near-zero / negative deltas must be in SATURATED.
-    for marker in ("+0.0001", "+0.0000", "-0.0050"):
-        assert p.index(marker) > saturated_pos, marker
-
-
-def test_prompt_aggregates_repeated_errors_correctly() -> None:
-    """20 overlap errors should collapse into a single ``constraint ×20``
-    line — not 20 raw rows. This is the property that distinguishes the
-    taxonomy from the old ``recent_errors=[5]`` list."""
-    errors = [("mutate_focused_fix", f"Overlap between circles {i} and {i+1}") for i in range(20)]
-    p = build_meta_advice_prompt(
-        problem_description=PROBLEM,
-        function_signature=SIGNATURE,
-        best_score=1.0,
-        n_evaluations=100,
-        accept_rate=0.1,
-        stagnation_level=0.0,
-        top_descriptions=[],
-        recent_admits=[],
-        errors_by_source=errors,
-        previous_advice=None,
-    )
-    assert "constraint ×20" in p
-    assert "mutate_focused_fix×20" in p
+    assert "x" * 500 not in p

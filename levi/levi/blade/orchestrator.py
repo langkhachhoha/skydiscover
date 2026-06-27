@@ -34,7 +34,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import random
 import time
 from collections import deque
@@ -74,9 +73,16 @@ from .prompts import (
     build_surgical_exploit_prompt,
     build_synthesis_prompt,
     build_targeted_mutate_prompt,
+    error_signature,
 )
 
 logger = logging.getLogger(__name__)
+
+# Upper bound on the number of distinct failure-mode signatures the Advisor
+# keeps in its accumulated error-knowledge base. The advice block only ever
+# surfaces the few most-recurrent modes, so the table is merged by signature
+# and capped here — recurring modes survive, one-off errors cycle out.
+_ERROR_KNOWLEDGE_MAX = 24
 
 
 # ---------------------------------------------------------------------------
@@ -286,18 +292,20 @@ class BladeConfig:
     meta_advice_mode: str = "rich"
     """Either ``"rich"`` (default) or ``"errors_only"``.
 
-    ``rich`` feeds the advisor with the top-K archived descriptions,
-    recent admits with score-delta vs parent, a saturation signal
-    (admits whose score-delta vs parent is ≈ 0, indicating an operator
-    family that is converting but no longer improving), and a typed
-    error taxonomy — so the advice block can name what's working,
-    what's saturated, what to try next, and what to avoid. The
-    saturated-bucket signal is inspired by SeaEvo's Strategic
-    Landscape Navigation, which tracks effective / saturated /
-    underexplored strategy families at the population level rather
-    than reasoning about individual programs in isolation.
-    ``errors_only`` deliberately drops the success-side signals and is
-    the ablation flag for "old-style" defensive advice.
+    ``rich`` feeds the Advisor with region-based trajectory signals — the
+    leading niches, the niches whose frontier advanced this window
+    (IMPROVING), niches that keep attracting attempts without their
+    frontier moving (SATURATED), under-explored niches, and an accumulated
+    failure-knowledge base — so the advice block can name what's working,
+    what's saturated, what to try next, and what to avoid. Credit is
+    assigned by behavioural niche, not by which prompt-template produced a
+    program; "improving vs saturated" is decided by whether a niche's
+    frontier moved, with no score-delta threshold. The saturation signal
+    is inspired by SeaEvo's Strategic Landscape Navigation, which tracks
+    effective / saturated / underexplored strategy families at the
+    population level rather than reasoning about individual programs in
+    isolation. ``errors_only`` deliberately drops the success-side signals
+    and is the ablation flag for "old-style" defensive advice.
     """
 
     # Output
@@ -387,11 +395,12 @@ class BladeOrchestrator:
         self.cost = _CallLog()
         self.paradigm_trials: list[ParadigmTrial] = []
         self.recent_trials: deque[str] = deque(maxlen=6)
-        # Rolling signal streams the meta-advisor reads each cycle.
-        # Failed candidates simply count as rejects — there is no longer
-        # a one-shot repair operator that drains an error queue.
-        self._advisor_admits: deque[tuple[str, float, float | None]] = deque(maxlen=12)
-        self._advisor_errors: deque[tuple[str, str]] = deque(maxlen=64)
+        # Signal streams the Advisor reads each cycle. Attempts are counted
+        # per behavioural niche (archive cell) over the current window and
+        # reset each cycle; the failure-knowledge base accumulates over the
+        # whole run, keyed by error signature.
+        self._advisor_attempts_by_cell: dict[int, int] = {}
+        self._error_knowledge: dict[str, dict[str, object]] = {}
 
         self.start_time: float = 0.0
         self.stop_event = asyncio.Event()
@@ -532,8 +541,36 @@ class BladeOrchestrator:
     def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None, metrics: dict | None = None) -> None:
         self.monitor.record_eval(score=score, accepted=False)
         if error_msg:
-            self._advisor_errors.append((source, error_msg))
+            self._record_error_knowledge(error_msg)
         self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg, metrics=metrics)
+
+    def _record_error_knowledge(self, error_msg: str) -> None:
+        """Merge one failure into the bounded failure-knowledge base.
+
+        Errors are keyed by a domain-agnostic :func:`error_signature` so the
+        same failure mode (the same error with different indices/sizes) merges
+        into a single counted entry. The base persists across cycles (it is
+        not reset per window) but is kept **bounded** at
+        :data:`_ERROR_KNOWLEDGE_MAX`: when a brand-new mode arrives and the
+        table is full, the least-recurrent entry (oldest among ties, via dict
+        insertion order) is evicted. Recurring modes therefore survive and
+        accumulate their counts while one-off errors cycle out — there is no
+        point hoarding a long dict when the advice block only ever surfaces
+        the few most-recurrent modes."""
+        sig = error_signature(error_msg)
+        clean = error_msg.strip().replace("\n", " ")[:200]
+        entry = self._error_knowledge.get(sig)
+        if entry is not None:
+            entry["count"] = int(entry["count"]) + 1
+            entry["example"] = clean
+            return
+        if len(self._error_knowledge) >= _ERROR_KNOWLEDGE_MAX:
+            victim = min(
+                self._error_knowledge,
+                key=lambda k: int(self._error_knowledge[k]["count"]),
+            )
+            del self._error_knowledge[victim]
+        self._error_knowledge[sig] = {"count": 1, "example": clean}
 
     @staticmethod
     def _format_problem_metrics(metrics: dict | None) -> str:
@@ -629,9 +666,17 @@ class BladeOrchestrator:
         else:
             accepted, reason = self.archive.add(program)
         self.monitor.record_eval(score=score, accepted=accepted)
+        # Count this evaluated attempt against the behavioural niche it landed
+        # in. ``cell_id`` is assigned by ``archive.add`` even when the program
+        # is dropped for losing to the cell incumbent, so near-misses count
+        # too — this is the "busy" half of the Advisor's busy-but-stale
+        # saturation signal and avoids the survivorship bias of looking only
+        # at admitted programs.
+        if program.cell_id >= 0:
+            self._advisor_attempts_by_cell[program.cell_id] = (
+                self._advisor_attempts_by_cell.get(program.cell_id, 0) + 1
+            )
         is_new_best = accepted and score > prev_best
-        if accepted:
-            self._advisor_admits.append((source, score, parent_score))
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best, metrics=metrics)
         if not accepted and reason == "dropped_worse":
             logger.debug("[BLADE] dropped score=%.4f did not beat cell incumbent", score)
@@ -1427,47 +1472,83 @@ class BladeOrchestrator:
     # Meta-advisor
     # ------------------------------------------------------------------
 
-    def _top_descriptions_for_advisor(self, k: int = 3) -> list[tuple[str, float]]:
-        """Top-K archived programs by score — descriptions + scores only."""
-        programs = list(self.archive.programs())
-        programs.sort(key=lambda p: p.score, reverse=True)
-        out: list[tuple[str, float]] = []
-        for p in programs[:k]:
-            desc = (p.description or "").strip()
-            if desc:
-                out.append((desc, float(p.score)))
-        return out
+    def _advisor_region_signals(
+        self,
+    ) -> tuple[
+        list[tuple[str, float]],
+        list[tuple[str, float]],
+        list[tuple[str, float, int]],
+        list[tuple[str, float]],
+    ]:
+        """Region-based Advisor signals derived from the live archive.
 
-    def _recent_admits_for_advisor(self, n: int = 8) -> list[tuple[str, float, float | None]]:
-        """Last ``n`` admits as ``(source, score, delta_vs_parent or None)``."""
-        items = list(self._advisor_admits)[-n:]
-        rows: list[tuple[str, float, float | None]] = []
-        for source, score, parent_score in items:
-            if parent_score is None or not math.isfinite(parent_score):
-                delta: float | None = None
-            else:
-                delta = float(score - parent_score)
-            rows.append((source, float(score), delta))
-        return rows
+        Returns ``(leaders, improving, saturated, under_explored)``. Each
+        niche is identified by its cell incumbent. A niche is *improving*
+        when its incumbent was admitted during the current advisor window
+        (its frontier moved); *saturated* when its frontier did not move but
+        it kept attracting evaluated attempts (busy-but-stale, i.e. mined
+        out); *under-explored* when it attracted few attempts (room to push).
+        Credit is purely by niche — no per-template attribution, no
+        score-delta threshold.
+        """
+        cells = self.archive.cells()  # cell_id -> best Program in that cell
+        incumbents = sorted(cells.values(), key=lambda p: p.score, reverse=True)
+        if not incumbents:
+            return [], [], [], []
+        now = self.monitor.eval_count
+        window_start = max(0, now - max(1, self.config.meta_advice_interval))
+        attempts = dict(self._advisor_attempts_by_cell)
 
-    def _errors_by_source_for_advisor(self, n: int = 20) -> list[tuple[str, str]]:
-        """Last ``n`` ``(source, error_message)`` pairs since the previous
-        advisor trigger, used to build the typed error taxonomy."""
-        return list(self._advisor_errors)[-n:]
+        leaders = [(p.description, float(p.score)) for p in incumbents[:3]]
+
+        # Improving: niches whose incumbent (the cell's frontier) was admitted
+        # during this window — i.e. the frontier moved.
+        improving_progs = [p for p in incumbents if p.created_at_eval > window_start]
+        improving = [(p.description, float(p.score)) for p in improving_progs[:4]]
+        improving_ids = {id(p) for p in improving_progs}
+        leader_ids = {id(p) for p in incumbents[:3]}
+
+        # Saturated: niches whose frontier did NOT move this window but which
+        # still attracted evaluated attempts, most-attempted first.
+        stale = [p for p in incumbents if id(p) not in improving_ids]
+        stale_busy = sorted(stale, key=lambda p: attempts.get(p.cell_id, 0), reverse=True)
+        saturated = [
+            (p.description, float(p.score), attempts.get(p.cell_id, 0))
+            for p in stale_busy
+            if attempts.get(p.cell_id, 0) >= 1
+        ][:3]
+
+        # Under-explored: occupied niches (neither leader nor improving) that
+        # attracted the fewest attempts this window.
+        under_candidates = [
+            p for p in incumbents
+            if id(p) not in leader_ids and id(p) not in improving_ids
+        ]
+        under_sorted = sorted(under_candidates, key=lambda p: attempts.get(p.cell_id, 0))
+        under_explored = [(p.description, float(p.score)) for p in under_sorted[:3]]
+
+        return leaders, improving, saturated, under_explored
+
+    def _error_knowledge_rows(self) -> list[tuple[str, int, str]]:
+        """Accumulated failure knowledge as ``[(signature, count, example)]``."""
+        return [
+            (sig, int(e["count"]), str(e["example"]))
+            for sig, e in self._error_knowledge.items()
+        ]
 
     async def _generate_meta_advice(self) -> None:
         cfg = self.config
-        # If the advisor mode is "errors_only" we deliberately drop the
-        # success-side signal (top descriptions + recent admits). This
-        # reproduces the pre-improvement behavior and is what the
-        # ``--meta-advice-mode errors_only`` ablation flips on.
+        # ``errors_only`` ablation: drop every success-side (region) signal
+        # and keep only the accumulated failure knowledge. Reproduces the old
+        # defensive-only advisor for measuring the success-side contribution.
         if getattr(cfg, "meta_advice_mode", "rich") == "errors_only":
-            top_desc: list[tuple[str, float]] = []
-            admits: list[tuple[str, float, float | None]] = []
+            leaders: list[tuple[str, float]] = []
+            improving: list[tuple[str, float]] = []
+            saturated: list[tuple[str, float, int]] = []
+            under_explored: list[tuple[str, float]] = []
         else:
-            top_desc = self._top_descriptions_for_advisor(k=3)
-            admits = self._recent_admits_for_advisor(n=8)
-        errors = self._errors_by_source_for_advisor(n=20)
+            leaders, improving, saturated, under_explored = self._advisor_region_signals()
+        error_rows = self._error_knowledge_rows()
         prompt = build_meta_advice_prompt(
             problem_description=cfg.problem_description,
             function_signature=cfg.function_signature,
@@ -1475,11 +1556,18 @@ class BladeOrchestrator:
             n_evaluations=self.monitor.eval_count,
             accept_rate=self.monitor.acceptance_rate(),
             stagnation_level=self.monitor.stagnation_level(),
-            top_descriptions=top_desc,
-            recent_admits=admits,
-            errors_by_source=errors,
+            leaders=leaders,
+            improving=improving,
+            saturated=saturated,
+            under_explored=under_explored,
+            error_knowledge=error_rows,
             previous_advice=self.current_meta_advice,
         )
+        # The window's per-niche attempt counts have now been consumed; reset
+        # them so the next cycle measures a fresh window. The failure
+        # knowledge base is intentionally NOT cleared — it accumulates over
+        # the whole run.
+        self._advisor_attempts_by_cell.clear()
         try:
             raw = await self._call(
                 self.mutation_lm, prompt,
@@ -1496,11 +1584,6 @@ class BladeOrchestrator:
         if len(text) > 1200:
             text = text[:1200].rstrip() + "…"
         self.current_meta_advice = text
-        # Clear the per-window error queue so the next advisor cycle sees
-        # a fresh taxonomy. Admits intentionally keep their rolling window
-        # so the advisor can spot operators that are *consistently*
-        # productive across cycles.
-        self._advisor_errors.clear()
         logger.info("[BLADE advisor] new advice (%d chars) at eval=%d", len(text), self.monitor.eval_count)
 
     async def _meta_advice_monitor(self) -> None:
