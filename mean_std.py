@@ -5,9 +5,9 @@ import statistics
 
 # ===== ĐIỀN 3 GIÁ TRỊ KẾT QUẢ TẠI ĐÂY =====
 VALUES = [
-    0.5708,
-    0.5708,
-    0.6363 ,
+    0.0322,
+    0.0322,
+    0.0354,
 ]
 
 DECIMALS = 4  # số chữ số thập phân khi làm tròn

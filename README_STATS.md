@@ -51,9 +51,10 @@ pip install numpy
 
 ## Các file JSON có sẵn
 
-- `math_kimi.json` - Mathematical Discovery Task với KIMI K2
-- `math_gpt.json` - Mathematical Discovery Task với GPT-5
-- `system_kimi.json` - System Engineering Task với KIMI K2
+- `math_kimi.json` - Mathematical Discovery Task với KIMI K2 (7 tasks, 3 seeds)
+- `math_gpt.json` - Mathematical Discovery Task với GPT-5 (7 tasks, 3 seeds)
+- `system_kimi.json` - System Engineering Task với KIMI K2 (4 tasks, 3 seeds)
+- `system_gpt.json` - System Engineering Task với GPT-5 (4 tasks, 3 seeds)
 
 ## Ví dụ output
 

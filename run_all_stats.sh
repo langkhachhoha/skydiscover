@@ -8,7 +8,7 @@ echo "========================================="
 echo ""
 
 # Array of JSON files
-files=("math_kimi.json" "math_gpt.json" "system_kimi.json")
+files=("math_kimi.json" "math_gpt.json" "system_kimi.json" "system_gpt.json")
 
 for file in "${files[@]}"
 do
