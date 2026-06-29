@@ -6,20 +6,21 @@
 
 ## Abstract
 
-LLM-driven evolutionary search is powerful but expensive, and the strongest systems pay for their
-results twice over — in **dollars and in time** — because they lean on a single frontier model for every
-step. SpecEvo dissolves this with three coupled ideas. First, in algorithm discovery *breadth is cheap
-and parallel, while depth is expensive and sequential*: a small, fast **Speculator** explores many
-directions at once into a self-organizing behavioral archive, while a frontier **Navigator** is woken
-only occasionally for the rare, hard step — so the search gets broad early coverage cheaply *and* deep
-reasoning when it matters, without the latency of a sequential loop or the cost of a parallel one.
-Second, discovery is a *generate-then-reflect* process: the Speculator generates a large body of
-attempts whose value lies as much in the evidence they leave behind as in the wins they score, and the
-Navigator reads that evidence as a *map* to propose a directed hypothesis (one of three move-classes,
-escalating with stagnation). Third, cheap models must be *steered, not merely repeated*: a set of
-distinct exploration operators forces the Speculator to cover the space, and an **Advisor** turns the
-whole trajectory — including the failures and near-misses a scalar score discards — into concise
-natural-language guidance injected back into the Speculator.
+LLM-driven evolutionary search is powerful but expensive, paying twice over — in **dollars and in
+time** — because a single frontier model is asked to carry every step. That one decision forces a bad
+trade: run the model sequentially and the search is slow to find its footing under a budget; run it in
+parallel and the cost explodes. SpecEvo breaks the trade by noticing that the two regimes have different
+natural owners — *breadth is cheap and parallel, while depth is expensive and sequential* — so a small,
+fast **Speculator** explores many directions at once into a self-organizing behavioral archive, while a
+frontier **Navigator** is woken only for the rare, hard step. This split pays off only if the cheap
+swarm is productive, which is what the rest of the design secures: because discovery is a
+*generate-then-reflect* process, the Speculator's value is as much the evidence it leaves behind as the
+wins it scores, and the Navigator reads the accumulated archive as a *map* to propose a directed move
+(one of three classes, escalating with stagnation) rather than another blind edit. To keep the swarm
+productive in the first place, SpecEvo steers it instead of repeating an "improve this" prompt — distinct
+exploration operators force it to cover the space, and an **Advisor** turns the whole trajectory,
+including the failures and near-misses a scalar score discards, into concise natural-language feedback
+that flows back into the Speculator.
 
 Across mathematical-discovery and system-engineering benchmarks, on both GPT-5 and Kimi-K2 backbones,
 SpecEvo matches or exceeds the strongest baselines on most tasks while spending **2.0–3.4× less** than
@@ -29,33 +30,33 @@ the average baseline.
 
 ## Motivation
 
-SpecEvo's design responds to three observations about how existing LLM-driven discovery systems spend
-their resources.
+The expense of LLM-driven discovery starts with one decision — handing every step to a single frontier
+model — and the trouble compounds from there. With only an expensive model in hand, a system must pick a
+regime, and both fail. A *sequential* refinement loop is cheap to coordinate but slow: frontier reasoning
+is slow per step, and early on the model has little context about what has already been tried, so the
+quality curve takes off late and short budgets fare poorly. A *parallel* population covers the space
+early, but if every lineage calls the frontier model the cost explodes. The way out is to stop treating
+breadth and depth as the same kind of work: breadth — running many directions at once — is exactly what
+cheap, fast models are good at, while depth — the rare step that genuinely needs frontier-scale reasoning
+— is reserved for the expensive model and run sequentially so it never throttles throughput. This is why
+SpecEvo pairs a cheap parallel **Speculator** with a rarely-woken frontier **Navigator**.
 
-1. **The cost–time dilemma of frontier-only search.** With only an expensive model in hand, a system
-   must pick one of two regimes, and each fails in its own way. A *sequential* refinement loop is cheap
-   to coordinate but slow: frontier reasoning is slow per step, and early on the model has little
-   context about what has been tried, so the quality curve takes off late — a *timing* failure under
-   short budgets. A *parallel* population covers the space early but, if every lineage calls the
-   frontier model, cost *explodes* — a *cost* failure. SpecEvo assigns breadth (parallel) to cheap fast
-   models and depth (rare, sequential, hard) to the frontier model, getting early broad coverage cheaply
-   *and* occasional deep reasoning without throttling throughput.
+But splitting by cost only helps if the cheap swarm is productive, and productivity depends on how its
+output is *used*. Real research is *generate-then-reflect*: many cheap attempts are run broadly, then
+someone steps back and looks across the whole body of work — successes *and* failures — to decide what to
+try next. A loop of `improve → improve → improve` throws that panoramic evidence away. SpecEvo keeps it:
+the Speculator is the bench whose attempts are valued as much for the evidence they leave behind as for
+the wins they score, and the Navigator is the investigator that reads the accumulated archive as a map
+and proposes where to go next, rather than grinding out one more edit.
 
-2. **Discovery is collective evidence, not a single mind iterating.** Real research is
-   *generate-then-reflect*: many cheap experiments are run broadly, then someone steps back and looks
-   across the whole body of attempts — successes *and* failures — to decide what to try next. A loop of
-   `improve → improve → improve` discards exactly that panoramic evidence. SpecEvo institutionalizes the
-   division of labor: the Speculator is the bench, the Navigator is the principal investigator forming
-   hypotheses from the map, and the Advisor is the reviewer distilling lessons.
-
-3. **Cheap models must be steered, not merely repeated.** Under a generic "improve this" prompt, small
-   models collapse to a few familiar patterns and cover the space narrowly. SpecEvo drives the
-   Speculator with a *set of distinct exploration operators* that force breadth back. And it treats
-   every output as information — including the failures and near-misses a scalar score throws away. A
-   fitness number is a lossy summary of what an evaluation revealed: a crash says what to avoid, a
-   saturated region says where to stop digging, a winner's description says what mechanism is paying off.
-   The **Advisor** recovers this discarded context as code-shaped **natural-language feedback** that
-   steers the next round — what a `Δscore` alone cannot say.
+That reflective layer is only as good as the stream it reads, so the cheap swarm must be steered, not
+merely repeated. Under a generic "improve this" prompt, small models collapse to a few familiar patterns
+and cover the space narrowly; SpecEvo instead drives the Speculator with a set of distinct exploration
+operators that force breadth back in. And it treats every output as information — including the failures
+and near-misses a scalar score discards. A fitness number is a lossy summary of what an evaluation
+revealed: a crash says what to avoid, a saturated region says where to stop digging, a winner's
+description says what mechanism is paying off. The **Advisor** recovers this discarded context as
+code-shaped **natural-language feedback** that steers the next round — what a `Δscore` alone cannot say.
 
 ---
 

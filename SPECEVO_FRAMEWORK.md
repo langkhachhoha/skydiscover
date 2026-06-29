@@ -9,23 +9,26 @@
 ## Abstract
 
 LLM-driven evolutionary search is powerful but expensive, and the strongest systems pay for their
-results twice over — in **dollars and in time** — because they lean on a single frontier model for
-every step. We argue this expense follows from *how* one costly model is spread across the search, and
-SpecEvo dissolves it with three coupled ideas. First, in algorithm discovery *breadth is cheap and
-parallel, while depth is expensive and sequential*: a small, fast **Speculator** explores many
-directions at once into a self-organizing behavioral archive, while a frontier **Navigator** is woken
-only occasionally to do the rare, hard step — so the search gets broad early coverage cheaply *and*
-deep reasoning when it matters, without either the latency of a sequential frontier loop or the cost of
-a parallel one. Second, discovery is a *generate-then-reflect* process, not one model looping in
-isolation: the Speculator generates a large body of attempts whose value lies as much in the evidence
-they leave behind as in the wins they score, and the Navigator reads that evidence as a *map* to propose
-a directed hypothesis (one of three move-classes, escalating with stagnation). Third, cheap models must
-be *steered, not merely repeated*: a set of distinct exploration operators forces the Speculator to
-cover the space, and an **Advisor** turns the whole trajectory — including the failures and near-misses
-that a scalar score discards — into concise natural-language guidance injected back into the Speculator.
-Across mathematical-discovery and system-engineering benchmarks, on both GPT-5 and Kimi-K2 backbones,
-SpecEvo matches or exceeds the strongest baselines on most tasks while spending **2.0–3.4× less** than
-the average baseline.
+results twice over — in **dollars and in time** — because a single frontier model is asked to carry
+every step of the search. That one decision forces a bad trade: run the model sequentially and the
+search is slow to find its footing under a budget; run it in parallel across many lineages and the cost
+explodes. SpecEvo breaks the trade by noticing that the two regimes have different natural owners — in
+algorithm discovery, *breadth is cheap and parallel, while depth is expensive and sequential*. A small,
+fast **Speculator** therefore explores many directions at once into a self-organizing behavioral
+archive, while a frontier **Navigator** is woken only for the rare, hard step. But splitting the work by
+cost pays off only if the cheap swarm is genuinely productive, and that is what the rest of the design
+secures. The Speculator's value lies as much in the evidence it leaves behind as in the wins it scores:
+because discovery is a *generate-then-reflect* process, the Navigator reads the accumulated archive as a
+*map* and proposes a directed move — one of three classes, escalating with how stalled the search is —
+rather than another blind edit. And to keep the swarm productive in the first place, SpecEvo steers it
+instead of merely repeating an "improve this" prompt: a set of distinct exploration operators forces the
+cheap model to cover the space, while an **Advisor** continually turns the whole trajectory — including
+the failures and near-misses that a scalar score throws away — into concise natural-language feedback
+that flows back into the Speculator. The pieces reinforce one another: the cost split makes breadth
+affordable, treating the swarm's output as evidence makes the frontier model's rare calls decisive, and
+verbal steering keeps the swarm from collapsing into noise. Across mathematical-discovery and
+system-engineering benchmarks, on both GPT-5 and Kimi-K2 backbones, SpecEvo matches or exceeds the
+strongest baselines on most tasks while spending **2.0–3.4× less** than the average baseline.
 
 ---
 
@@ -36,9 +39,9 @@ heuristic design, and systems optimization. The recipe is familiar: a user suppl
 scoring function; an evolutionary loop repeatedly asks an LLM to mutate candidate programs, evaluates
 them, and keeps the promising ones. The difficulty is cost. The strongest published systems route
 *every* mutation through an expensive frontier model, and a single run can cost tens of dollars and
-hours of wall-clock time. We take the position that this cost is largely self-inflicted, and that it
-follows from three design habits that can be undone. The structure of SpecEvo is a direct response to
-each.
+hours of wall-clock time. We take the position that this cost is largely self-inflicted: it begins with
+one design decision, and the trouble compounds from there. The structure of SpecEvo is the chain of
+fixes that follows once that first decision is undone.
 
 ### 1.1 The cost–time dilemma of frontier-only search
 
@@ -67,7 +70,9 @@ expensive; assigning each regime to the model suited for it dissolves the dilemm
 
 ### 1.2 Discovery is a process of collective evidence, not a single mind iterating
 
-A second habit is to treat search as one model looping `improve → improve → improve`. This is not how
+Splitting the work by cost only helps if the cheap tier is genuinely productive — and that depends less
+on how *much* it generates than on how its output is *used*. Here the standard loop leaves its largest
+value on the table: it treats search as one model iterating `improve → improve → improve`. This is not how
 discovery actually works. Real research is a **generate-then-reflect** cycle: at the bench, many cheap
 experiments are run across many directions — most ordinary, some broken, a few surprising; then
 someone steps back and looks *across the whole body of attempts*, successes and failures alike, to
@@ -83,9 +88,10 @@ evidence that this reflective layer needs.
 
 ### 1.3 Cheap models must be steered, not merely repeated
 
-The third habit is to prompt the mutation model with a single instruction — "improve this version" —
-and rely on model strength for diversity. This works passably for frontier models but fails for cheap
-ones, for two reasons that SpecEvo turns to its advantage.
+This reflective layer is only as good as the stream it reads — which exposes the final gap. The usual
+way to drive a mutation model is a single instruction, "improve this version", trusting model strength
+for diversity. That works passably for frontier models but breaks for cheap ones, in two ways that
+SpecEvo turns to its advantage and that together keep the stream worth reflecting on.
 
 First, **small models collapse to repetition.** Given the same generic "improve" prompt, a cheap model
 tends to fall back on a few familiar patterns, producing near-duplicate proposals that cover the design
