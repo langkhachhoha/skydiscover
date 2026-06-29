@@ -51,7 +51,7 @@ on:
         description: "Wall-clock cap in seconds (blank to disable)"
         required: false
         type: string
-        default: "10800"
+        default: ""
       mutation_model:
         description: "OpenRouter id of the small / mutation model"
         required: true
