@@ -8,25 +8,27 @@
 
 ## Abstract
 
-LLM-driven evolutionary search is powerful but expensive, and the strongest systems pay for their
-results twice over — in **dollars and in time** — because a single frontier model is asked to carry
-every step of the search. That one decision forces a bad trade: run the model sequentially and the
-search is slow to find its footing under a budget; run it in parallel across many lineages and the cost
-explodes. SpecEvo breaks the trade by noticing that the two regimes have different natural owners — in
-algorithm discovery, *breadth is cheap and parallel, while depth is expensive and sequential*. A small,
-fast **Speculator** therefore explores many directions at once into a self-organizing behavioral
-archive, while a frontier **Navigator** is woken only for the rare, hard step. But splitting the work by
-cost pays off only if the cheap swarm is genuinely productive, and that is what the rest of the design
-secures. The Speculator's value lies as much in the evidence it leaves behind as in the wins it scores:
-because discovery is a *generate-then-reflect* process, the Navigator reads the accumulated archive as a
-*map* and proposes a directed move — one of three classes, escalating with how stalled the search is —
-rather than another blind edit. And to keep the swarm productive in the first place, SpecEvo steers it
-instead of merely repeating an "improve this" prompt: a set of distinct exploration operators forces the
-cheap model to cover the space, while an **Advisor** continually turns the whole trajectory — including
-the failures and near-misses that a scalar score throws away — into concise natural-language feedback
-that flows back into the Speculator. The pieces reinforce one another: the cost split makes breadth
-affordable, treating the swarm's output as evidence makes the frontier model's rare calls decisive, and
-verbal steering keeps the swarm from collapsing into noise. Across mathematical-discovery and
+Scientific discovery is the work of a **lab**, not a lone genius — yet LLM-driven evolutionary search is
+built as though it were a lone genius. The dominant recipe asks a single frontier model to carry *every*
+step of the search: the computational equivalent of hiring one brilliant researcher and making them
+personally run every experiment, judge every result, and choose every next move, flat-out like an ox until
+the budget runs out. It is expensive — in dollars and in wall-clock time — and it is a poor imitation of
+how discovery actually happens, especially under tight resources. A real lab divides the labor: a few
+cheap, eager juniors run many experiments at the bench in parallel; a senior labmate periodically reviews
+the whole body of work — failures included — and tells the juniors what to stop doing and what to build on;
+and a principal investigator, whose time is the lab's scarcest resource, steps in only at the hard
+junctures to read the accumulated evidence and set the next direction. **SpecEvo is this low-resource lab,
+made mechanical.** A small, fast **Speculator** plays the juniors, exploring many directions at once into a
+shared behavioral archive that serves as the lab's notebook; a frontier **Navigator** plays the PI, woken
+only for the rare, hard step, reading the archive as a *map* and proposing a directed move — one of three
+classes, escalating with how stalled the search is — rather than another blind edit; and an **Advisor**
+plays the senior labmate, continually turning the whole trajectory — including the failures and near-misses
+a scalar score throws away — into concise natural-language feedback that flows back to the juniors: *avoid
+this error, stop crowding this exhausted corner, build on this working idea.* The roles reinforce one
+another the way a functioning lab does: cheap parallel hands make breadth affordable, treating their output
+as shared evidence makes the PI's rare calls decisive, and the senior's mentoring keeps the juniors from
+collapsing into repetition or noise. The resulting cost-efficiency is not a trick bolted on — it falls out
+of faithfully modeling how a resource-constrained team divides labor. Across mathematical-discovery and
 system-engineering benchmarks, on both GPT-5 and Kimi-K2 backbones, SpecEvo matches or exceeds the
 strongest baselines on most tasks while spending **2.0–3.4× less** than the average baseline.
 
@@ -39,102 +41,142 @@ heuristic design, and systems optimization. The recipe is familiar: a user suppl
 scoring function; an evolutionary loop repeatedly asks an LLM to mutate candidate programs, evaluates
 them, and keeps the promising ones. The difficulty is cost. The strongest published systems route
 *every* mutation through an expensive frontier model, and a single run can cost tens of dollars and
-hours of wall-clock time. We take the position that this cost is largely self-inflicted: it begins with
-one design decision, and the trouble compounds from there. The structure of SpecEvo is the chain of
-fixes that follows once that first decision is undone.
+hours of wall-clock time. We argue that this is not just a billing problem but a *picture* problem: the
+field has implicitly modeled discovery as a single expert mind grinding away alone. SpecEvo starts from a
+different and, we think, more faithful picture — and the architecture is what follows once that picture
+is taken seriously.
 
-### 1.1 The cost–time dilemma of frontier-only search
+### 1.1 Discovery is a lab, not a lone genius
 
-When the only capable tool is an expensive model, every framework is forced into one of two regimes,
-and each fails in its own way.
+The frontier-only recipe is the computational form of a fantasy: hire one brilliant researcher, sit them
+at a desk, and have them personally run every experiment, judge every result, and decide every next move,
+working flat-out like an ox until the money runs out. No real discovery happens this way — and certainly
+not in the labs that produce most of science under ordinary, limited budgets. A working lab is a *team
+with a structure*, and that structure exists precisely because no single mind, however capable, is the
+cheapest way to do every job.
+
+Picture a small lab with three kinds of people:
+
+- **The juniors** — students at the bench. There are several of them, they are inexpensive, and they
+  work in parallel. They run a large number of experiments across many directions, most of which are
+  ordinary, some broken, a few surprising. They are not expected to be brilliant; they are expected to be
+  *prolific and diverse*, and to leave a clear record of everything they tried.
+- **The principal investigator (PI)** — the professor. Their time is the scarcest and most expensive
+  resource in the lab, so they do not sit at the bench. They appear at the hard junctures: they read what
+  the lab has accumulated, see the shape of the whole effort, and propose the next direction — a
+  hypothesis, not a tweak. One good call from the PI redirects a dozen bench-experiments.
+- **The senior labmate** — the postdoc or "đàn anh" who has been here longer. They write little code
+  themselves; their job is to look across the juniors' whole body of work — the failures and dead-ends
+  included — and hand back concrete guidance: *that mistake keeps recurring, stop making it; that corner
+  is exhausted, stop digging there; that idea is working, build on it.*
+
+This is the essence of how a **low-resource team** actually does research: breadth comes from many cheap
+hands, depth from a rare and expensive judgment, and what keeps the cheap hands from wandering is
+continual mentoring grounded in the lab's own record. SpecEvo is a deliberate, mechanical scale-model of
+this lab. The **Speculator** is the juniors; the **Navigator** is the PI; the **Advisor** is the senior
+labmate; and a shared **behavioral archive** is the lab notebook they all read and write. The rest of
+this section traces how each role is forced by a real constraint of doing science cheaply — and the
+cost savings reported above are not a clever trick layered on top, but the natural consequence of letting
+each job be done by the cheapest agent capable of it.
+
+### 1.2 Why one expert cannot also be every student: the cost–time dilemma
+
+The first constraint is the one that breaks the lone-genius picture outright. When the only capable tool
+is an expensive model, every framework is forced into one of two regimes, and each fails in its own way —
+exactly as a lab would fail if it had only the professor and no one else.
 
 **The sequential regime.** A single line of refinement, where each step waits on the previous one and
-calls the frontier model to "improve the current best." This is cheap in *coordination* but
-catastrophic in *time*. Frontier reasoning is slow per step, and — worse — early in the run the model
-has almost no context about which directions have already been tried, so it re-derives the search
-from scratch. The quality curve takes off *late*: only after enough steps accumulate does the run
-become good. Under a short budget, sequential frontier search simply has not had time to find its
-footing. This is a *timing* failure, not merely a monetary one.
+calls the frontier model to "improve the current best." This is the professor working alone at the bench:
+cheap in *coordination* but catastrophic in *time*. Frontier reasoning is slow per step, and — worse —
+early in the run the model has almost no context about which directions have already been tried, so it
+re-derives the search from scratch. The quality curve takes off *late*: only after enough steps
+accumulate does the run become good. Under a short budget, sequential frontier search simply has not had
+time to find its footing. This is a *timing* failure, not merely a monetary one.
 
 **The parallel regime.** Population- or island-based search that explores many directions at once,
-covering the design space early. This is excellent for *exploration* — but if each parallel lineage
-calls the frontier model, cost grows with the number of lineages and *explodes*. This is a *cost*
-failure.
+covering the design space early. This is the right division of labor — but if you staff every bench with
+a professor, i.e. route each parallel lineage through the frontier model, cost grows with the number of
+lineages and *explodes*. This is a *cost* failure.
 
-SpecEvo's first principle is that **breadth and depth have fundamentally different marginal costs and
-therefore deserve different models.** Breadth — running many directions in parallel — is exactly what
-small, fast, cheap models are good at; depth — the rare, hard step that genuinely needs frontier-scale
-reasoning — is reserved for the frontier model and run sequentially so that it never throttles
-throughput. Combining the two regimes under *one* model is what makes existing systems either slow or
-expensive; assigning each regime to the model suited for it dissolves the dilemma.
+SpecEvo's first principle is the lab's first principle: **breadth and depth are different jobs with
+different costs, and should be staffed by different people.** Breadth — running many directions in
+parallel — is exactly what small, fast, cheap models (the juniors) are good at; depth — the rare, hard
+step that genuinely needs frontier-scale reasoning — is reserved for the frontier model (the PI) and run
+sequentially so it never throttles throughput. Asking *one* model to be both the professor and every
+student is what makes existing systems either slow or expensive; giving each job to the agent suited for
+it dissolves the dilemma.
 
-### 1.2 Discovery is a process of collective evidence, not a single mind iterating
+### 1.3 The lab notebook: discovery runs on collective evidence
 
-Splitting the work by cost only helps if the cheap tier is genuinely productive — and that depends less
-on how *much* it generates than on how its output is *used*. Here the standard loop leaves its largest
-value on the table: it treats search as one model iterating `improve → improve → improve`. This is not how
-discovery actually works. Real research is a **generate-then-reflect** cycle: at the bench, many cheap
-experiments are run across many directions — most ordinary, some broken, a few surprising; then
-someone steps back and looks *across the whole body of attempts*, successes and failures alike, to
-form an informed judgment about what to try next. It is the panoramic view over *collective evidence*
-that makes the next round intelligent — not a single agent's introspection in a vacuum.
+Hiring cheap juniors only helps if their work is genuinely *used* — and that depends less on how *much*
+they generate than on what the lab does with it. Here the standard loop leaves its largest value on the
+table: it treats search as one model iterating `improve → improve → improve`, keeping only the running
+best and discarding the rest. No real lab works this way. Discovery is a **generate-then-reflect**
+cycle: the juniors run many cheap experiments across many directions; then someone steps back and looks
+*across the whole body of attempts*, successes and failures alike, to judge what to try next. It is the
+panoramic view over *collective evidence* — the lab notebook, not any one person's memory — that makes
+the next round intelligent.
 
-SpecEvo institutionalizes this division of labor. The Speculator is the bench: it generates a large,
-diverse body of attempts, and its value lies as much in the evidence it leaves behind as in the wins
-it scores. The Navigator is the principal investigator: it reads the map of what has been tried and
-proposes a hypothesis about where to go. The Advisor is the reviewer: it converts the trajectory into
-lessons. A system that throws away everything except the running best score discards exactly the
-evidence that this reflective layer needs.
+SpecEvo institutionalizes this. The Speculator is the bench: its value lies as much in the evidence it
+leaves behind as in the wins it scores, so even its near-misses are written into the notebook rather than
+thrown away. The Navigator is the PI: when it wakes, it does not look at a single parent program but
+reads the *map* of everything the lab has tried — which directions are occupied, which are paying off,
+how stalled the search has become — and proposes a grounded hypothesis about where to go. A system that
+keeps only the best score so far has, in effect, thrown out the lab notebook and asked the professor to
+plan the next experiment from memory.
 
-### 1.3 Cheap models must be steered, not merely repeated
+### 1.4 Juniors must be mentored, not merely told to work harder
 
-This reflective layer is only as good as the stream it reads — which exposes the final gap. The usual
-way to drive a mutation model is a single instruction, "improve this version", trusting model strength
-for diversity. That works passably for frontier models but breaks for cheap ones, in two ways that
-SpecEvo turns to its advantage and that together keep the stream worth reflecting on.
+The reflective layer is only as good as the stream of work it reads — and cheap juniors, left
+unsupervised, produce a poor stream. The usual way to drive a mutation model is a single instruction,
+"improve this version," trusting model strength for diversity. That works passably for a frontier model
+but breaks for a cheap one, in two ways a good senior labmate knows to correct.
 
-First, **small models collapse to repetition.** Given the same generic "improve" prompt, a cheap model
-tends to fall back on a few familiar patterns, producing near-duplicate proposals that cover the design
-space narrowly. SpecEvo counters this by driving the Speculator with a *set of distinct exploration
-operators*, each reframing the task from a different angle — fix one weakness, swap one mechanism, fuse
-two structures, or follow a pre-computed analysis. The operators force breadth back into the stream,
-converting the cheap model's tendency to repeat into a structured sweep of the space.
+First, **inexperienced hands collapse to repetition.** Given the same generic "improve" prompt, a cheap
+model falls back on a few familiar patterns, producing near-duplicate proposals that cover the design
+space narrowly — the junior who keeps running slight variants of the one protocol they know. SpecEvo
+counters this the way a mentor assigns varied tasks: it drives the Speculator with a *set of distinct
+exploration operators*, each reframing the work from a different angle — fix one weakness, swap one
+mechanism, fuse two structures, or follow a pre-computed analysis. The operators force breadth back into
+the stream, turning the cheap model's tendency to repeat into a structured sweep of the space.
 
-Second, **every output is information — even the broken ones.** Cheap models frequently emit code that
+Second, **every result is information — even the failed ones.** Cheap models frequently emit code that
 will not run, violates constraints, or rehashes a stale idea. A system that reads only scalar scores
-throws this context away. SpecEvo harvests it: the Advisor aggregates recurring errors, identifies
-saturated regions, and names what is paying off, then expresses all of this as concise, code-shaped
-**natural-language feedback** that is injected back into the Speculator's prompt — *avoid this error
-class, stop crowding this exhausted region, build on this working mechanism.* Language preserves the
-context that a `Δscore` destroys. The Navigator benefits from the same richness: rather than a single
-parent, it sees which directions are occupied and how stalled the search is, so the hypotheses it
-proposes are grounded rather than blind.
+throws this context away — like a lab that files only its successful experiments. SpecEvo harvests it
+through the Advisor, the senior labmate's role made explicit: it aggregates recurring errors, identifies
+exhausted regions, and names what is paying off, then expresses all of it as concise, code-shaped
+**natural-language feedback** injected back into the Speculator's prompt — *avoid this error class, stop
+crowding this exhausted region, build on this working mechanism.* Language preserves the context that a
+`Δscore` destroys. This is mentoring, not scoring: it is what lets a few cheap, error-prone hands be
+*directed* rather than left to guess.
 
-### 1.4 The Speculate–Navigate–Advise loop and contributions
+### 1.5 The Speculate–Navigate–Advise loop and contributions
 
-These three principles assemble into a single loop with three distinct cost tempos. The **Speculator**
-runs almost continuously — cheap, parallel, the source of most steps and all evidence. Periodically,
-the **Navigator** wakes for a single expensive call to read the population map and propose a direction
-matched to the current degree of stagnation. Also periodically, the **Advisor** distills the trajectory
-into language and feeds it back. All three are anchored to a **self-organizing behavioral archive**
-that serves simultaneously as a diverse solution memory and as the raw material for reflection. We call
-this the **Speculate–Navigate–Advise (SNA)** loop.
+The three roles assemble into a single loop with three distinct tempos — the daily rhythm of the lab.
+The **Speculator** (juniors) runs almost continuously — cheap, parallel, the source of most steps and all
+evidence. Periodically, the **Navigator** (PI) wakes for a single expensive call to read the population
+map and propose a direction matched to the current degree of stagnation. Also periodically, the
+**Advisor** (senior labmate) distills the trajectory into language and feeds it back. All three are
+anchored to a **self-organizing behavioral archive** — the lab notebook — that serves simultaneously as a
+diverse solution memory and as the raw material for reflection. We call this the
+**Speculate–Navigate–Advise (SNA)** loop.
 
 Our contributions are:
 
-1. **A two-tempo architecture** that separates cheap parallel breadth from expensive sequential depth,
-   resolving the cost–time dilemma of frontier-only search and reaching near-SOTA quality at 2.0–3.4×
-   lower cost.
-2. **A stagnation-routed Navigator** that reads the population as a map and proposes *hypotheses* —
-   choosing among three move-classes, **Synthesis**, **Surgical**, and **Reframe** — rather than issuing
-   undifferentiated edits, with the counter-intuitive but data-driven rule that the *deepest* stagnation
-   triggers the most aggressive move.
+1. **A lab-structured, two-tempo architecture** that separates cheap parallel breadth (the juniors) from
+   expensive sequential depth (the PI), resolving the cost–time dilemma of frontier-only search and
+   reaching near-SOTA quality at 2.0–3.4× lower cost.
+2. **A stagnation-routed Navigator** that, like a PI reading the lab's results, treats the population as a
+   map and proposes *hypotheses* — choosing among three move-classes, **Synthesis**, **Surgical**, and
+   **Reframe** — rather than issuing undifferentiated edits, with the counter-intuitive but data-driven
+   rule that the *deepest* stagnation triggers the most aggressive move.
 3. **An Advisor that recovers the signal scalar fitness discards.** A fitness number is a lossy summary
    of what an evaluation revealed: a crash says what to avoid, a saturated region says where to stop
-   digging, a winner's description says what mechanism is paying off. The Advisor re-reads the whole
-   trajectory — including the failures and near-misses other systems throw away — and re-expresses this
-   discarded context as concise natural-language feedback that steers the Speculator. This *verbal*
-   feedback is what lets a swarm of cheap, error-prone models be directed rather than left to guess.
+   digging, a winner's description says what mechanism is paying off. Playing the senior reviewer, the
+   Advisor re-reads the whole trajectory — including the failures and near-misses other systems throw
+   away — and re-expresses this discarded context as concise natural-language feedback that steers the
+   Speculator. This *verbal* mentoring is what lets a team of cheap, error-prone models be directed rather
+   than left to guess.
 
 ---
 

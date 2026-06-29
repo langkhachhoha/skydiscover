@@ -1,26 +1,32 @@
 # SpecEvo: Speculative Evolution with Large Language Models for Cost-Efficient Scientific Discovery
 
+*A low-resource research lab, emulated with large language models: many cheap students (**Speculator**), a
+rarely-available professor (**Navigator**), and a senior labmate who mentors them (**Advisor**).*
+
 **Operating loop: Speculate → Navigate → Advise.**
 
 ---
 
 ## Abstract
 
-LLM-driven evolutionary search is powerful but expensive, paying twice over — in **dollars and in
-time** — because a single frontier model is asked to carry every step. That one decision forces a bad
-trade: run the model sequentially and the search is slow to find its footing under a budget; run it in
-parallel and the cost explodes. SpecEvo breaks the trade by noticing that the two regimes have different
-natural owners — *breadth is cheap and parallel, while depth is expensive and sequential* — so a small,
-fast **Speculator** explores many directions at once into a self-organizing behavioral archive, while a
-frontier **Navigator** is woken only for the rare, hard step. This split pays off only if the cheap
-swarm is productive, which is what the rest of the design secures: because discovery is a
-*generate-then-reflect* process, the Speculator's value is as much the evidence it leaves behind as the
-wins it scores, and the Navigator reads the accumulated archive as a *map* to propose a directed move
-(one of three classes, escalating with stagnation) rather than another blind edit. To keep the swarm
-productive in the first place, SpecEvo steers it instead of repeating an "improve this" prompt — distinct
-exploration operators force it to cover the space, and an **Advisor** turns the whole trajectory,
-including the failures and near-misses a scalar score discards, into concise natural-language feedback
-that flows back into the Speculator.
+Scientific discovery is the work of a **lab**, not a lone genius — yet LLM-driven evolutionary search is
+built as though it were a lone genius. The dominant recipe asks a single frontier model to carry *every*
+step of the search: the computational equivalent of hiring one brilliant researcher and making them
+personally run every experiment, judge every result, and choose every next move, flat-out like an ox until
+the budget runs out. It is expensive — in dollars and in wall-clock time — and a poor imitation of how
+discovery actually happens, especially under tight resources. A real lab divides the labor: a few cheap,
+eager juniors run many experiments at the bench in parallel; a senior labmate periodically reviews the
+whole body of work — failures included — and tells them what to stop doing and what to build on; and a
+principal investigator, whose time is the lab's scarcest resource, steps in only at the hard junctures to
+read the accumulated evidence and set direction. **SpecEvo is this low-resource lab, made mechanical.** A
+small, fast **Speculator** plays the juniors, exploring many directions at once into a shared behavioral
+archive that serves as the lab's notebook; a frontier **Navigator** plays the PI, woken only for the rare,
+hard step, reading the archive as a *map* and proposing a directed move — one of three classes, escalating
+with how stalled the search is — instead of another blind edit; and an **Advisor** plays the senior
+labmate, continually turning the whole trajectory — including the failures and near-misses a scalar score
+throws away — into concise natural-language feedback for the juniors: *avoid this error, stop crowding this
+exhausted corner, build on this working idea.* The cost-efficiency is not a trick bolted on; it falls out
+of faithfully modeling how a resource-constrained team divides labor.
 
 Across mathematical-discovery and system-engineering benchmarks, on both GPT-5 and Kimi-K2 backbones,
 SpecEvo matches or exceeds the strongest baselines on most tasks while spending **2.0–3.4× less** than
@@ -30,33 +36,39 @@ the average baseline.
 
 ## Motivation
 
-The expense of LLM-driven discovery starts with one decision — handing every step to a single frontier
-model — and the trouble compounds from there. With only an expensive model in hand, a system must pick a
-regime, and both fail. A *sequential* refinement loop is cheap to coordinate but slow: frontier reasoning
-is slow per step, and early on the model has little context about what has already been tried, so the
-quality curve takes off late and short budgets fare poorly. A *parallel* population covers the space
-early, but if every lineage calls the frontier model the cost explodes. The way out is to stop treating
-breadth and depth as the same kind of work: breadth — running many directions at once — is exactly what
-cheap, fast models are good at, while depth — the rare step that genuinely needs frontier-scale reasoning
-— is reserved for the expensive model and run sequentially so it never throttles throughput. This is why
-SpecEvo pairs a cheap parallel **Speculator** with a rarely-woken frontier **Navigator**.
+The frontier-only recipe is the computational form of a fantasy: hire one brilliant researcher, sit them at
+a desk, and have them personally run every experiment, judge every result, and decide every next move,
+working flat-out until the money runs out. No real discovery happens this way — least of all in the
+ordinary, budget-limited labs that produce most of science. A working lab is a *team with a structure*, and
+that structure exists precisely because no single mind, however capable, is the cheapest way to do every
+job. SpecEvo asks what that structure looks like when the lab is poor — few experts, little compute — and
+builds the framework as a mechanical scale-model of it, with three roles tied together by a shared lab
+notebook.
 
-But splitting by cost only helps if the cheap swarm is productive, and productivity depends on how its
-output is *used*. Real research is *generate-then-reflect*: many cheap attempts are run broadly, then
-someone steps back and looks across the whole body of work — successes *and* failures — to decide what to
-try next. A loop of `improve → improve → improve` throws that panoramic evidence away. SpecEvo keeps it:
-the Speculator is the bench whose attempts are valued as much for the evidence they leave behind as for
-the wins they score, and the Navigator is the investigator that reads the accumulated archive as a map
-and proposes where to go next, rather than grinding out one more edit.
+The first lesson of a low-resource lab is that *one expert cannot also be every student*. Staffing the
+problem with only a frontier model forces the two failure modes a one-person lab would suffer: work
+sequentially, and the search is slow to find its footing under a budget — each step re-derives context the
+loop never recorded; parallelize by putting a professor at every bench, and the cost explodes. So SpecEvo
+separates the jobs by who can afford to do them. Breadth — running many directions at once — is what cheap,
+fast models (the juniors, our **Speculator**) are good at; depth — the rare step that genuinely needs
+frontier-scale reasoning — is reserved for the expensive model (the PI, our **Navigator**), woken
+sequentially so it never throttles the bench.
 
-That reflective layer is only as good as the stream it reads, so the cheap swarm must be steered, not
-merely repeated. Under a generic "improve this" prompt, small models collapse to a few familiar patterns
-and cover the space narrowly; SpecEvo instead drives the Speculator with a set of distinct exploration
-operators that force breadth back in. And it treats every output as information — including the failures
-and near-misses a scalar score discards. A fitness number is a lossy summary of what an evaluation
-revealed: a crash says what to avoid, a saturated region says where to stop digging, a winner's
-description says what mechanism is paying off. The **Advisor** recovers this discarded context as
-code-shaped **natural-language feedback** that steers the next round — what a `Δscore` alone cannot say.
+But cheap juniors only help if their work is *used*, and discovery runs on collective evidence, not on one
+mind's memory. A loop of `improve → improve → improve` keeps the running best and discards the rest;
+a real lab keeps a notebook and reads across the whole body of work — successes and failures alike — before
+deciding what to try next. SpecEvo's archive is that notebook: the Speculator's attempts are valued as much
+for the evidence they leave behind as for the wins they score, and when the Navigator wakes it does not
+stare at a single program but reads the *map* of everything tried — which directions are occupied, which
+are paying off, how stalled the search has become — and proposes a grounded hypothesis about where to go.
+
+And juniors must be *mentored*, not just told to work harder. Left under a generic "improve this" prompt, a
+cheap model collapses to a few familiar patterns — the student who keeps re-running the one protocol they
+know — so SpecEvo assigns varied work through a set of distinct exploration operators that force breadth
+back in. More importantly, every result is information, even the failures: a crash says what to avoid, an
+exhausted region says where to stop digging, a winning program says what idea is paying off. A scoreboard
+throws all of this away; the senior labmate does not. The **Advisor** reads the whole trajectory and hands
+the juniors concrete, code-shaped guidance in plain language — what a `Δscore` alone can never say.
 
 ---
 
@@ -64,45 +76,46 @@ code-shaped **natural-language feedback** that steers the next round — what a 
 
 ![SpecEvo overall framework](image/Overall.png)
 
-*An **Init phase** seeds a diverse, behaviorally embedded population. The **Speculator** (cheap model)
-explores many directions in parallel into an adaptive MAP-Elites archive; the **Navigator** (frontier
-model) wakes on stagnation to propose a directed move; and the **Advisor** distills population-level
-lessons that are injected back into the Speculator's prompt. The archive's elites converge to the
-returned **best code**.*
+*The lab in one pass. An **Init phase** lays out a few diverse starting projects and a behaviorally
+embedded population. The **Speculator** (the juniors — a cheap model) explores many directions in parallel
+into an adaptive MAP-Elites archive that serves as the **lab notebook**; the **Navigator** (the PI — a
+frontier model) wakes on stagnation to read the notebook and propose a directed move; and the **Advisor**
+(the senior labmate) distills lessons from the whole trajectory and injects them back into the juniors'
+prompts. The archive's best entry is returned as the **best code**.*
 
 ### Components
 
-- **Init phase — seeding the strategy map.**
-  The frontier model writes a handful of *diverse seed programs* sequentially (each conditioned on the
-  previous to push for novelty); the cheap model then fans each seed into many parallel variants. Every
-  program is encoded as a **hybrid behavior descriptor** — structural AST features concatenated with a
-  PCA-reduced embedding of its natural-language description — so programs of equal fitness but different
-  ideas occupy different niches.
+- **Init phase — laying out the starting projects.**
+  The professor (frontier model) sketches a handful of *diverse seed programs* sequentially — each
+  conditioned on the previous to push for novelty — and the juniors (cheap model) fan each seed into many
+  parallel variants. Every program is encoded as a **hybrid behavior descriptor** — structural AST features
+  concatenated with a PCA-reduced embedding of its natural-language description — so programs of equal
+  fitness but different ideas occupy different niches.
 
-- **Population — adaptive, online-clustered MAP-Elites.**
-  Niches are *discovered online* by KMeans over the learned descriptor and **periodically re-clustered**
-  as the search moves, rather than fixed up front. Each niche keeps a single elite incumbent; a program
-  is admitted only if it beats its niche's incumbent.
+- **The lab notebook — an adaptive, online-clustered MAP-Elites archive.**
+  Niches are *discovered online* by KMeans over the learned descriptor and **periodically re-clustered** as
+  the search moves, rather than fixed up front. Each niche keeps a single elite incumbent; a program is
+  admitted only if it beats its niche's incumbent. This is the shared record every role reads and writes.
 
-- **Speculator — cheap, massive, parallel exploration.**
+- **Speculator (the juniors) — cheap, massive, parallel exploration.**
   The low-cost model issues many proposals at once across the archive, driven by a set of distinct
   operators (focused fix, mechanism swap, structural/component crossover, analysis-guided mutation). A
   proposal is valuable not only when it wins, but because its outcome — admits, near-misses, recurring
   errors — becomes *evidence* for the Navigator and Advisor.
 
-- **Navigator — rare, expensive, hypothesis-driven escalation.**
-  The frontier model wakes only at fixed intervals, reads the cells' representatives, and is routed by a
-  stagnation signal to one of three move-classes of increasing intensity — **Synthesis** (hybridize
-  nearby strong ideas), **Surgical** (precisely tune the champion), or **Reframe** (switch to a
-  genuinely different strategy family) — with the counter-intuitive but data-driven rule that the
-  *deepest* stagnation triggers a **Reframe**. A short *Strategy Log* of its last six attempts keeps it
-  from repeating dead-ends.
+- **Navigator (the PI) — rare, expensive, hypothesis-driven direction.**
+  The frontier model wakes only at fixed intervals, reads the cells' representatives like a PI reviewing the
+  lab's results, and is routed by a stagnation signal to one of three move-classes of increasing intensity —
+  **Synthesis** (hybridize nearby strong ideas), **Surgical** (precisely tune the champion), or **Reframe**
+  (switch to a genuinely different strategy family) — with the counter-intuitive but data-driven rule that
+  the *deepest* stagnation triggers a **Reframe**. A short *Strategy Log* of its last six visits keeps it
+  from re-proposing dead-ends.
 
-- **Advisor — population-level reflection in language.**
-  At intervals, cheap deterministic counters label niches as **leading**, **improving**, **saturated**,
-  or **under-explored** (by whether a niche's frontier moved and how heavily it is being mined — no
-  absolute thresholds), and aggregate **recurring errors** into bounded, portable knowledge. An LLM
-  verbalizes this map into concise advice injected back into the Speculator's prompt.
+- **Advisor (the senior labmate) — mentorship in language.**
+  Between the PI's rare visits, cheap deterministic counters label niches as **leading**, **improving**,
+  **saturated**, or **under-explored** (by whether a niche's frontier moved and how heavily it is being
+  mined — no absolute thresholds), and aggregate **recurring errors** into bounded, portable knowledge. An
+  LLM verbalizes this map into concise advice injected back into the juniors' prompts.
 
 See [SPECEVO_FRAMEWORK.md](SPECEVO_FRAMEWORK.md) for the full method write-up and default configuration.
 
