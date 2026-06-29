@@ -134,8 +134,8 @@ baselines cluster together near the top.
 
 | | GPT-5 | Kimi-K2 |
 |---|---|---|
-| **Math** | ![](image/math_gpt_cost.png) | ![](image/math_kimi_cost.png) |
-| **System** | ![](image/system_gpt_cost.png) | ![](image/system_kimi_cost.png) |
+| **Math** | ![Math cost, GPT-5](image/math_gpt_cost.png) | ![Math cost, Kimi-K2](image/math_kimi_cost.png) |
+| **System** | ![System cost, GPT-5](image/system_gpt_cost.png) | ![System cost, Kimi-K2](image/system_kimi_cost.png) |
 
 Relative to the **average baseline**, SpecEvo is **3.4×** cheaper on math (GPT-5), **2.0×** on math
 (Kimi-K2), **2.8×** on system (GPT-5), and **2.6×** on system (Kimi-K2) — near-SOTA quality at a
