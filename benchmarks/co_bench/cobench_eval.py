@@ -304,8 +304,11 @@ def evaluate_source(
     Returns a metric dict:
       score / dev_score / test_score / overall_score  (higher is better, 1.0 = best-known)
       valid_rate, num_cases, num_instances, feedback
-    ``score`` == ``dev_score`` (the signal search should optimise, matching the
-    CO-Bench agent protocol); ``test_score`` is the held-out set.
+    ``score`` == ``overall_score`` (mean over every instance actually evaluated) —
+    this is the robust signal the search optimises, well-defined under any cap.
+    ``dev_score`` / ``test_score`` reproduce CO-Bench's dev/test split and are only
+    meaningful when the FULL set is run (MAX_CASES=MAX_INSTANCES=0); under a small
+    cap the split can be tiny or empty because get_dev() indexes fixed positions.
     """
     if timeout is None:
         timeout = default_timeout()
@@ -383,14 +386,14 @@ def evaluate_source(
     valid = _valid_rate(results)
 
     return {
-        "score": dev_score,
+        "score": overall,
         "dev_score": dev_score,
         "test_score": test_score,
         "overall_score": overall,
         "valid_rate": valid,
         "num_cases": len(results),
         "num_instances": total_instances,
-        "feedback": _feedback(results, dev_score),
+        "feedback": _feedback(results, overall),
     }
 
 
