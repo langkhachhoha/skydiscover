@@ -23,7 +23,7 @@ on:
           - adaevolve
           - evox
       benchmark_dir:
-        description: "Benchmark directory (must contain initial_program.py, config.yaml, and either evaluator.py or evaluator/evaluator.py)"
+        description: "Benchmark directory (must contain initial_program.py, config.yaml, and either evaluator.py or evaluator/evaluator.py). CO-Bench problems live under benchmarks/co_bench/<slug> (e.g. benchmarks/co_bench/tsp, benchmarks/co_bench/bin_packing_1d)."
         required: false
         default: "benchmarks/math/circle_packing"
       iterations:
@@ -34,6 +34,18 @@ on:
         description: "OpenRouter model id routed through SkyDiscover"
         required: false
         default: "openrouter/openai/gpt-5"
+      cobench_timeout:
+        description: "CO-Bench only: per-instance time limit in seconds (paper uses 10). Ignored by non-CO-Bench benchmarks."
+        required: false
+        default: "10"
+      cobench_max_cases:
+        description: "CO-Bench only: max test-case files per evaluation (0 or blank = all files). This is the full CO-Bench test set."
+        required: false
+        default: ""
+      cobench_max_instances:
+        description: "CO-Bench only: max instances per test-case file (0 or blank = all instances). This is the full CO-Bench test set."
+        required: false
+        default: ""
       seed:
         description: "Experiment seed label (e.g. 1, 2, 3) — tags the run name and artifacts only; does not change execution"
         required: false
@@ -126,6 +138,10 @@ jobs:
           # Per-call OpenRouter usage.cost is appended here by skydiscover.llm.cost_tracker.
           # A running aggregate is rewritten at cost_log.totals.json on every call.
           SKYDISCOVER_COST_LOG: outputs/github-actions/baseline_${{ inputs.baseline }}_${{ github.run_id }}/cost_log.jsonl
+          # CO-Bench knobs (read by benchmarks/co_bench/*/evaluator.py; harmless for other benchmarks).
+          COBENCH_TIMEOUT: ${{ inputs.cobench_timeout }}
+          COBENCH_MAX_CASES: ${{ inputs.cobench_max_cases }}
+          COBENCH_MAX_INSTANCES: ${{ inputs.cobench_max_instances }}
         run: |
           mkdir -p "outputs/github-actions/baseline_${{ inputs.baseline }}_${{ github.run_id }}"
           uv run skydiscover-run "${{ inputs.benchmark_dir }}/initial_program.py" \

@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       benchmark:
-        description: "Full path to benchmark directory (e.g. 'levi/examples/circle_packing')"
+        description: "Full path to benchmark directory (e.g. 'levi/examples/circle_packing'). CO-Bench examples live under levi/examples/co_bench/<slug> (e.g. levi/examples/co_bench/tsp, levi/examples/co_bench/gap)."
         required: true
         type: string
         default: "levi/examples/circle_packing"
@@ -130,6 +130,21 @@ on:
         required: false
         type: string
         default: ""
+      cobench_timeout:
+        description: "CO-Bench only: per-instance time limit in seconds (paper uses 10). Ignored by non-CO-Bench examples."
+        required: false
+        type: string
+        default: "10"
+      cobench_max_cases:
+        description: "CO-Bench only: max test-case files per evaluation (0 or blank = all files)."
+        required: false
+        type: string
+        default: ""
+      cobench_max_instances:
+        description: "CO-Bench only: max instances per test-case file (0 or blank = all instances). This is the full CO-Bench test set."
+        required: false
+        type: string
+        default: ""
       seed:
         description: "Experiment seed label (e.g. 1, 2, 3) — tags the run name and artifacts only; does not change execution"
         required: false
@@ -190,6 +205,18 @@ on:
         required: false
         type: string
         default: ""
+      cobench_timeout:
+        required: false
+        type: string
+        default: "10"
+      cobench_max_cases:
+        required: false
+        type: string
+        default: ""
+      cobench_max_instances:
+        required: false
+        type: string
+        default: ""
       seed:
         required: false
         type: string
@@ -210,6 +237,10 @@ jobs:
       OPENAI_BASE_URL: https://openrouter.ai/api/v1
       PYTHONUNBUFFERED: "1"
       OUTPUT_DIR: outputs/github-actions/blade_${{ github.run_id }}
+      # CO-Bench knobs (read by levi/examples/co_bench/*/problem.py; harmless otherwise).
+      COBENCH_TIMEOUT: ${{ inputs.cobench_timeout }}
+      COBENCH_MAX_CASES: ${{ inputs.cobench_max_cases }}
+      COBENCH_MAX_INSTANCES: ${{ inputs.cobench_max_instances }}
 
     steps:
       - name: Checkout repository
