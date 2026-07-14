@@ -56,10 +56,13 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
   file, `load_data()` yields instances; each instance runs `solve(**instance)`
   then `eval_func(**instance, **solution)`.
 - **Per-instance isolation + timeout.** Non-daemon callers (the baseline
-  evaluator) run each instance in a **forked subprocess** and hard-kill it at the
-  limit. Daemon callers (BLADE workers, which may not spawn child processes) run
-  each instance in-process under **`SIGALRM`**. Both enforce the same 10s limit;
-  a runaway/looping `solve` scores 0 and never hangs the search.
+  evaluator) run instances in **parallel forked subprocesses** (up to
+  `COBENCH_WORKERS`, default = CPU count), each hard-killed at the limit — so a
+  slow/looping candidate's wall time is bounded by `ceil(instances / workers) ×
+  timeout` instead of `instances × timeout`. Daemon callers (BLADE workers, which
+  may not spawn child processes) run instances sequentially in-process under
+  **`SIGALRM`** (bounded by the worker's own eval_timeout). Both enforce the same
+  10s per-instance limit; a runaway `solve` scores 0 and never hangs the search.
 - Applies the task's `norm_score` (normalize vs. best-known). The search signal
   `combined_score` = `overall_score` = mean over **every instance actually
   evaluated** (robust under any cap). `dev_score` / `test_score` reproduce
@@ -73,6 +76,7 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
 | `COBENCH_TIMEOUT` | per-instance time limit, seconds (paper: 10) | `10` |
 | `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | all |
 | `COBENCH_MAX_INSTANCES` | max instances per file (`0` = all) | `3` |
+| `COBENCH_WORKERS` | parallel instance evaluators (baseline path) | CPU count |
 
 **Default = all files × 3 instances/file** — ~6–48 instances per problem (TSP 6,
 gap 48, graph_coloring 30…). In practice each iteration is **dominated by the
