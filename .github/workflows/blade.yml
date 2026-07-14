@@ -136,7 +136,7 @@ on:
         type: string
         default: "10"
       cobench_max_cases:
-        description: "CO-Bench only: max test-case files per evaluation (default 2; set 0 for all files = full test set)."
+        description: "CO-Bench only: max test-case files per evaluation (default: all files; set a positive N to use fewer for a quicker run)."
         required: false
         type: string
         default: ""

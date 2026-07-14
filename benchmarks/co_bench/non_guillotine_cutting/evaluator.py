@@ -8,8 +8,8 @@ instances actually evaluated); dev_score/test_score reproduce CO-Bench's
 dev/test split and are meaningful only when the full set is run.
 
 Runtime knobs (env): COBENCH_TIMEOUT, COBENCH_MAX_CASES, COBENCH_MAX_INSTANCES.
-Defaults are a fast bounded sample (2 test-case files x 3 instances). Set a
-variable to 0 for the full set, or to any positive number to widen it.
+Default sample: ALL test-case files x 3 instances per file. Set MAX_INSTANCES=0
+for the full set, or MAX_CASES to a positive number to use fewer files.
 """
 import os
 import sys
@@ -34,7 +34,7 @@ def evaluate(program_path, fast_mode=False, **_):
     r = ce.evaluate_source(
         TASK,
         source,
-        max_cases=_cap("COBENCH_MAX_CASES", 2),
+        max_cases=_cap("COBENCH_MAX_CASES", None),
         max_instances=_cap("COBENCH_MAX_INSTANCES", 3),
     )
     return {

@@ -60,24 +60,27 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
   limit. Daemon callers (BLADE workers, which may not spawn child processes) run
   each instance in-process under **`SIGALRM`**. Both enforce the same 10s limit;
   a runaway/looping `solve` scores 0 and never hangs the search.
-- Applies the task's `norm_score` (normalize vs. best-known) and `get_dev`
-  (dev/test split). Returns `dev_score` (the search signal, exposed as
-  `combined_score`), `test_score` (held-out), `overall_score`, and `valid_rate`.
+- Applies the task's `norm_score` (normalize vs. best-known). The search signal
+  `combined_score` = `overall_score` = mean over **every instance actually
+  evaluated** (robust under any cap). `dev_score` / `test_score` reproduce
+  CO-Bench's dev/test split and are informational — only meaningful at the full
+  set (under a small cap the split can be tiny/empty). Also returns `valid_rate`.
 
 ## Runtime knobs (env vars)
 
 | Variable | Meaning | Default |
 |----------|---------|---------|
 | `COBENCH_TIMEOUT` | per-instance time limit, seconds (paper: 10) | `10` |
-| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | `2` |
+| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | all |
 | `COBENCH_MAX_INSTANCES` | max instances per file (`0` = all) | `3` |
 
-**Defaults are a fast bounded sample** (2 files × 3 instances ⇒ ≤ 6 instances,
-worst-case ~60s per candidate evaluation, usually far less). Cost grows as
-`cases × instances × up to 10s`. To run the **full CO-Bench test set** (faithful
-to the paper, but much slower), set `COBENCH_MAX_CASES=0` and
-`COBENCH_MAX_INSTANCES=0`; use any positive numbers to widen the sample in
-between.
+**Default = all files × 3 instances/file** — ~6–48 instances per problem (TSP 6,
+gap 48, graph_coloring 30…). In practice each iteration is **dominated by the
+LLM call** (~10–30s); evaluation is usually well under a second because good
+solves finish fast and bad ones fail fast — the instance count only bites when a
+candidate is *valid but slow* (near 10s × instances). To run the **full
+CO-Bench test set** (faithful to the paper, slower), set `COBENCH_MAX_INSTANCES=0`;
+lower `COBENCH_MAX_CASES` to use fewer files for a quicker smoke test.
 
 ## Running locally
 
