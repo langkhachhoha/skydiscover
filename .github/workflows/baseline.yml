@@ -39,11 +39,11 @@ on:
         required: false
         default: "10"
       cobench_max_cases:
-        description: "CO-Bench only: max test-case files per evaluation (0 or blank = all files). This is the full CO-Bench test set."
+        description: "CO-Bench only: max test-case files per evaluation (default 2; set 0 for all files = full test set)."
         required: false
         default: ""
       cobench_max_instances:
-        description: "CO-Bench only: max instances per test-case file (0 or blank = all instances). This is the full CO-Bench test set."
+        description: "CO-Bench only: max instances per test-case file (default 3; set 0 for all instances = full test set)."
         required: false
         default: ""
       seed:

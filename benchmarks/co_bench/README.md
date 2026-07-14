@@ -69,14 +69,15 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
 | Variable | Meaning | Default |
 |----------|---------|---------|
 | `COBENCH_TIMEOUT` | per-instance time limit, seconds (paper: 10) | `10` |
-| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0`/blank = all) | all |
-| `COBENCH_MAX_INSTANCES` | max instances per file (`0`/blank = all) | all |
+| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | `2` |
+| `COBENCH_MAX_INSTANCES` | max instances per file (`0` = all) | `3` |
 
-**By default the full CO-Bench test set is evaluated** (every file, every
-instance). This is faithful to the paper but slow — cost grows as
-`cases × instances × up to 10s`, so a single candidate evaluation on e.g. TSP
-runs 256 instances × up to 10s. **Set `COBENCH_MAX_CASES` / `COBENCH_MAX_INSTANCES`
-to bound a run** when you want it faster (e.g. for a smoke test).
+**Defaults are a fast bounded sample** (2 files × 3 instances ⇒ ≤ 6 instances,
+worst-case ~60s per candidate evaluation, usually far less). Cost grows as
+`cases × instances × up to 10s`. To run the **full CO-Bench test set** (faithful
+to the paper, but much slower), set `COBENCH_MAX_CASES=0` and
+`COBENCH_MAX_INSTANCES=0`; use any positive numbers to widen the sample in
+between.
 
 ## Running locally
 

@@ -7,8 +7,8 @@ best-known objective. `combined_score` == dev_score (the search signal);
 `test_score` is the held-out set.
 
 Runtime knobs (env): COBENCH_TIMEOUT, COBENCH_MAX_CASES, COBENCH_MAX_INSTANCES.
-Defaults are FULL (all cases, all instances); set them (e.g. COBENCH_MAX_CASES,
-COBENCH_MAX_INSTANCES) to bound a run when you need it faster.
+Defaults are a fast bounded sample (2 test-case files x 3 instances). Set a
+variable to 0 for the full set, or to any positive number to widen it.
 """
 import os
 import sys
@@ -33,8 +33,8 @@ def evaluate(program_path, fast_mode=False, **_):
     r = ce.evaluate_source(
         TASK,
         source,
-        max_cases=_cap("COBENCH_MAX_CASES", None),
-        max_instances=_cap("COBENCH_MAX_INSTANCES", None),
+        max_cases=_cap("COBENCH_MAX_CASES", 2),
+        max_instances=_cap("COBENCH_MAX_INSTANCES", 3),
     )
     return {
         "combined_score": r["score"],
