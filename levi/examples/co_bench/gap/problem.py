@@ -49,7 +49,7 @@ def score_fn(solve_fn, _inputs=None) -> dict:
     r = ce.evaluate_source(
         TASK,
         source,
-        max_cases=_cap("COBENCH_MAX_CASES", None),
+        max_cases=_cap("COBENCH_MAX_CASES", 10),
         max_instances=_cap("COBENCH_MAX_INSTANCES", 3),
     )
     out = {

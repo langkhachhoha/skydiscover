@@ -33,7 +33,6 @@ Runtime knobs (env vars, all optional):
 
 from __future__ import annotations
 
-import concurrent.futures
 import importlib.util
 import math
 import multiprocessing as mp
@@ -357,44 +356,22 @@ def evaluate_source(
             instances = instances[:max_instances]
         loaded[case] = list(instances)
 
-    score_arrays = {case: [None] * len(insts) for case, insts in loaded.items()}
-    tasks = [(case, idx, inst)
-             for case, insts in loaded.items()
-             for idx, inst in enumerate(insts)]
-    total_instances = len(tasks)
-
-    if use_subprocess:
-        # Baseline path: evaluate instances in PARALLEL (each in its own forked
-        # subprocess with a hard timeout). This bounds a slow/looping candidate's
-        # wall time to ~one timeout batch instead of instances x timeout — matching
-        # CO-Bench's ParallelRun. Order is preserved via the (case, idx) key.
-        workers = _env_int("COBENCH_WORKERS", None) or (os.cpu_count() or 4)
-        workers = max(1, min(workers, len(tasks) or 1))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-            fut = {
-                ex.submit(_run_instance_subprocess, solve_source, config_path, inst, timeout):
-                    (case, idx)
-                for case, idx, inst in tasks
-            }
-            for f in concurrent.futures.as_completed(fut):
-                case, idx = fut[f]
-                try:
-                    score_arrays[case][idx] = f.result()
-                except Exception as e:  # noqa: BLE001
-                    score_arrays[case][idx] = f"Exception: {e}"
-    else:
-        # Daemon path (BLADE worker): no child processes allowed, so evaluate
-        # sequentially under SIGALRM (main thread) or a soft thread timeout.
-        # The BLADE worker's own eval_timeout bounds the whole candidate.
-        for case, idx, inst in tasks:
-            if is_main_thread:
+    total_instances = sum(len(v) for v in loaded.values())
+    # Evaluate every instance SEQUENTIALLY (one at a time), preserving order.
+    # Non-daemon callers run each instance in a forked subprocess (hard-kill on
+    # timeout); daemon callers (BLADE workers) use in-process SIGALRM / a soft
+    # thread timeout.
+    for case, instances in loaded.items():
+        scores: list[Any] = []
+        for inst in instances:
+            if use_subprocess:
+                s = _run_instance_subprocess(solve_source, config_path, inst, timeout)
+            elif is_main_thread:
                 s = _run_instance_sigalrm(solve_fn, cfg.eval_func, inst, timeout)
             else:
                 s = _run_instance_thread(solve_fn, cfg.eval_func, inst, timeout)
-            score_arrays[case][idx] = s
-
-    for case, insts in loaded.items():
-        results[case] = (score_arrays[case], None)
+            scores.append(s)
+        results[case] = (scores, None)
 
     # Normalise raw scores against best-known objective.
     if callable(norm_score):

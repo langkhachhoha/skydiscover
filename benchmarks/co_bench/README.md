@@ -55,14 +55,13 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
 - Loads the vendored task `config.py` and iterates its test-case files. For each
   file, `load_data()` yields instances; each instance runs `solve(**instance)`
   then `eval_func(**instance, **solution)`.
-- **Per-instance isolation + timeout.** Non-daemon callers (the baseline
-  evaluator) run instances in **parallel forked subprocesses** (up to
-  `COBENCH_WORKERS`, default = CPU count), each hard-killed at the limit — so a
-  slow/looping candidate's wall time is bounded by `ceil(instances / workers) ×
-  timeout` instead of `instances × timeout`. Daemon callers (BLADE workers, which
-  may not spawn child processes) run instances sequentially in-process under
-  **`SIGALRM`** (bounded by the worker's own eval_timeout). Both enforce the same
-  10s per-instance limit; a runaway `solve` scores 0 and never hangs the search.
+- **Per-instance isolation + timeout.** Instances are evaluated **sequentially**
+  (one at a time). Non-daemon callers (the baseline evaluator) run each instance
+  in a **forked subprocess** and hard-kill it at the limit; daemon callers (BLADE
+  workers, which may not spawn child processes) run each instance in-process under
+  **`SIGALRM`**. Both enforce the same 10s per-instance limit; a runaway `solve`
+  scores 0 and never hangs the search. (Note: with sequential evaluation a
+  *valid-but-slow* candidate costs up to `instances × timeout`.)
 - Applies the task's `norm_score` (normalize vs. best-known). The search signal
   `combined_score` = `overall_score` = mean over **every instance actually
   evaluated** (robust under any cap). `dev_score` / `test_score` reproduce
@@ -74,17 +73,15 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
 | Variable | Meaning | Default |
 |----------|---------|---------|
 | `COBENCH_TIMEOUT` | per-instance time limit, seconds (paper: 10) | `10` |
-| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | all |
+| `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | `10` |
 | `COBENCH_MAX_INSTANCES` | max instances per file (`0` = all) | `3` |
-| `COBENCH_WORKERS` | parallel instance evaluators (baseline path) | CPU count |
 
-**Default = all files × 3 instances/file** — ~6–48 instances per problem (TSP 6,
-gap 48, graph_coloring 30…). In practice each iteration is **dominated by the
-LLM call** (~10–30s); evaluation is usually well under a second because good
-solves finish fast and bad ones fail fast — the instance count only bites when a
-candidate is *valid but slow* (near 10s × instances). To run the **full
-CO-Bench test set** (faithful to the paper, slower), set `COBENCH_MAX_INSTANCES=0`;
-lower `COBENCH_MAX_CASES` to use fewer files for a quicker smoke test.
+**Default = up to 10 files × 3 instances/file** — ≤ 30 instances per problem
+(TSP has only 2 files ⇒ 6). Each iteration is usually **dominated by the LLM
+call**; evaluation is fast when solves finish or fail quickly, but since
+instances run **sequentially**, a *valid-but-slow* candidate can cost up to
+`instances × 10s`. To run the **full CO-Bench test set** (faithful to the paper,
+slower), set `COBENCH_MAX_CASES=0` and `COBENCH_MAX_INSTANCES=0`.
 
 ## Running locally
 
