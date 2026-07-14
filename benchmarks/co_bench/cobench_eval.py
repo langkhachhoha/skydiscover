@@ -205,6 +205,23 @@ def list_test_cases(task: str, data_root: Path = DATA_ROOT) -> list[str]:
 # Per-instance execution
 # --------------------------------------------------------------------------- #
 def _subproc_target(solve_source, config_path, instance, q):
+    # CRITICAL: this child is fork()'d from the search-runner process, so it
+    # inherits the runner's SIGTERM/SIGINT handlers AND its shared mp.Event
+    # shutdown flag. If we let a timeout-kill (SIGTERM) run the inherited handler,
+    # the child would call request_shutdown() and set the *shared* event, aborting
+    # the whole search after the first timed-out instance. Reset signal handlers
+    # to default and detach the process group so killing this child never touches
+    # the parent's shutdown state.
+    for _sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_sig, signal.SIG_DFL)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        if hasattr(os, "setpgrp"):
+            os.setpgrp()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         ns: dict[str, Any] = {}
         exec(solve_source, ns)
@@ -230,13 +247,13 @@ def _run_instance_subprocess(solve_source, config_path, instance, timeout) -> An
     p.start()
     p.join(timeout + 1)
     if p.is_alive():
-        p.terminate()
+        # Use SIGKILL (uncatchable) rather than SIGTERM so no inherited handler
+        # can run in the child — see _subproc_target for why that matters.
+        try:
+            p.kill()
+        except Exception:  # noqa: BLE001
+            p.terminate()
         p.join(1)
-        if p.is_alive():
-            try:
-                p.kill()
-            except Exception:  # noqa: BLE001
-                pass
         return f"Timeout ({timeout}s)"
     try:
         return q.get_nowait()
