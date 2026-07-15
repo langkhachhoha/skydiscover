@@ -62,11 +62,16 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
   **`SIGALRM`**. Both enforce the same 10s per-instance limit; a runaway `solve`
   scores 0 and never hangs the search. (Note: with sequential evaluation a
   *valid-but-slow* candidate costs up to `instances × timeout`.)
-- Applies the task's `norm_score` (normalize vs. best-known). The search signal
-  `combined_score` = `overall_score` = mean over **every instance actually
-  evaluated** (robust under any cap). `dev_score` / `test_score` reproduce
-  CO-Bench's dev/test split and are informational — only meaningful at the full
-  set (under a small cap the split can be tiny/empty). Also returns `valid_rate`.
+- Applies the task's `norm_score` (normalize vs. best-known), then splits the
+  evaluated instances into a **dev** set (the search signal) and a **disjoint
+  test** set (held out). The split is deterministic: flatten every instance in
+  file order then instance order and take the first `COBENCH_DEV_FRAC` (7/10 by
+  default) as dev, the remaining tail as test. So `combined_score` = `dev_score`
+  = mean over the **dev** split (the only number the search optimises);
+  `test_score` = mean over the **held-out test** tail (reported for
+  generalisation, never optimised); `overall_score` = mean over **every**
+  instance (dev + test). Also returns `valid_rate`, `num_dev`, `num_test`. The
+  split is uniform across all tasks (the vendored `get_dev` is ignored).
 
 ## Runtime knobs (env vars)
 
@@ -75,6 +80,7 @@ gets scored **identically** whether it is discovered by a baseline or by BLADE.
 | `COBENCH_TIMEOUT` | per-instance time limit, seconds (paper: 10) | `10` |
 | `COBENCH_MAX_CASES` | max test-case files per evaluation (`0` = all) | `10` |
 | `COBENCH_MAX_INSTANCES` | max instances per file (`0` = all) | `3` |
+| `COBENCH_DEV_FRAC` | fraction of instances in the dev (search) split; rest is held-out test | `0.7` |
 
 **Default = up to 10 files × 3 instances/file** — ≤ 30 instances per problem
 (TSP has only 2 files ⇒ 6). Each iteration is usually **dominated by the LLM

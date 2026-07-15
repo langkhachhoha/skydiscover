@@ -3,9 +3,10 @@
 Delegates to the shared CO-Bench engine (benchmarks/co_bench/cobench_eval.py),
 which scores the candidate `solve` on the vendored test instances under a hard
 per-instance time limit (10s, CO-Bench protocol) and normalizes against the
-best-known objective. `combined_score` == overall_score (mean over the
-instances actually evaluated); dev_score/test_score reproduce CO-Bench's
-dev/test split and are meaningful only when the full set is run.
+best-known objective. `combined_score` == dev_score (the search signal:
+mean over the DEV split, the first 7/10 of the ordered instances);
+test_score is the disjoint held-out tail (reported, never optimised);
+overall_score is the mean over every evaluated instance.
 
 Runtime knobs (env): COBENCH_TIMEOUT, COBENCH_MAX_CASES, COBENCH_MAX_INSTANCES.
 Default sample: 10 test-case files x 3 instances per file. Set MAX_CASES=0 or

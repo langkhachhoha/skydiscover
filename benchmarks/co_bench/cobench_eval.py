@@ -25,10 +25,19 @@ paths while respecting their process models:
   * **in-process SIGALRM** (daemon caller e.g. a LEVI worker, which forbids
     child processes): interrupts pure-Python loops in the worker's main thread.
 
+Every task is split into a **dev** set (what the search optimises) and a
+disjoint **test** set (held out, reported but never optimised).  The split is
+deterministic: flatten all evaluated instances in case order (files sorted by
+name) then instance order, take the first ``COBENCH_DEV_FRAC`` (7/10 by
+default) as dev and the remaining tail as test.  With the default cap of 10
+files x 3 instances (upper bound 30) that is roughly a 21/9 dev/test split.
+The vendored ``get_dev`` is ignored so all tasks share this scheme.
+
 Runtime knobs (env vars, all optional):
   COBENCH_TIMEOUT        per-instance time limit in seconds (default 10)
-  COBENCH_MAX_CASES      cap on number of test-case files evaluated
-  COBENCH_MAX_INSTANCES  cap on instances per test-case file
+  COBENCH_MAX_CASES      cap on number of test-case files evaluated (default 10)
+  COBENCH_MAX_INSTANCES  cap on instances per test-case file (default 3)
+  COBENCH_DEV_FRAC       fraction of instances used for the dev split (default 0.7)
 """
 
 from __future__ import annotations
@@ -105,32 +114,59 @@ def _average_score(results: dict) -> float:
     ) / len(results)
 
 
-def _filter_dev(results: dict, dev: Optional[dict]) -> dict:
-    if dev is None:
-        return results
+def default_dev_frac() -> float:
+    """Fraction of the ordered instance sequence assigned to the dev (search) split."""
+    raw = os.environ.get("COBENCH_DEV_FRAC", "").strip()
+    if raw:
+        try:
+            v = float(raw)
+            if 0.0 < v < 1.0:
+                return v
+        except ValueError:
+            pass
+    return 0.7  # 7/3 dev/test split
+
+
+def _split_indices(loaded: dict, dev_frac: float) -> tuple[dict, dict]:
+    """Deterministic ordered dev/test split over the flattened instance list.
+
+    Every task is split the SAME way (the vendored ``get_dev`` is ignored) so
+    the search set and the held-out set are disjoint and reproducible.  We
+    flatten all evaluated instances in case order (files sorted by name) then
+    instance order, take the first ``dev_frac`` (7/10 by default) as **dev**
+    (what the search optimises) and the remaining tail as **test** (held out,
+    reported but never optimised).  Returns ``(dev, test)``, each a dict
+    ``case -> [instance indices]``.
+    """
+    flat = [(case, idx) for case, insts in loaded.items() for idx in range(len(insts))]
+    n = len(flat)
+    if n == 0:
+        return {}, {}
+    n_dev = int(round(n * dev_frac))
+    if n >= 2:
+        n_dev = max(1, min(n - 1, n_dev))  # keep both splits non-empty
+    dev: dict = {}
+    test: dict = {}
+    for case, idx in flat[:n_dev]:
+        dev.setdefault(case, []).append(idx)
+    for case, idx in flat[n_dev:]:
+        test.setdefault(case, []).append(idx)
+    return dev, test
+
+
+def _select(results: dict, sel: dict) -> dict:
+    """Keep only the instance indices named in ``sel`` (dict case -> [idx])."""
     out = {}
     for case, (scores, error_message) in results.items():
-        if case not in dev:
+        if case not in sel:
             continue
-        dev_list = dev[case] or [0]
-        sel = [s for idx, s in enumerate(scores) if idx in dev_list]
-        if sel:
-            out[case] = (sel, error_message)
-    return out
-
-
-def _filter_test(results: dict, dev: Optional[dict]) -> dict:
-    if dev is None:
-        return results
-    out = {}
-    for case, (scores, error_message) in results.items():
-        if case not in dev:
+        if scores is None:
             out[case] = (scores, error_message)
             continue
-        dev_list = dev[case] or [0]
-        sel = [s for idx, s in enumerate(scores) if idx not in dev_list]
-        if sel:
-            out[case] = (sel, error_message)
+        idxs = sel[case]
+        chosen = [s for i, s in enumerate(scores) if i in idxs]
+        if chosen:
+            out[case] = (chosen, error_message)
     return out
 
 
@@ -320,12 +356,12 @@ def evaluate_source(
 
     Returns a metric dict:
       score / dev_score / test_score / overall_score  (higher is better, 1.0 = best-known)
-      valid_rate, num_cases, num_instances, feedback
-    ``score`` == ``overall_score`` (mean over every instance actually evaluated) —
-    this is the robust signal the search optimises, well-defined under any cap.
-    ``dev_score`` / ``test_score`` reproduce CO-Bench's dev/test split and are only
-    meaningful when the FULL set is run (MAX_CASES=MAX_INSTANCES=0); under a small
-    cap the split can be tiny or empty because get_dev() indexes fixed positions.
+      valid_rate, num_cases, num_instances, num_dev, num_test, feedback
+    ``score`` == ``dev_score`` — the search signal, i.e. the mean over the DEV
+    split (the first ``COBENCH_DEV_FRAC`` of the ordered instances).  The search
+    only ever optimises this number.  ``test_score`` is the disjoint held-out
+    tail (reported for generalisation, never optimised).  ``overall_score`` is
+    the mean over EVERY evaluated instance (dev + test), kept for reference.
     """
     if timeout is None:
         timeout = default_timeout()
@@ -340,7 +376,6 @@ def evaluate_source(
         cases = cases[:max_cases]
 
     norm_score = getattr(cfg, "norm_score", None)
-    get_dev = getattr(cfg, "get_dev", None)
 
     # Decide per-instance execution strategy once.
     daemon = mp.current_process().daemon
@@ -397,27 +432,25 @@ def evaluate_source(
         except Exception:  # noqa: BLE001 — fall back to raw on a broken norm
             pass
 
-    dev = None
-    if callable(get_dev):
-        try:
-            dev = get_dev()
-        except Exception:  # noqa: BLE001
-            dev = None
-
+    # Deterministic 7/3 dev/test split over the flattened instance sequence.
+    # The search optimises the DEV split; TEST is held out (reported only).
+    dev_sel, test_sel = _split_indices(loaded, default_dev_frac())
     overall = _average_score(results)
-    dev_score = _average_score(_filter_dev(results, dev))
-    test_score = _average_score(_filter_test(results, dev))
+    dev_score = _average_score(_select(results, dev_sel))
+    test_score = _average_score(_select(results, test_sel))
     valid = _valid_rate(results)
 
     return {
-        "score": overall,
+        "score": dev_score,          # search signal — optimise the dev split
         "dev_score": dev_score,
         "test_score": test_score,
         "overall_score": overall,
         "valid_rate": valid,
         "num_cases": len(results),
         "num_instances": total_instances,
-        "feedback": _feedback(results, overall),
+        "num_dev": sum(len(v) for v in dev_sel.values()),
+        "num_test": sum(len(v) for v in test_sel.values()),
+        "feedback": _feedback(results, overall, dev_score, test_score),
     }
 
 
@@ -430,12 +463,15 @@ def _error_result(msg: str) -> dict[str, Any]:
         "valid_rate": 0.0,
         "num_cases": 0,
         "num_instances": 0,
+        "num_dev": 0,
+        "num_test": 0,
         "feedback": msg,
         "error": msg,
     }
 
 
-def _feedback(results: dict, avg: float, feedback_length: int = 16) -> str:
+def _feedback(results: dict, avg: float, dev: Optional[float] = None,
+              test: Optional[float] = None, feedback_length: int = 16) -> str:
     lines = []
     for case, (scores, err) in list(results.items())[:feedback_length]:
         if err:
@@ -445,7 +481,10 @@ def _feedback(results: dict, avg: float, feedback_length: int = 16) -> str:
         else:
             shown = [s if isinstance(s, str) else f"{float(s):.3f}" for s in scores][:feedback_length]
             lines.append(f"{case} -> Scores: {shown}")
-    lines.append(f"Avg Score {avg}")
+    if dev is not None and test is not None:
+        lines.append(f"Dev Score {dev} | Test Score {test} | Overall {avg}")
+    else:
+        lines.append(f"Avg Score {avg}")
     return "\n".join(lines)
 
 
