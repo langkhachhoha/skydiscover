@@ -15,14 +15,23 @@ against the best-known solution** (score `1.0` = best-known / optimal, higher is
 better), and any program error, constraint violation, or timeout scores **0.0**
 for that instance.
 
-## The 8 representative problems
+## Integrated problems
 
-CO-Bench spans 8 problem categories (36 problems total). To keep runs cheap we
-integrate **one representative problem per category**:
+CO-Bench spans 8 problem categories (36 problems total). We integrate the
+**entire Packing category (all 9 problems)** plus **one representative problem
+per remaining category**:
 
 | Slug | CO-Bench task | Category |
 |------|---------------|----------|
-| `bin_packing_1d`           | Bin packing - one-dimensional      | Packing |
+| `bin_packing_1d`            | Bin packing - one-dimensional              | Packing |
+| `mdmkp`                     | Multi-Demand Multidimensional Knapsack problem | Packing |
+| `mkp`                       | Multidimensional knapsack problem          | Packing |
+| `container_loading`         | Container loading                          | Packing |
+| `container_loading_weight`  | Container loading with weight restrictions | Packing |
+| `packing_circles`           | Packing unequal circles                    | Packing |
+| `packing_circles_area`      | Packing unequal circles area               | Packing |
+| `packing_rectangles`        | Packing unequal rectangles and squares     | Packing |
+| `packing_rectangles_area`   | Packing unequal rectangles and squares area | Packing |
 | `non_guillotine_cutting`   | Constrained non-guillotine cutting | Cutting |
 | `warehouse_location_uncap` | Uncapacitated warehouse location   | Facility location |
 | `flow_shop`                | Flow shop scheduling               | Scheduling |
@@ -150,11 +159,19 @@ seed scores below were produced by the shared engine on a bounded sample
 | Problem | Seed dev score | Notes |
 |---------|:--:|-------|
 | bin_packing_1d           | ~0.99 | first-fit decreasing |
+| packing_circles          | ~1.00 | greedy grid placement, prefix order |
+| mkp                      | ~0.96 | profit/consumption ratio greedy |
+| packing_circles_area     | ~0.94 | greedy grid, largest-first |
+| packing_rectangles_area  | ~0.95 | greedy AABB grid, largest-area-first |
+| packing_rectangles       | ~0.93 | greedy AABB grid, smallest-first |
 | warehouse_location_uncap | ~0.90 | assign each customer to cheapest warehouse |
 | gap                      | ~0.86 | least-consumption + overflow repair |
 | flow_shop                | ~0.82 | identity permutation |
 | tsp                      | ~0.80 | nearest-neighbour |
 | graph_coloring           | ~0.75 | greedy largest-first |
+| mdmkp                    | ~0.61 | greedy demand-satisfaction then profit fill (some instances infeasible → 0) |
+| container_loading        | ~0.45 | best single box type, uniform 3D grid |
+| container_loading_weight | ~0.45 | best single box type, load-aware column stacking |
 | steiner                  | ~0.11 | no Steiner points (MST baseline) |
 | non_guillotine_cutting   | 0.00  | places nothing — genuinely hard feasibility, for the search to crack |
 

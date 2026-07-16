@@ -55,9 +55,18 @@ from typing import Any, Callable, Optional
 # Directory holding the vendored CO-Bench tasks: data/<task>/config.py + files.
 DATA_ROOT = Path(__file__).resolve().parent / "data"
 
-# Canonical slug -> CO-Bench task name (one representative per CO-Bench category).
+# Canonical slug -> CO-Bench task name (one representative per CO-Bench category,
+# plus the full Packing category: all 9 CO-Bench packing problems).
 TASKS: dict[str, str] = {
     "bin_packing_1d": "Bin packing - one-dimensional",          # Packing
+    "mdmkp": "Multi-Demand Multidimensional Knapsack problem",  # Packing
+    "mkp": "Multidimensional knapsack problem",                 # Packing
+    "container_loading": "Container loading",                   # Packing
+    "container_loading_weight": "Container loading with weight restrictions",  # Packing
+    "packing_circles": "Packing unequal circles",              # Packing
+    "packing_circles_area": "Packing unequal circles area",    # Packing
+    "packing_rectangles": "Packing unequal rectangles and squares",       # Packing
+    "packing_rectangles_area": "Packing unequal rectangles and squares area",  # Packing
     "non_guillotine_cutting": "Constrained non-guillotine cutting",  # Cutting
     "warehouse_location_uncap": "Uncapacitated warehouse location",  # Facility location
     "flow_shop": "Flow shop scheduling",                        # Scheduling
@@ -69,6 +78,14 @@ TASKS: dict[str, str] = {
 
 CATEGORY: dict[str, str] = {
     "bin_packing_1d": "Packing",
+    "mdmkp": "Packing",
+    "mkp": "Packing",
+    "container_loading": "Packing",
+    "container_loading_weight": "Packing",
+    "packing_circles": "Packing",
+    "packing_circles_area": "Packing",
+    "packing_rectangles": "Packing",
+    "packing_rectangles_area": "Packing",
     "non_guillotine_cutting": "Cutting",
     "warehouse_location_uncap": "Facility location",
     "flow_shop": "Scheduling",
