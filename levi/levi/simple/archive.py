@@ -73,6 +73,7 @@ class Program:
     cell_id: int = -1  # assigned by archive
     ast_vec: np.ndarray | None = None  # 14-d, lazy-filled
     behavior_vec: np.ndarray | None = None  # standardised hybrid, filled by archive
+    metrics: dict = field(default_factory=dict)  # full score_fn dict (dev/test/overall, ...)
 
     def short_repr(self) -> str:
         desc = self.description.replace("\n", " ")

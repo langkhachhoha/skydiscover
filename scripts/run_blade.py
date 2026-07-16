@@ -449,6 +449,7 @@ def main() -> int:
         "paradigm_model": args.paradigm_model,
         "embedding_model": args.embedding_model,
         "best_score": result.best_score,
+        "best_metrics": result.best_metrics,
         "total_evaluations": result.total_evaluations,
         "total_cost": result.total_cost,
         "archive_size": result.archive_size,
@@ -478,6 +479,15 @@ def main() -> int:
 
     print()
     print(f"Best score        : {result.best_score:.6f}")
+    # CO-Bench (and any problem returning a dev/test split) reports the held-out
+    # test score alongside the optimised dev score. ``best_score`` == dev_score.
+    _m = result.best_metrics or {}
+    if "dev_score" in _m:
+        print(f"Dev score         : {float(_m['dev_score']):.6f}")
+    if "test_score" in _m:
+        print(f"Test score        : {float(_m['test_score']):.6f}  (held out, not optimised)")
+    if "overall_score" in _m:
+        print(f"Overall score     : {float(_m['overall_score']):.6f}")
     print(f"Evaluations used  : {result.total_evaluations}")
     print(f"Total cost        : ${result.total_cost:.4f}")
     print(f"Archive size      : {result.archive_size}")

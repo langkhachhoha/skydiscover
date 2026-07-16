@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Compact grouped bar chart: Heilbronn Triangle hyperparameter ablation.
 
-Two zones along the x-axis, one per ablated knob ("k-means clusters" and
-"paradigm cadence"). Within each zone the three parameter values (20/50/100)
-sit as slim bars snug against each other, each a distinct shade. Scores
-cluster tightly (~0.0350-0.0361), so the y-axis is zoomed into the data band
-with a break marker at the origin to stay honest about the truncation.
+Three zones along the x-axis, one per ablated knob ("k-means clusters",
+"navigator frequency", and "advisor frequency"). Within each zone the three 
+parameter values (20/50/100) sit as slim bars snug against each other, each 
+a distinct shade. Scores cluster tightly (~0.0350-0.0361), so the y-axis is 
+zoomed into the data band with a break marker at the origin to stay honest 
+about the truncation.
 """
 
 from __future__ import annotations
@@ -20,7 +21,8 @@ import numpy as np
 
 # Higher is better.
 KMEANS = {"20": 0.0351, "50": 0.0361, "100": 0.0353}
-PPS_CADENCE = {"20": 0.0361, "50": 0.0357, "100": 0.0350}
+NAVIGATOR_FREQ = {"20": 0.0361, "50": 0.0357, "100": 0.0350}
+ADVISOR_FREQ = {"20": 0.0351, "50": 0.0359, "100": 0.0355}
 
 OUT_DIR = Path(__file__).resolve().parents[2] / "result" / "heilbronn_triangle" / "ablation"
 
@@ -32,9 +34,14 @@ ZONES = [
         "colors": ["#A9C2DD", "#6B97C4", "#3B6EA5"],  # blue ramp
     },
     {
-        "label": "paradigm cadence",
-        "scores": PPS_CADENCE,
+        "label": "navigator frequency",
+        "scores": NAVIGATOR_FREQ,
         "colors": ["#EBBDA9", "#DD8E6E", "#D1603D"],  # terracotta ramp
+    },
+    {
+        "label": "advisor frequency",
+        "scores": ADVISOR_FREQ,
+        "colors": ["#B8DDB8", "#7FC87F", "#4CAF50"],  # green ramp
     },
 ]
 SETTINGS = ["20", "50", "100"]
@@ -56,13 +63,13 @@ def main() -> None:
     y_bottom = lo - span * 0.45
     y_top = hi + span * 0.55
 
-    fig, ax = plt.subplots(figsize=(2.6, 1.9))
+    fig, ax = plt.subplots(figsize=(3.8, 1.9))
 
     bar_w = 0.16
     in_gap = 0.012                # gap between slim bars inside a zone
     n = len(SETTINGS)
     zone_span = n * bar_w + (n - 1) * in_gap
-    zone_pitch = zone_span + 0.22  # small gutter between the two zones
+    zone_pitch = zone_span + 0.22  # small gutter between zones
 
     label_off = span * 0.06
     zone_centres = []
@@ -70,12 +77,24 @@ def main() -> None:
         centre = zi * zone_pitch
         zone_centres.append(centre)
         scores = [zone["scores"][s] for s in SETTINGS]
+        best_score = max(scores)
+        
         # Slim bars packed snug around the zone centre.
         offsets = (np.arange(n) - (n - 1) / 2) * (bar_w + in_gap)
         xs = centre + offsets
         ax.bar(xs, scores, width=bar_w, color=zone["colors"], edgecolor="white",
                linewidth=0.4, zorder=3)
+        
         for x, score in zip(xs, scores):
+            # Add percentage decrease text above the score number for non-best bars
+            if score < best_score:
+                decrease_pct = ((best_score - score) / best_score) * 100
+                # Place red text above the score
+                ax.text(x, score + label_off * 2.5, f'↓{decrease_pct:.1f}%', 
+                       ha="center", va="bottom", fontsize=5, color="red", 
+                       fontweight="bold")
+            
+            # Score number
             ax.text(x, score + label_off, f"{score:.4f}", ha="center", va="bottom",
                     fontsize=5, color="#333333")
 

@@ -59,7 +59,7 @@ TYPES = [
     ("mutate_targeted",          "Mutate\ntargeted",     "#C44E52"),
     ("crossover_structural",     "Crossover\nstructural", "#8172B3"),
     ("crossover_component_swap", "Crossover\ncomponent",  "#CCB974"),
-    ("paradigm_shift",           "Paradigm\nshift",       "#64B5CD"),
+    # ("paradigm_shift",           "Paradigm\nshift",       "#64B5CD"),  # Removed
 ]
 ORDER = [t[0] for t in TYPES]
 LABELS = {t[0]: t[1] for t in TYPES}

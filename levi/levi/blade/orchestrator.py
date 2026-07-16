@@ -354,6 +354,7 @@ class BladeResult:
     runtime_seconds: float
     output_dir: str
     paradigm_trials: list[ParadigmTrial] = field(default_factory=list)
+    best_metrics: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -585,6 +586,16 @@ class BladeOrchestrator:
         parts: list[str] = []
         # Known numeric fields, in skydiscover's reporting order. Only the
         # ones the problem actually returns are shown.
+        # CO-Bench dev/test split: the search optimises ``dev_score`` (== the
+        # fitness ``score``); ``test_score`` is the held-out tail, reported for
+        # generalisation but never optimised. Surface both so a run's log/summary
+        # separates them the same way the baselines do.
+        if "dev_score" in metrics:
+            parts.append(f"dev_score={float(metrics['dev_score']):.4f}")
+        if "test_score" in metrics:
+            parts.append(f"test_score={float(metrics['test_score']):.4f}")
+        if "overall_score" in metrics:
+            parts.append(f"overall_score={float(metrics['overall_score']):.4f}")
         if "normalized_score" in metrics:
             parts.append(f"normalized_score={float(metrics['normalized_score']):.2f}")
         if "total_cost" in metrics:
@@ -659,6 +670,7 @@ class BladeOrchestrator:
             embedding=embedding,
             source=source,  # type: ignore[arg-type]
             created_at_eval=self.monitor.eval_count + 1,
+            metrics=metrics if isinstance(metrics, dict) else {},
         )
         prev_best = self.monitor.best_score
         if force_on_drop:
@@ -1350,6 +1362,7 @@ class BladeOrchestrator:
         result = BladeResult(
             best_program=best.code if best else (self.config.seed_program or ""),
             best_score=best.score if best else float("-inf"),
+            best_metrics=dict(best.metrics) if best and best.metrics else {},
             total_evaluations=self.monitor.eval_count,
             total_cost=self.cost.cost,
             archive_size=len(self.archive),
@@ -1635,6 +1648,7 @@ class BladeOrchestrator:
         snap = {
             "method": "blade-lite",
             "best_score": result.best_score,
+            "best_metrics": result.best_metrics,
             "total_evaluations": result.total_evaluations,
             "total_cost": result.total_cost,
             "archive_size": result.archive_size,
