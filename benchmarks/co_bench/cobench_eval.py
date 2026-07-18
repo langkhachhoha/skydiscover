@@ -68,12 +68,32 @@ TASKS: dict[str, str] = {
     "packing_rectangles": "Packing unequal rectangles and squares",       # Packing
     "packing_rectangles_area": "Packing unequal rectangles and squares area",  # Packing
     "non_guillotine_cutting": "Constrained non-guillotine cutting",  # Cutting
+    "assortment": "Assortment problem",                         # Cutting
+    "constrained_guillotine": "Constrained guillotine cutting",  # Cutting
+    "unconstrained_guillotine": "Unconstrained guillotine cutting",  # Cutting
     "warehouse_location_uncap": "Uncapacitated warehouse location",  # Facility location
+    "warehouse_location_cap": "Capacitated warehouse location",  # Facility location
+    "pmedian_cap": "p-median - capacitated",                   # Facility location
+    "pmedian_uncap": "p-median - uncapacitated",               # Facility location
     "flow_shop": "Flow shop scheduling",                        # Scheduling
+    "aircraft_landing": "Aircraft landing",                    # Scheduling
+    "crew_scheduling": "Crew scheduling",                      # Scheduling
+    "common_due_date": "Common due date scheduling",           # Scheduling
+    "hybrid_reentrant": "Hybrid Reentrant Shop Scheduling",    # Scheduling
+    "job_shop": "Job shop scheduling",                         # Scheduling
+    "open_shop": "Open shop scheduling",                       # Scheduling
     "tsp": "Travelling salesman problem",                       # Routing
+    "period_vrp": "Vehicle routing: period routing",           # Routing
+    "rcsp": "Resource constrained shortest path",              # Routing
     "gap": "Generalised assignment problem",                    # Assignment
+    "assignment": "Assignment problem",                        # Assignment
     "steiner": "Euclidean Steiner problem",                     # Tree
+    "corporate_structuring": "Corporate structuring",          # Tree
     "graph_coloring": "Graph colouring",                        # Graph & set
+    "mis": "Maximal independent set",                          # Graph & set
+    "equitable_partitioning": "Equitable partitioning problem",  # Graph & set
+    "set_covering": "Set covering",                            # Graph & set
+    "set_partitioning": "Set partitioning",                    # Graph & set
 }
 
 CATEGORY: dict[str, str] = {
@@ -87,12 +107,32 @@ CATEGORY: dict[str, str] = {
     "packing_rectangles": "Packing",
     "packing_rectangles_area": "Packing",
     "non_guillotine_cutting": "Cutting",
+    "assortment": "Cutting",
+    "constrained_guillotine": "Cutting",
+    "unconstrained_guillotine": "Cutting",
     "warehouse_location_uncap": "Facility location",
+    "warehouse_location_cap": "Facility location",
+    "pmedian_cap": "Facility location",
+    "pmedian_uncap": "Facility location",
     "flow_shop": "Scheduling",
+    "aircraft_landing": "Scheduling",
+    "crew_scheduling": "Scheduling",
+    "common_due_date": "Scheduling",
+    "hybrid_reentrant": "Scheduling",
+    "job_shop": "Scheduling",
+    "open_shop": "Scheduling",
     "tsp": "Routing",
+    "period_vrp": "Routing",
+    "rcsp": "Routing",
     "gap": "Assignment",
+    "assignment": "Assignment",
     "steiner": "Tree",
+    "corporate_structuring": "Tree",
     "graph_coloring": "Graph & set",
+    "mis": "Graph & set",
+    "equitable_partitioning": "Graph & set",
+    "set_covering": "Graph & set",
+    "set_partitioning": "Graph & set",
 }
 
 
@@ -247,11 +287,22 @@ def solve_template(task: str, data_root: Path = DATA_ROOT) -> str:
 
 
 def list_test_cases(task: str, data_root: Path = DATA_ROOT) -> list[str]:
+    """Names of the task's test-case entries (passed one at a time to load_data).
+
+    Usually plain data files. A few CO-Bench tasks (e.g. Maximal independent
+    set) instead ship each *case* as a sub-directory of instance files whose
+    name matches a ``norm_score`` key, so directories are listed too. Hidden
+    files (``.DS_Store``), ``__pycache__`` and the ``.py`` config are skipped.
+    """
     d = data_root / task
-    return sorted(
-        f.name for f in d.iterdir()
-        if f.is_file() and not f.name.endswith(".py") and f.name != "__pycache__"
-    )
+    out = []
+    for f in d.iterdir():
+        if f.name.startswith(".") or f.name == "__pycache__":
+            continue
+        if f.is_file() and f.name.endswith(".py"):
+            continue
+        out.append(f.name)
+    return sorted(out)
 
 
 # --------------------------------------------------------------------------- #

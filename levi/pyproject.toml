@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "numpy>=2.3.5",
+    "scipy>=1.11.0",     # CO-Bench: assignment seed uses scipy.optimize.linear_sum_assignment
+    "networkx>=3.0",     # CO-Bench: Maximal independent set graphs are networkx .gpickle
     "litellm>=1.81.16",
     "scikit-learn>=1.4.0",
     "colorama>=0.4.6",
