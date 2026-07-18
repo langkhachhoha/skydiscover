@@ -165,7 +165,7 @@ def _average_score(results: dict) -> float:
         return 0.0
     return sum(
         (sum(x if not isinstance(x, str) else 0 for x in scores) / len(scores)
-         if not error_message else 0)
+         if not error_message and scores else 0)
         for scores, error_message in
         (results.get(case, (None, "No result")) for case in results.keys())
     ) / len(results)
@@ -437,6 +437,16 @@ def evaluate_source(
         max_cases = _env_int("COBENCH_MAX_CASES", None)
     if max_instances is None:
         max_instances = _env_int("COBENCH_MAX_INSTANCES", None)
+    # Convention: 0 (or negative) means "no cap" — use every file / instance.
+    # This matches the baseline evaluators' and BLADE problems' _cap() helper
+    # (which maps 0 -> None) and the workflow help text ("set 0 for all
+    # instances = full test set"). Without this, an env value of "0" reaches
+    # the slice below as the literal int 0, so instances[:0] == [] yields an
+    # empty score list and _average_score() divides by zero.
+    if max_cases is not None and max_cases <= 0:
+        max_cases = None
+    if max_instances is not None and max_instances <= 0:
+        max_instances = None
 
     cfg, config_path = load_config(task, data_root)
     cases = list_test_cases(task, data_root)
