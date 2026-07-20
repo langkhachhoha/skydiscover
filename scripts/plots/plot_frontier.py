@@ -11,7 +11,7 @@ Design (deliberate, to be clearer / nicer than the iteration-based reference):
     so the gap between methods is legible.
   * each curve ends at a dot marking the run's *total* cost (all money spent),
     so a method is rewarded for reaching a high score *and* stopping cheaply.
-  * our method (LiteEvo / blade) is emphasised: thicker line, higher z-order.
+  * our method (SpecEvo / blade) is emphasised: thicker line, higher z-order.
 
 Usage:
   .venv/bin/python scripts/plots/plot_frontier.py [task]
@@ -36,7 +36,7 @@ BENCH_ROOT = ROOT / "benchmarks" / "math"
 
 # shared palette / display names; folder aliases (ada vs adaevo) both map here
 STYLE = {
-    "blade":  ("LiteEvo", "#D6263A", True),    # our method
+    "blade":  ("SpecEvo", "#D6263A", True),    # our method (data from LiteEvo/blade)
     "ada":    ("AdaEvolve", "#8E44AD", False),
     "adaevo": ("AdaEvolve", "#8E44AD", False),
     "gepa":   ("GEPA", "#2E86C1", False),
@@ -124,12 +124,6 @@ def main(task: str = "circle_packing_rect") -> None:
     fig, ax = plt.subplots(figsize=(7.4, 4.8))
     style_axes(ax)
 
-    # --- SOTA reference line --------------------------------------------------
-    if benchmark is not None:
-        ax.axhline(benchmark, ls=(0, (6, 4)), color="#555555", lw=1.4, zorder=2)
-        ax.text(xmax * 0.015, benchmark - 0.03 * span, "Human / SOTA",
-                ha="left", va="top", fontsize=11, color="#444444", style="italic")
-
     for m in methods:
         _, color, ours = STYLE.get(m, (m, "#888888", False))
         cost, score, total = data[m]
@@ -171,7 +165,7 @@ def main(task: str = "circle_packing_rect") -> None:
     leg.get_frame().set_linewidth(1.0)
     leg.set_zorder(10)  # keep labels readable above the curves
     for txt in leg.get_texts():
-        if txt.get_text() == "LiteEvo":
+        if txt.get_text() == "SpecEvo":
             txt.set_fontweight("bold")
             txt.set_color(STYLE["blade"][1])
 
