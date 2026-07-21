@@ -308,6 +308,48 @@ class BladeConfig:
     and is the ablation flag for "old-style" defensive advice.
     """
 
+    # ------------------------------------------------------------------
+    # Error-rate ablation instrumentation.
+    #
+    # Every field below defaults to OFF, so a run that does not opt in
+    # (blade.yml, blade_ablation.yml, any existing driver) behaves exactly
+    # as before — no extra counters are touched, no files are written and
+    # the advisor / budget schedules are untouched.
+    # ------------------------------------------------------------------
+    post_init_budget_evals: int | None = None
+    """Cap evaluations at ``<evals at end of bootstrap> + N``.
+
+    ``budget_evals`` counts every evaluation including the init phase
+    (``n_diverse_seeds`` frontier seeds + ``n_variants_per_seed`` variants
+    each, ~105 evals by default), which makes "run the evolutionary loop
+    for exactly N iterations" impossible to express. This field is
+    resolved into ``budget_evals`` once the bootstrap finishes, so the
+    main loop gets exactly N evaluations of its own. ``None`` (default)
+    leaves ``budget_evals`` alone."""
+
+    ablation_window_evals: int = 0
+    """When > 0, close an instrumentation window every N post-init
+    evaluations: record the window's error rate and (if
+    ``ablation_checkpoint_population``) dump the whole live population.
+    0 (default) disables the instrumentation entirely."""
+
+    ablation_checkpoint_population: bool = False
+    """Write ``checkpoints/checkpoint_<NN>.json`` (full population code +
+    descriptions + scores) at every window close."""
+
+    align_advisor_to_post_init: bool = False
+    """Restart the advisor's cadence clock at the end of the bootstrap,
+    the way ``pe_cron_interval`` already does.
+
+    By default ``last_meta_advice_eval_count`` stays at 0 while the init
+    phase burns ~105 evals, so the advisor fires immediately on its first
+    poll and its windows are offset from the post-init origin by an
+    amount that depends on how many init candidates survived. For the
+    error-rate ablation we want advisor cycle *k* and measurement window
+    *k* to share one origin. They still will not coincide to the exact
+    evaluation — the advisor polls on a 2 s timer, so it fires within a
+    few evaluations of each boundary rather than on it."""
+
     # Output
     output_dir: str | Path = "runs/blade"
 
@@ -355,6 +397,9 @@ class BladeResult:
     output_dir: str
     paradigm_trials: list[ParadigmTrial] = field(default_factory=list)
     best_metrics: dict = field(default_factory=dict)
+    error_rate_windows: list[dict] = field(default_factory=list)
+    """One entry per closed instrumentation window; empty unless
+    ``BladeConfig.ablation_window_evals`` was set."""
 
 
 # ---------------------------------------------------------------------------
@@ -433,6 +478,14 @@ class BladeOrchestrator:
 
         self._client_in_flight: int = 0
         self._eval_in_flight: int = 0
+
+        # Error-rate ablation state. Inert unless
+        # ``config.ablation_window_evals > 0``.
+        self._post_init_eval_count: int = 0
+        self._error_total: int = 0
+        self._llm_failure_total: int = 0
+        self._window_mark: dict[str, Any] = {}
+        self._error_rate_windows: list[dict] = []
 
     # ------------------------------------------------------------------
     # Budget
@@ -544,6 +597,7 @@ class BladeOrchestrator:
         if error_msg:
             self._record_error_knowledge(error_msg)
         self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg, metrics=metrics)
+        self._ablation_after_eval(error_msg)
 
     def _record_error_knowledge(self, error_msg: str) -> None:
         """Merge one failure into the bounded failure-knowledge base.
@@ -572,6 +626,170 @@ class BladeOrchestrator:
             )
             del self._error_knowledge[victim]
         self._error_knowledge[sig] = {"count": 1, "example": clean}
+
+    # ------------------------------------------------------------------
+    # Error-rate ablation instrumentation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_llm_failure(error_msg: str) -> bool:
+        """True when the LLM call itself failed, so no candidate ever existed.
+
+        The error rate is deliberately a *single* number — every failure
+        counts, whatever its shape: the model returned prose with no code
+        block, the code raised, the solution was invalid, the evaluator
+        died. All of those are attempts that produced nothing usable, which
+        is exactly what the Advisor is supposed to reduce.
+
+        The one exclusion is a failed LLM call (API error, timeout, or a
+        worker that blew up before it could evaluate anything). That is
+        infrastructure noise — no program was generated, so there is no
+        attempt to judge. Those evaluations are dropped from *both* sides
+        of the ratio rather than counted as successes, and the count is
+        reported separately per window as ``n_excluded``.
+        """
+        m = error_msg.strip()
+        return m.startswith("LLM error") or m.startswith("worker exception")
+
+    def _ablation_after_eval(self, error_msg: str | None) -> None:
+        """Tally one evaluation and close the window if it just filled.
+
+        Called from the two (and only two) sites that advance
+        ``monitor.eval_count``, so exactly one call lands per evaluation.
+        Returns immediately when the instrumentation is off.
+        """
+        if self.config.ablation_window_evals <= 0:
+            return
+        if error_msg is not None:
+            if self._is_llm_failure(error_msg):
+                self._llm_failure_total += 1
+            else:
+                self._error_total += 1
+        if not self._window_mark:
+            # Bootstrap is still running — windows only start once the
+            # main loop's origin has been marked in ``run()``.
+            return
+        window = self.config.ablation_window_evals
+        if self.monitor.eval_count - int(self._window_mark["eval_count"]) >= window:
+            self._close_ablation_window(final=False)
+
+    def _close_ablation_window(self, *, final: bool) -> None:
+        """Record error rate (and optionally a population dump) for the
+        evaluations completed since the previous window closed."""
+        mark = self._window_mark
+        ec = self.monitor.eval_count
+        n_evals = ec - int(mark["eval_count"])
+        if n_evals <= 0:
+            return
+        n_errors = self._error_total - int(mark["errors"])
+        # Failed LLM calls produced no candidate, so they leave the ratio
+        # entirely instead of padding the denominator as pseudo-successes.
+        n_excluded = self._llm_failure_total - int(mark["excluded"])
+        n_scored = n_evals - n_excluded
+        idx = len(self._error_rate_windows) + 1
+        best = self.monitor.best_score
+        sample = {
+            "window": idx,
+            "final_partial": final,
+            "eval_start": int(mark["eval_count"]),
+            "eval_end": ec,
+            "post_init_evals": ec - self._post_init_eval_count,
+            "n_evaluations": n_evals,
+            "n_scored": n_scored,
+            "n_excluded": n_excluded,
+            "n_errors": n_errors,
+            "error_rate": (n_errors / n_scored) if n_scored > 0 else None,
+            "best_score": best if best != float("-inf") else None,
+            "archive_size": len(self.archive),
+            "num_occupied_cells": self.archive.num_occupied_cells(),
+            "total_cost": self.cost.cost,
+            "elapsed_seconds": time.time() - self.start_time,
+            "advisor_triggers": self.meta_advice_trigger_count,
+        }
+        self._error_rate_windows.append(sample)
+        self._window_mark = {
+            "eval_count": ec,
+            "errors": self._error_total,
+            "excluded": self._llm_failure_total,
+        }
+        rate = sample["error_rate"]
+        logger.info(
+            "[BLADE ablation] window %d closed at eval=%d (post-init %d) | "
+            "error_rate=%s (%d/%d) | llm_failures excluded=%d",
+            idx, ec, sample["post_init_evals"],
+            f"{rate:.3f}" if rate is not None else "n/a",
+            n_errors, n_scored, n_excluded,
+        )
+        if self.config.ablation_checkpoint_population:
+            try:
+                self._write_population_checkpoint(idx, sample)
+            except Exception:  # pragma: no cover — never kill a run over a dump
+                logger.exception("[BLADE ablation] checkpoint %d failed", idx)
+
+    def _write_population_checkpoint(self, idx: int, sample: dict) -> None:
+        """Dump every program currently in the archive, code included."""
+        ckpt_dir = self.output_dir / "checkpoints"
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        population = [
+            {
+                "cell_id": p.cell_id,
+                "score": p.score,
+                "source": p.source,
+                "created_at_eval": p.created_at_eval,
+                "uses_count": p.uses_count,
+                "description": p.description,
+                "metrics": p.metrics,
+                "code": p.code,
+            }
+            for p in self.archive.programs()
+        ]
+        population.sort(key=lambda d: -d["score"])
+        payload = {
+            "checkpoint": idx,
+            "window": sample,
+            "meta_advice": self.current_meta_advice,
+            "population_size": len(population),
+            "population": population,
+        }
+        path = ckpt_dir / f"checkpoint_{idx:02d}.json"
+        path.write_text(json.dumps(payload, indent=2))
+        logger.info(
+            "[BLADE ablation] checkpoint %d written — %d programs → %s",
+            idx, len(population), path,
+        )
+
+    def _report_error_rate(self) -> None:
+        """Write ``error_rate_report.json``.
+
+        The human-readable table is *not* printed here — the caller
+        (``scripts/run_blade.py``) renders it via
+        :func:`format_error_rate_table` as the very last thing the run
+        prints, so the ten numbers land at the bottom of the CI log
+        instead of being buried above the summary.
+        """
+        windows = self._error_rate_windows
+        if not windows:
+            return
+        total_evals = sum(w["n_evaluations"] for w in windows)
+        total_scored = sum(w["n_scored"] for w in windows)
+        total_excluded = sum(w["n_excluded"] for w in windows)
+        total_errors = sum(w["n_errors"] for w in windows)
+
+        report = {
+            "window_evals": self.config.ablation_window_evals,
+            "post_init_eval_count": self._post_init_eval_count,
+            "enable_meta_advice": self.config.enable_meta_advice,
+            "meta_advice_interval": self.config.meta_advice_interval,
+            "single_prompt_operators": self.config.single_prompt_operators,
+            "n_windows": len(windows),
+            "total_evaluations": total_evals,
+            "total_scored": total_scored,
+            "total_excluded_llm_failures": total_excluded,
+            "total_errors": total_errors,
+            "overall_error_rate": (total_errors / total_scored) if total_scored else None,
+            "windows": windows,
+        }
+        (self.output_dir / "error_rate_report.json").write_text(json.dumps(report, indent=2))
 
     @staticmethod
     def _format_problem_metrics(metrics: dict | None) -> str:
@@ -690,6 +908,7 @@ class BladeOrchestrator:
             )
         is_new_best = accepted and score > prev_best
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best, metrics=metrics)
+        self._ablation_after_eval(None)
         if not accepted and reason == "dropped_worse":
             logger.debug("[BLADE] dropped score=%.4f did not beat cell incumbent", score)
         if accepted and reason == "forced":
@@ -1337,6 +1556,38 @@ class BladeOrchestrator:
             # phase. Init evals (phase 1 frontier seeds + phase 2 mutation
             # variants) must not push PE toward its first trigger.
             self.last_pe_eval_count = self.monitor.eval_count
+            self._post_init_eval_count = self.monitor.eval_count
+
+            # Error-rate ablation: the "iteration 0" origin for the budget,
+            # the measurement windows and (optionally) the advisor cadence
+            # is the end of the init phase, not the first evaluation.
+            if cfg.align_advisor_to_post_init:
+                self.last_meta_advice_eval_count = self._post_init_eval_count
+            if cfg.post_init_budget_evals is not None:
+                resolved = self._post_init_eval_count + cfg.post_init_budget_evals
+                if cfg.budget_evals is not None:
+                    logger.warning(
+                        "[BLADE] post_init_budget_evals=%d overrides budget_evals=%s",
+                        cfg.post_init_budget_evals, cfg.budget_evals,
+                    )
+                cfg.budget_evals = resolved
+                logger.info(
+                    "[BLADE] post-init eval budget: %d iterations from eval=%d "
+                    "→ stopping at eval=%d",
+                    cfg.post_init_budget_evals, self._post_init_eval_count, resolved,
+                )
+            if cfg.ablation_window_evals > 0:
+                self._window_mark = {
+                    "eval_count": self._post_init_eval_count,
+                    "errors": self._error_total,
+                    "excluded": self._llm_failure_total,
+                }
+                logger.info(
+                    "[BLADE ablation] measuring error rate every %d post-init "
+                    "evaluations (checkpoints=%s)",
+                    cfg.ablation_window_evals, cfg.ablation_checkpoint_population,
+                )
+
             pe_monitor_task = asyncio.create_task(self._pe_monitor())
             advisor_task = asyncio.create_task(self._meta_advice_monitor())
             analyzer_task = asyncio.create_task(self._analyzer_monitor())
@@ -1357,6 +1608,8 @@ class BladeOrchestrator:
             except Exception:  # pragma: no cover — defensive
                 logger.exception("[BLADE] failed to shut down process pool cleanly")
 
+        self._flush_ablation_windows()
+
         elapsed = time.time() - self.start_time
         best = self.archive.best()
         result = BladeResult(
@@ -1369,9 +1622,29 @@ class BladeOrchestrator:
             runtime_seconds=elapsed,
             output_dir=str(self.output_dir),
             paradigm_trials=list(self.paradigm_trials),
+            error_rate_windows=list(self._error_rate_windows),
         )
         self._save_snapshot(result)
+        self._report_error_rate()
         return result
+
+    def _flush_ablation_windows(self) -> None:
+        """Close the trailing partial window, if one is worth reporting.
+
+        Workers already in flight when the budget trips still finish, so a
+        run of 500 post-init evals typically lands a handful past the cap.
+        Those stragglers belong to the last full window, not to a new one:
+        when the budget is an exact multiple of the window size we stop at
+        that many windows and let the overshoot fall on the floor.
+        """
+        cfg = self.config
+        if cfg.ablation_window_evals <= 0 or not self._window_mark:
+            return
+        if cfg.post_init_budget_evals is not None:
+            max_windows = cfg.post_init_budget_evals // cfg.ablation_window_evals
+            if len(self._error_rate_windows) >= max_windows:
+                return
+        self._close_ablation_window(final=True)
 
     async def _cancel_with_grace(self, tasks: list[asyncio.Task], *, label: str) -> None:
         live = [t for t in tasks if t is not None and not t.done()]
@@ -1702,6 +1975,62 @@ class BladeOrchestrator:
                 "paradigm_force_mode": self.config.paradigm_force_mode,
             },
         }
+        if self.config.ablation_window_evals > 0:
+            snap["error_rate_windows"] = self._error_rate_windows
+            snap["post_init_eval_count"] = self._post_init_eval_count
         (self.output_dir / "snapshot.json").write_text(json.dumps(snap, indent=2))
         if result.best_program:
             (self.output_dir / "best.py").write_text(result.best_program)
+
+
+# ---------------------------------------------------------------------------
+# Error-rate ablation reporting
+# ---------------------------------------------------------------------------
+
+
+def format_error_rate_table(windows: list[dict], *, interval: int) -> str:
+    """Render the per-window error-rate table.
+
+    Kept module-level (and out of :meth:`BladeOrchestrator.run`) so the
+    driver can print it as the last thing a run emits, once every other
+    summary line is already on screen.
+    """
+    if not windows:
+        return ""
+    total_scored = sum(w["n_scored"] for w in windows)
+    total_excluded = sum(w["n_excluded"] for w in windows)
+    total_errors = sum(w["n_errors"] for w in windows)
+    overall = (total_errors / total_scored) if total_scored else None
+
+    lines = [
+        "",
+        "=" * 78,
+        f"ERROR RATE — {len(windows)} window(s) × {interval} post-init evaluations",
+        "=" * 78,
+        f"{'win':>3}  {'evals':>13}  {'scored':>7}  {'err':>5}  {'rate':>7}  "
+        f"{'skip':>5}  {'best':>12}",
+        "-" * 78,
+    ]
+    for w in windows:
+        best = w["best_score"]
+        best_str = f"{best:.6f}" if best is not None else "n/a"
+        rate = w["error_rate"]
+        rate_str = f"{rate:.1%}" if rate is not None else "n/a"
+        span = f"{w['eval_start']}->{w['eval_end']}"
+        if w["final_partial"]:
+            span += "*"
+        lines.append(
+            f"{w['window']:>3}  {span:>13}  {w['n_scored']:>7}  "
+            f"{w['n_errors']:>5}  {rate_str:>7}  {w['n_excluded']:>5}  {best_str:>12}"
+        )
+    overall_str = f"{overall:.1%}" if overall is not None else "n/a"
+    lines += [
+        "-" * 78,
+        f"overall: {total_errors}/{total_scored} = {overall_str}",
+        f"skipped: {total_excluded} failed LLM call(s) — no candidate produced, "
+        "excluded from the ratio",
+        "=" * 78,
+    ]
+    if any(w["final_partial"] for w in windows):
+        lines.append("* partial window (run stopped before it filled)")
+    return "\n".join(lines)

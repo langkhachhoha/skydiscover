@@ -1,0 +1,457 @@
+name: SpecEvo Advisor Ablation (error rate)
+
+run-name: SpecEvo error-rate ablation — ${{ inputs.benchmark }} (${{ inputs.mode }}) · seed ${{ inputs.seed }}
+
+# Error-rate ablation for the SpecEvo Advisor.
+#
+# Question this workflow answers: does the Advisor lower the fraction of
+# generated candidates that fail to evaluate, and how does that fraction
+# move over the course of a run?
+#
+# Protocol (identical across the three modes, only the ablated component
+# differs):
+#
+#   * Budget is 500 **post-init** iterations. The ~105 bootstrap
+#     evaluations (5 frontier seeds × 20 mutation variants) do NOT count
+#     against it — the origin is the end of the init phase, the same
+#     origin the paradigm-shift cron already uses. There is no wall-clock
+#     cap; the run stops on iteration count alone.
+#   * Advisor frequency = 50 iterations, and its cadence clock is
+#     restarted at that same origin, so advisor cycle k and measurement
+#     window k share it. (The advisor polls on a 2 s timer, so it fires
+#     within a few iterations of each boundary, not exactly on it.)
+#   * Error rate is one number, not a breakdown: every failed attempt
+#     counts — no code block in the model's output, code that raised, an
+#     invalid solution, an evaluator that died. The single exclusion is a
+#     failed LLM call (API error / timeout / worker blew up): no candidate
+#     was ever generated, so those are dropped from both sides of the
+#     ratio and reported separately as "skipped".
+#   * Every 50 iterations one measurement window closes: the window's
+#     error rate is recorded (silently — only a one-line log) and the
+#     entire live population is dumped to
+#     checkpoints/checkpoint_<NN>.json (code + description + score for
+#     every program). 500 / 50 = 10 windows, so a completed run yields
+#     exactly 10 error-rate numbers and 10 checkpoints.
+#   * The 10 numbers are printed as one table at the very end of the job,
+#     and also land in error_rate_report.json.
+#
+# Modes:
+#
+#   with_advisor  — baseline, Advisor ON (every other component ON too)
+#   no_advisor    — Advisor OFF (--no-meta-advice), the A4 ablation
+#   single_prompt — Advisor ON but the mutate / crossover template
+#                   repertoire collapses to one general mutate + one
+#                   structural crossover prompt (the A6 ablation from
+#                   ./blade_ablation.yml)
+#
+# All of the machinery above is opt-in at the CLI level
+# (--post-init-evals / --error-rate-interval / --checkpoint-population /
+# --align-advisor-post-init). Runs launched from ./blade.yml or
+# ./blade_ablation.yml pass none of those flags and are unaffected.
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: "Full path to benchmark directory (e.g. 'levi/examples/circle_packing')"
+        required: true
+        type: string
+        default: "levi/examples/circle_packing"
+      mode:
+        description: >-
+          Which arm of the ablation to run. with_advisor = baseline;
+          no_advisor = Advisor disabled; single_prompt = single general
+          mutate / crossover template (A6).
+        required: false
+        type: choice
+        default: "with_advisor"
+        options:
+          - with_advisor
+          - no_advisor
+          - single_prompt
+      post_init_evals:
+        description: "Iteration budget counted from the END of the init phase"
+        required: false
+        type: string
+        default: "500"
+      measure_interval:
+        description: "Error-rate measurement + population-checkpoint cadence (iterations)"
+        required: false
+        type: string
+        default: "50"
+      advisor_interval:
+        description: "Advisor frequency (iterations). Ignored when mode=no_advisor."
+        required: false
+        type: string
+        default: "50"
+      mutation_model:
+        description: "OpenRouter id of the small / mutation model"
+        required: true
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        description: "OpenRouter id of the frontier (paradigm-shift) model"
+        required: true
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        description: "Concurrent LLM workers"
+        required: false
+        type: string
+        default: "4"
+      pe_interval:
+        description: "Paradigm-shift cadence (every N evaluations)"
+        required: false
+        type: string
+        default: "50"
+      eval_timeout:
+        description: "Per-candidate evaluation timeout in seconds"
+        required: false
+        type: string
+        default: "600"
+      n_diverse_seeds:
+        description: "Phase-1 diverse seeds from the frontier model (sequential)"
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        description: "Phase-2 mutation-model variants per seed (parallel)"
+        required: false
+        type: string
+        default: "20"
+      dollars:
+        description: "Max USD spend (blank = no cap; the iteration budget is the intended stop condition)"
+        required: false
+        type: string
+        default: ""
+      seconds:
+        description: "Wall-clock cap in seconds (blank = none, which is the protocol default)"
+        required: false
+        type: string
+        default: ""
+      checkpoint_population:
+        description: "Dump the full population to a JSON checkpoint at every measurement window"
+        required: false
+        type: boolean
+        default: true
+      cobench_timeout:
+        description: "CO-Bench only: per-instance time limit in seconds. Ignored by non-CO-Bench examples."
+        required: false
+        type: string
+        default: "10"
+      cobench_max_cases:
+        description: "CO-Bench only: max test-case files per evaluation (blank = all)."
+        required: false
+        type: string
+        default: ""
+      cobench_max_instances:
+        description: "CO-Bench only: max instances per test-case file (blank = default 3; 0 = all)."
+        required: false
+        type: string
+        default: ""
+      advanced_options:
+        description: >-
+          Optional JSON object with low-level overrides. Recognised keys:
+          problem_module, target_score, embedding_model, eval_processes,
+          n_paradigm_variants, n_cells, recluster_every, embedding_dim,
+          meta_advice_inject_p, analyzer_interval, analyzer_top_k,
+          p_targeted_mutate, p_crossover.
+          Example: '{"n_cells":50,"p_crossover":0.35}'
+        required: false
+        type: string
+        default: ""
+      seed:
+        description: "Experiment seed label — tags the run name and artifacts only; does not change execution"
+        required: false
+        type: string
+        default: "1"
+
+  workflow_call:
+    inputs:
+      benchmark:
+        required: true
+        type: string
+      mode:
+        required: false
+        type: string
+        default: "with_advisor"
+      post_init_evals:
+        required: false
+        type: string
+        default: "500"
+      measure_interval:
+        required: false
+        type: string
+        default: "50"
+      advisor_interval:
+        required: false
+        type: string
+        default: "50"
+      mutation_model:
+        required: true
+        type: string
+        default: "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
+      paradigm_model:
+        required: true
+        type: string
+        default: "openrouter/openai/gpt-5"
+      workers:
+        required: false
+        type: string
+        default: "4"
+      pe_interval:
+        required: false
+        type: string
+        default: "50"
+      eval_timeout:
+        required: false
+        type: string
+        default: "600"
+      n_diverse_seeds:
+        required: false
+        type: string
+        default: "5"
+      n_variants_per_seed:
+        required: false
+        type: string
+        default: "20"
+      dollars:
+        required: false
+        type: string
+        default: ""
+      seconds:
+        required: false
+        type: string
+        default: ""
+      checkpoint_population:
+        required: false
+        type: boolean
+        default: true
+      cobench_timeout:
+        required: false
+        type: string
+        default: "10"
+      cobench_max_cases:
+        required: false
+        type: string
+        default: ""
+      cobench_max_instances:
+        required: false
+        type: string
+        default: ""
+      advanced_options:
+        required: false
+        type: string
+        default: ""
+      seed:
+        required: false
+        type: string
+        default: "1"
+
+concurrency:
+  group: ablation-${{ github.run_id }}-${{ inputs.benchmark }}-${{ inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  ablation:
+    runs-on: ubuntu-latest
+    # No `timeout-minutes` override: the protocol has no wall-clock cap,
+    # so the job runs until the 500-iteration budget is spent (bounded in
+    # practice by GitHub's own 6 h job limit).
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_API_BASE: https://openrouter.ai/api/v1
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      PYTHONUNBUFFERED: "1"
+      OUTPUT_DIR: outputs/github-actions/ablation_${{ inputs.mode }}_${{ github.run_id }}
+      # CO-Bench knobs (read by levi/examples/co_bench/*/problem.py; harmless otherwise).
+      COBENCH_TIMEOUT: ${{ inputs.cobench_timeout }}
+      COBENCH_MAX_CASES: ${{ inputs.cobench_max_cases }}
+      COBENCH_MAX_INSTANCES: ${{ inputs.cobench_max_instances }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Sanitise benchmark path for artifact name
+        run: |
+          # GitHub Actions has no `replace()` expression function, so the
+          # artifact-safe variant of inputs.benchmark (which contains '/')
+          # is precomputed here and consumed via env.
+          SAFE="${BENCHMARK_RAW//\//_}"
+          echo "BENCHMARK_SAFE=$SAFE" >> "$GITHUB_ENV"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
+      - name: Verify in-tree LEVI + BLADE modules
+        run: |
+          test -f levi/pyproject.toml || { echo "::error::Expected ./levi/pyproject.toml"; exit 1; }
+          test -d levi/levi/blade   || { echo "::error::Expected ./levi/levi/blade/ (SpecEvo orchestrator)"; exit 1; }
+          test -d levi/levi/simple  || { echo "::error::Expected ./levi/levi/simple/ (SpecEvo primitives)"; exit 1; }
+          test -f scripts/run_blade.py || { echo "::error::Expected ./scripts/run_blade.py"; exit 1; }
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Validate OpenRouter secret
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "::error::Missing GitHub secret OPENROUTER_API_KEY"
+            exit 1
+          fi
+
+      - name: Install LEVI (vendored in-repo)
+        working-directory: levi
+        run: |
+          # Mirrors blade.yml: per-example extras are optional and are NOT
+          # pulled by a bare `uv sync`, so map the benchmark to the extra
+          # that provides its heavy dependencies.
+          EXTRA=""
+          case "$BENCHMARK_RAW" in
+            *eplb*)      EXTRA="--extra example-eplb" ;;       # torch
+            *cloudcast*) EXTRA="--extra example-cloudcast" ;;  # networkx + pandas
+            *llm_sql*)   EXTRA="--extra example-llm-sql" ;;    # pandas
+            *ifbench*)   EXTRA="--extra example-ifbench" ;;
+            *hover*)     EXTRA="--extra example-hover" ;;
+            *)           EXTRA="" ;;
+          esac
+          echo "Installing LEVI with extras: ${EXTRA:-<none>}"
+          uv sync $EXTRA
+          # Persist the extra so the Run step's `uv run` syncs the SAME
+          # environment instead of re-resolving to base deps only.
+          echo "BENCHMARK_EXTRA=$EXTRA" >> "$GITHUB_ENV"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
+      - name: Parse advanced options
+        if: inputs.advanced_options != ''
+        run: |
+          echo "${{ inputs.advanced_options }}" | python3 -c "
+          import json, sys
+          try:
+              opts = json.loads(sys.stdin.read())
+              for k, v in opts.items():
+                  env_name = f'ADV_{k.upper()}'
+                  print(f'{env_name}={v}')
+          except Exception as e:
+              print(f'Error parsing advanced options: {e}', file=sys.stderr)
+              sys.exit(1)
+          " >> $GITHUB_ENV
+
+      - name: Download benchmark dataset
+        run: |
+          # eplb and llm_sql keep their datasets out of git and fetch on
+          # demand; every other example is self-contained (no-op).
+          DATASET_NAME=""
+          case "$BENCHMARK_RAW" in
+            *eplb*)    DATASET_NAME="eplb" ;;
+            *llm_sql*) DATASET_NAME="llm_sql" ;;
+            *)         DATASET_NAME="" ;;
+          esac
+          if [ -z "$DATASET_NAME" ]; then
+            echo "No dataset download required for $BENCHMARK_RAW"
+            exit 0
+          fi
+          SCRIPT="benchmarks/ADRS/$DATASET_NAME/evaluator/download_dataset.sh"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "::error::Expected dataset script $SCRIPT (needed by $DATASET_NAME)"
+            exit 1
+          fi
+          echo "Downloading $DATASET_NAME dataset via $SCRIPT"
+          bash "$SCRIPT"
+        env:
+          BENCHMARK_RAW: ${{ inputs.benchmark }}
+
+      - name: Run SpecEvo error-rate ablation (${{ inputs.mode }}) on ${{ inputs.benchmark }}
+        working-directory: levi
+        run: |
+          set -euo pipefail
+          PROBLEM_MODULE="${ADV_PROBLEM_MODULE:-problem}"
+          EMBEDDING_MODEL="${ADV_EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}"
+          EVAL_PROCESSES="${ADV_EVAL_PROCESSES:-4}"
+
+          EXTRA_OPTS=""
+          [ -n "${ADV_TARGET_SCORE:-}" ]        && EXTRA_OPTS="$EXTRA_OPTS --target-score $ADV_TARGET_SCORE"
+          [ -n "${ADV_N_PARADIGM_VARIANTS:-}" ] && EXTRA_OPTS="$EXTRA_OPTS --n-paradigm-variants $ADV_N_PARADIGM_VARIANTS"
+          [ -n "${ADV_N_CELLS:-}" ]             && EXTRA_OPTS="$EXTRA_OPTS --n-cells $ADV_N_CELLS"
+          [ -n "${ADV_RECLUSTER_EVERY:-}" ]     && EXTRA_OPTS="$EXTRA_OPTS --recluster-every $ADV_RECLUSTER_EVERY"
+          [ -n "${ADV_EMBEDDING_DIM:-}" ]       && EXTRA_OPTS="$EXTRA_OPTS --embedding-dim $ADV_EMBEDDING_DIM"
+          [ -n "${ADV_META_ADVICE_INJECT_P:-}" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-inject-p $ADV_META_ADVICE_INJECT_P"
+          [ -n "${ADV_ANALYZER_INTERVAL:-}" ]   && EXTRA_OPTS="$EXTRA_OPTS --analyzer-interval $ADV_ANALYZER_INTERVAL"
+          [ -n "${ADV_ANALYZER_TOP_K:-}" ]      && EXTRA_OPTS="$EXTRA_OPTS --analyzer-top-k $ADV_ANALYZER_TOP_K"
+          [ -n "${ADV_P_TARGETED_MUTATE:-}" ]   && EXTRA_OPTS="$EXTRA_OPTS --p-targeted-mutate $ADV_P_TARGETED_MUTATE"
+          [ -n "${ADV_P_CROSSOVER:-}" ]         && EXTRA_OPTS="$EXTRA_OPTS --p-crossover $ADV_P_CROSSOVER"
+
+          # ----- the three ablation arms -----
+          # Only the ablated component differs; budget, cadence and
+          # instrumentation below are shared, so the three runs are
+          # directly comparable.
+          case "${{ inputs.mode }}" in
+            no_advisor)    EXTRA_OPTS="$EXTRA_OPTS --no-meta-advice" ;;
+            single_prompt) EXTRA_OPTS="$EXTRA_OPTS --single-prompt-operators" ;;
+            with_advisor)  ;;
+            *) echo "::error::Unknown mode '${{ inputs.mode }}'"; exit 1 ;;
+          esac
+
+          # Population checkpoints are opt-in on the CLI too.
+          if [ "${{ inputs.checkpoint_population }}" = "true" ]; then
+            EXTRA_OPTS="$EXTRA_OPTS --checkpoint-population"
+          fi
+
+          uv run --active ${BENCHMARK_EXTRA:-} python ../scripts/run_blade.py \
+            --example-dir "${{ inputs.benchmark }}" \
+            --problem-module "$PROBLEM_MODULE" \
+            --mutation-model "${{ inputs.mutation_model }}" \
+            --paradigm-model "${{ inputs.paradigm_model }}" \
+            --embedding-model "$EMBEDDING_MODEL" \
+            --evals "" \
+            --dollars "${{ inputs.dollars }}" \
+            --seconds "${{ inputs.seconds }}" \
+            --workers "${{ inputs.workers }}" \
+            --eval-processes "$EVAL_PROCESSES" \
+            --eval-timeout "${{ inputs.eval_timeout }}" \
+            --pe-interval "${{ inputs.pe_interval }}" \
+            --n-diverse-seeds "${{ inputs.n_diverse_seeds }}" \
+            --n-variants-per-seed "${{ inputs.n_variants_per_seed }}" \
+            --post-init-evals "${{ inputs.post_init_evals }}" \
+            --error-rate-interval "${{ inputs.measure_interval }}" \
+            --align-advisor-post-init \
+            --meta-advice-interval "${{ inputs.advisor_interval }}" \
+            --output-dir "${{ env.OUTPUT_DIR }}" \
+            $EXTRA_OPTS
+
+      - name: Error-rate summary
+        if: always()
+        run: |
+          # Also mirrored to the job log by run_blade.py; this puts the ten
+          # numbers on the run's summary page so the three arms can be
+          # compared without opening the artifacts.
+          python3 scripts/summarize_error_rate.py \
+            "${OUTPUT_DIR}/error_rate_report.json" \
+            --mode "${{ inputs.mode }}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: List population checkpoints
+        if: always()
+        run: |
+          CKPT="${OUTPUT_DIR}/checkpoints"
+          if [ -d "$CKPT" ]; then
+            echo "Population checkpoints (uploaded with the run artifact):"
+            ls -la "$CKPT"
+          else
+            echo "No checkpoints directory at $CKPT"
+          fi
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ablation-${{ env.BENCHMARK_SAFE }}-${{ inputs.mode }}-seed${{ inputs.seed }}-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 14

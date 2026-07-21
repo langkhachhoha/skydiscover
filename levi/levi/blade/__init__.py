@@ -16,11 +16,18 @@ matches :func:`levi.evolve_code` so existing problem definitions and
 benchmarks plug in unchanged.
 """
 
-from .orchestrator import BladeConfig, BladeOrchestrator, BladeResult, ParadigmTrial
+from .orchestrator import (
+    BladeConfig,
+    BladeOrchestrator,
+    BladeResult,
+    ParadigmTrial,
+    format_error_rate_table,
+)
 
 __all__ = [
     "BladeConfig",
     "BladeOrchestrator",
     "BladeResult",
     "ParadigmTrial",
+    "format_error_rate_table",
 ]

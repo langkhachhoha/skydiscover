@@ -227,6 +227,37 @@ def _parse_args() -> argparse.Namespace:
     )
 
     # ------------------------------------------------------------------
+    # Error-rate ablation instrumentation. All off by default — omitting
+    # these flags leaves a run byte-identical to before.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--post-init-evals", type=int, default=None, metavar="N",
+        help="Stop after N evaluations counted from the END of the init "
+        "phase (i.e. N iterations of the evolutionary main loop). Unlike "
+        "--evals, the ~105 bootstrap evaluations do not eat into it.",
+    )
+    p.add_argument(
+        "--error-rate-interval", type=int, default=0, metavar="N",
+        help="Measure the error rate every N post-init evaluations. Every "
+        "failed attempt counts except a failed LLM call (which produced no "
+        "candidate and is excluded from the ratio). The per-window table is "
+        "printed once at the end of the run and written to "
+        "error_rate_report.json. 0 (default) = off.",
+    )
+    p.add_argument(
+        "--checkpoint-population", action="store_true",
+        help="With --error-rate-interval: dump the full population (all "
+        "code + descriptions + scores) to checkpoints/checkpoint_<NN>.json "
+        "at every window close.",
+    )
+    p.add_argument(
+        "--align-advisor-post-init", action="store_true",
+        help="Restart the advisor cadence clock at the end of the init "
+        "phase (as pe-interval already does) so advisor cycle k and "
+        "error-rate window k share an origin.",
+    )
+
+    # ------------------------------------------------------------------
     # Ablation toggles (the three paper-facing knobs)
     # ------------------------------------------------------------------
     p.add_argument(
@@ -381,6 +412,14 @@ def main() -> int:
     elif args.p_crossover is not None:
         overrides["p_crossover"] = args.p_crossover
 
+    if args.post_init_evals is not None:
+        overrides["post_init_budget_evals"] = args.post_init_evals
+    if args.error_rate_interval > 0:
+        overrides["ablation_window_evals"] = args.error_rate_interval
+        overrides["ablation_checkpoint_population"] = args.checkpoint_population
+    if args.align_advisor_post_init:
+        overrides["align_advisor_to_post_init"] = True
+
     if args.single_prompt_operators:
         overrides["single_prompt_operators"] = True
     if args.paradigm_force_mode is not None:
@@ -413,6 +452,11 @@ def main() -> int:
     print(f"[blade] ablation_ast_only = {args.ast_only}")
     print(f"[blade] ablation_emb_only = {args.emb_only}")
     print(f"[blade] ablation_static   = {args.static_cells}")
+    print(f"[blade] post_init_evals   = {args.post_init_evals}")
+    print(f"[blade] error_rate_ivl    = {args.error_rate_interval}")
+    print(f"[blade] checkpoint_pop    = {args.checkpoint_population}")
+    print(f"[blade] meta_advice       = {not args.no_meta_advice} (interval {args.meta_advice_interval})")
+    print(f"[blade] single_prompt_ops = {args.single_prompt_operators}")
     print(f"[blade] workers           = {workers}")
     print(f"[blade] output_dir        = {output_dir}")
 
@@ -472,8 +516,20 @@ def main() -> int:
             "dollars": dollars,
             "seconds": seconds,
             "target_score": target_score,
+            "post_init_evaluations": args.post_init_evals,
         },
     }
+    if args.error_rate_interval > 0:
+        windows = result.error_rate_windows
+        n_scored = sum(w["n_scored"] for w in windows)
+        n_err = sum(w["n_errors"] for w in windows)
+        summary["error_rate"] = {
+            "interval": args.error_rate_interval,
+            "n_windows": len(windows),
+            "overall": (n_err / n_scored) if n_scored else None,
+            "excluded_llm_failures": sum(w["n_excluded"] for w in windows),
+            "per_window": [w["error_rate"] for w in windows],
+        }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2))
     (output_dir / "best_program.py").write_text(result.best_program or "")
 
@@ -494,6 +550,18 @@ def main() -> int:
     print(f"Paradigm trials   : {len(result.paradigm_trials)}")
     print(f"Runtime           : {result.runtime_seconds:.1f}s")
     print(f"Output dir        : {output_dir}")
+
+    # Last thing on screen: the ablation's ten error-rate measurements.
+    if args.error_rate_interval > 0:
+        from levi.blade import format_error_rate_table
+
+        print(format_error_rate_table(
+            result.error_rate_windows, interval=args.error_rate_interval,
+        ))
+        print(f"Report            : {output_dir / 'error_rate_report.json'}")
+        if args.checkpoint_population:
+            ckpts = sorted((output_dir / "checkpoints").glob("checkpoint_*.json"))
+            print(f"Checkpoints       : {len(ckpts)} in {output_dir / 'checkpoints'}")
     return 0
 
 
