@@ -48,6 +48,7 @@ STYLE = {
 TASKS = {
     "circle_packing_rect": dict(title="Circle Packing (n=21)", ylabel="Sum of Radii"),
     "heilbronn_triangle":  dict(title="Heilbronn Triangle (n=11)", ylabel="Min Area (normalized)"),
+    "EPLB":                dict(title="EPLB", ylabel="Combined Score"),
 }
 
 
@@ -61,10 +62,28 @@ def task_benchmark(task: str) -> float | None:
 
 
 def discover_methods(task: str) -> list[str]:
-    """Method folders present for this task, ordered baselines-first, ours-last."""
+    """Method folders present for this task, ordered baselines-first, ours-last.
+
+    Skips methods whose frontier is empty *and* whose run spent $0 (e.g. an
+    empty placeholder ``run.txt``) so they don't draw a degenerate (0,0) line.
+    """
     tdir = RESULT_ROOT / task
-    found = [p.name for p in tdir.iterdir()
-             if p.is_dir() and (p / "frontier.csv").exists()]
+    found = []
+    for p in tdir.iterdir():
+        if not p.is_dir() or not (p / "frontier.csv").exists():
+            continue
+        with (p / "frontier.csv").open() as f:
+            n_rows = sum(1 for _ in csv.DictReader(f))
+        total = 0.0
+        summary = p / "summary.csv"
+        if summary.exists():
+            with summary.open() as f:
+                row = next(csv.DictReader(f), None)
+                if row:
+                    total = float(row["total_cost"])
+        if n_rows == 0 and total <= 0:
+            continue
+        found.append(p.name)
     return sorted(found, key=lambda m: STYLE.get(m, ("", "", False))[2])
 
 

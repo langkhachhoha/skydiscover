@@ -14,9 +14,11 @@ either::
     combined_score = metric / BENCHMARK      # higher-is-better tasks
     combined_score = BENCHMARK / metric      # lower-is-better tasks
 
-``combined_score`` is therefore always "higher == better" and == 1.0 at SOTA,
-so it is used to decide what counts as a *new best* regardless of task
-direction.  The plotted y-value, however, is the **raw metric** (BLADE style).
+``combined_score`` is therefore always "higher == better" and == 1.0 at SOTA
+for math tasks, so it is used to decide what counts as a *new best* regardless
+of task direction.  The plotted y-value is the **raw metric** (BLADE style)
+when the log exposes a single objective field; for ADRS-style multi-metric
+logs (EPLB, …) the plotted y-value is ``combined_score`` itself.
 
 What is written next to each method's ``run.txt``
 -------------------------------------------------
@@ -36,7 +38,9 @@ isn't ``combined_score``/``eval_time``).  BLADE's ``score:`` is the raw metric
 already, and its ``combined_score`` is recomputed from the task BENCHMARK when
 available (else left blank — the plotter only needs the raw score + cost).
 
-Run:  python scripts/plots/extract_log.py            # all tasks under result/
+Run:
+  python scripts/plots/extract_log.py                 # all tasks under result/
+  python scripts/plots/extract_log.py EPLB            # one (or more) task(s)
 """
 from __future__ import annotations
 
@@ -76,21 +80,35 @@ _BLADE_STATUS_COST = re.compile(r"\[Status\] Cost:\s*\$(?P<cost>[\d.]+)")
 # Native stack:
 #   ... Metrics: radii_sum=2.2189, combined_score=0.9379, eval_time=0.0 ... [cost=$0.4050, ...]
 _NATIVE_METRICS_LINE = re.compile(r"Metrics:\s*(?P<body>.*?)\s*\[cost=\$(?P<cost>[\d.]+)")
-_NATIVE_NEWBEST = re.compile(r"New best solution found")
+_NATIVE_NEWBEST = re.compile(
+    r"New best solution found(?:\s+at\s+iteration\s+(?P<iter>\d+))?"
+)
 _NATIVE_ITER = re.compile(r"Iteration (?P<iter>\d+):")
 _KV = re.compile(r"([A-Za-z_]\w*)=(-?\d+\.?\d*(?:[eE][-+]?\d+)?)")
 _ANY_COST = re.compile(r"cost=\$(?P<cost>[\d.]+)")
 
 # fields on the Metrics line that are never the objective metric
-_NON_METRIC = {"combined_score", "eval_time", "llm_calls"}
+_NON_METRIC = {"combined_score", "eval_time", "llm_calls", "error", "validity"}
 
 
 def _pick_metric(kv: dict[str, float]) -> float | None:
-    """Pick the raw objective metric from a parsed Metrics line."""
-    for k, v in kv.items():
-        if k not in _NON_METRIC:
-            return v
-    return None
+    """Pick the plotted objective metric from a parsed Metrics line.
+
+    Math tasks expose a single raw metric (e.g. ``radii_sum``,
+    ``min_area_normalized``) beside ``combined_score`` — that raw value is
+    what BLADE reports as ``score:`` and is what we plot.
+
+    ADRS-style evaluators (EPLB, TXN, …) emit many auxiliary fields
+    (balancedness, times, speed, …) with ``combined_score`` as the actual
+    search objective.  When more than one non-aux candidate is present we
+    therefore fall back to ``combined_score``.
+    """
+    candidates = [k for k in kv if k not in _NON_METRIC]
+    if len(candidates) == 1:
+        return kv[candidates[0]]
+    if "combined_score" in kv and len(candidates) != 1:
+        return kv["combined_score"]
+    return kv[candidates[0]] if candidates else None
 
 
 # ---------------------------------------------------------------------------
@@ -137,13 +155,19 @@ def parse_native(lines: list[str], benchmark: float | None) -> list[dict]:
             if metric is not None and combined is not None:
                 last = (metric, combined, float(mm["cost"]))
             continue
-        if _NATIVE_NEWBEST.search(ln) and last is not None:
+        mn = _NATIVE_NEWBEST.search(ln)
+        if mn and last is not None:
             metric, combined, cost = last
             if combined <= best_combined:
                 continue
             best_combined = combined
+            it = (
+                int(mn["iter"]) if mn["iter"] is not None
+                else last_iter if last_iter is not None
+                else len(out) + 1
+            )
             out.append(dict(
-                iter=last_iter if last_iter is not None else len(out) + 1,
+                iter=it,
                 cost=cost,
                 score=metric,
                 combined_score=combined,
@@ -179,8 +203,16 @@ PARSERS = {
 }
 
 
-def main() -> None:
-    for task_dir in sorted(p for p in RESULT_ROOT.iterdir() if p.is_dir()):
+def main(tasks: list[str] | None = None) -> None:
+    task_dirs = sorted(p for p in RESULT_ROOT.iterdir() if p.is_dir())
+    if tasks:
+        wanted = set(tasks)
+        task_dirs = [p for p in task_dirs if p.name in wanted]
+        missing = wanted - {p.name for p in task_dirs}
+        if missing:
+            raise SystemExit(f"Unknown task(s) under result/: {sorted(missing)}")
+
+    for task_dir in task_dirs:
         task = task_dir.name
         benchmark = task_benchmark(task)
         bstr = f"{benchmark:.6g}" if benchmark else "n/a"
@@ -189,7 +221,11 @@ def main() -> None:
             run = task_dir / method / "run.txt"
             if not run.exists():
                 continue
-            lines = run.read_text().splitlines()
+            text = run.read_text()
+            if not text.strip():
+                print(f"  {method:6s}: empty run.txt — skipped")
+                continue
+            lines = text.splitlines()
             rows = parser(lines, benchmark)
             tcost = total_cost(method, lines)
 
@@ -215,7 +251,8 @@ def main() -> None:
             if rows:
                 last = rows[-1]
                 pct = (f"{100*last['combined_score']:.1f}% SOTA"
-                       if isinstance(last["combined_score"], float) else "—")
+                       if isinstance(last["combined_score"], float) and benchmark
+                       else "—")
                 print(
                     f"  {method:6s}: {len(rows):3d} new-best pts | "
                     f"final score={last['score']:.4f} ({pct}) | "
@@ -226,4 +263,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1:] or None)

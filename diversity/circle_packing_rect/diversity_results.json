@@ -1,0 +1,166 @@
+{
+  "multi_prompt": [
+    {
+      "checkpoint": 1,
+      "n": 50,
+      "n_clusters": 18,
+      "n_mst_edges": 49,
+      "swdi": 2.5115946800294893,
+      "cdi": 3.8080691700970504,
+      "best_score": 2.2727272727250005,
+      "eval_end": 179
+    },
+    {
+      "checkpoint": 2,
+      "n": 50,
+      "n_clusters": 16,
+      "n_mst_edges": 49,
+      "swdi": 2.3971202122153974,
+      "cdi": 3.7620272067788187,
+      "best_score": 2.2882759766691625,
+      "eval_end": 229
+    },
+    {
+      "checkpoint": 3,
+      "n": 50,
+      "n_clusters": 16,
+      "n_mst_edges": 49,
+      "swdi": 2.3990847223309792,
+      "cdi": 3.7669527031023855,
+      "best_score": 2.339588264563044,
+      "eval_end": 279
+    },
+    {
+      "checkpoint": 4,
+      "n": 50,
+      "n_clusters": 16,
+      "n_mst_edges": 49,
+      "swdi": 2.3305633510812025,
+      "cdi": 3.7340929891831967,
+      "best_score": 2.347274615577891,
+      "eval_end": 329
+    },
+    {
+      "checkpoint": 5,
+      "n": 50,
+      "n_clusters": 15,
+      "n_mst_edges": 49,
+      "swdi": 2.2507946719897958,
+      "cdi": 3.6719191843901773,
+      "best_score": 2.348963286842875,
+      "eval_end": 379
+    },
+    {
+      "checkpoint": 6,
+      "n": 50,
+      "n_clusters": 16,
+      "n_mst_edges": 49,
+      "swdi": 2.2587102479574277,
+      "cdi": 3.6416117064421964,
+      "best_score": 2.3542199160337884,
+      "eval_end": 429
+    },
+    {
+      "checkpoint": 7,
+      "n": 50,
+      "n_clusters": 17,
+      "n_mst_edges": 49,
+      "swdi": 2.2298960167091533,
+      "cdi": 3.6040398513460534,
+      "best_score": 2.3542199160337884,
+      "eval_end": 479
+    },
+    {
+      "checkpoint": 8,
+      "n": 50,
+      "n_clusters": 17,
+      "n_mst_edges": 49,
+      "swdi": 2.2298960167091533,
+      "cdi": 3.62622865930333,
+      "best_score": 2.354276556973633,
+      "eval_end": 529
+    }
+  ],
+  "single_prompt": [
+    {
+      "checkpoint": 1,
+      "n": 49,
+      "n_clusters": 23,
+      "n_mst_edges": 48,
+      "swdi": 2.731672016328197,
+      "cdi": 3.761824881069561,
+      "best_score": 2.2727270720526787,
+      "eval_end": 176
+    },
+    {
+      "checkpoint": 2,
+      "n": 49,
+      "n_clusters": 20,
+      "n_mst_edges": 48,
+      "swdi": 2.486599336508773,
+      "cdi": 3.7110306705845586,
+      "best_score": 2.2727272584645575,
+      "eval_end": 226
+    },
+    {
+      "checkpoint": 3,
+      "n": 49,
+      "n_clusters": 22,
+      "n_mst_edges": 48,
+      "swdi": 2.681450612517389,
+      "cdi": 3.6981257937057865,
+      "best_score": 2.2727272687722757,
+      "eval_end": 276
+    },
+    {
+      "checkpoint": 4,
+      "n": 49,
+      "n_clusters": 22,
+      "n_mst_edges": 48,
+      "swdi": 2.650175320848216,
+      "cdi": 3.6930914491833606,
+      "best_score": 2.2727272687722757,
+      "eval_end": 326
+    },
+    {
+      "checkpoint": 5,
+      "n": 49,
+      "n_clusters": 19,
+      "n_mst_edges": 48,
+      "swdi": 2.5428958152441834,
+      "cdi": 3.6385590513343047,
+      "best_score": 2.2965760984086034,
+      "eval_end": 376
+    },
+    {
+      "checkpoint": 6,
+      "n": 49,
+      "n_clusters": 17,
+      "n_mst_edges": 48,
+      "swdi": 2.4681460804206763,
+      "cdi": 3.62812812711831,
+      "best_score": 2.314820322131848,
+      "eval_end": 426
+    },
+    {
+      "checkpoint": 7,
+      "n": 49,
+      "n_clusters": 16,
+      "n_mst_edges": 48,
+      "swdi": 2.3722269724113425,
+      "cdi": 3.5846003593950995,
+      "best_score": 2.329576900687503,
+      "eval_end": 476
+    },
+    {
+      "checkpoint": 8,
+      "n": 49,
+      "n_clusters": 16,
+      "n_mst_edges": 48,
+      "swdi": 2.4257197243046376,
+      "cdi": 3.6304908832554377,
+      "best_score": 2.3326923904425323,
+      "eval_end": 526
+    }
+  ]
+}

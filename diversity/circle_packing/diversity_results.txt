@@ -1,0 +1,33 @@
+SWDI / CDI diversity analysis - circle_packing
+Metrics follow HSEvo (Pham Vu Tuan Dat et al., 2024), Section 3.
+Embedding model : openai/text-embedding-3-small (via OpenRouter)
+SWDI threshold  : alpha = 0.95
+Encoding        : AST comment/docstring removal + canonical re-emission (ast.unparse)
+Population      : the archive snapshot stored in each checkpoint (as-is, duplicates kept)
+SWDI higher = more even spread across clusters; CDI higher = more dispersed population.
+
+=== multi_prompt ===
+ ckpt    N  #clusters     SWDI      CDI   best_score   evals
+    1   50         27   3.0709   3.8088     2.616947     159
+    2   50         27   3.0938   3.7947     2.616947     209
+    3   50         26   3.0370   3.7568     2.616947     259
+    4   50         23   2.9261   3.7390     2.616947     309
+    5   50         22   2.8528   3.7308     2.616947     359
+    6   50         22   2.8528   3.7151     2.616947     409
+    7   50         21   2.8206   3.7163     2.616947     459
+    8   50         20   2.7266   3.6983     2.616947     509
+ mean                   2.9226   3.7450
+  std                   0.1325   0.0393
+
+=== single_prompt ===
+ ckpt    N  #clusters     SWDI      CDI   best_score   evals
+    1   50         24   2.8115   3.8003     2.596920     177
+    2   50         26   2.9697   3.8111     2.596920     227
+    3   50         25   2.9870   3.8013     2.605488     277
+    4   50         25   2.9816   3.8037     2.607735     327
+    5   50         25   2.9856   3.8043     2.608406     377
+    6   50         25   2.9765   3.7894     2.608406     427
+    7   50         25   2.9069   3.7866     2.608406     477
+    8   50         26   2.9688   3.7938     2.608406     527
+ mean                   2.9484   3.7988
+  std                   0.0610   0.0082

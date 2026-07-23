@@ -64,6 +64,8 @@ def _map_config(config: Config, iterations: Optional[int], output_dir: str):
                 temperature=getattr(m, "temperature", oe.llm.temperature),
                 api_key=getattr(m, "api_key", None),
                 api_base=resolved_api_base,
+                reasoning_effort=getattr(m, "reasoning_effort", None)
+                or getattr(config.llm, "reasoning_effort", None),
             )
             for m in config.llm.models
         ]
