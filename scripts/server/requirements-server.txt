@@ -1,0 +1,24 @@
+# Core runtime for running BLADE + baselines on a plain (non-GitHub-Actions)
+# server, installed on top of `pip install -e .` (which brings the skydiscover
+# base dependencies: openai, pyyaml, tqdm, numpy, scipy, networkx, dotenv).
+#
+# Mirrors levi/pyproject.toml [project.dependencies] — BLADE is run from
+# scripts/run_blade.py, which puts ./levi on sys.path, so LEVI itself is not
+# pip-installed but its dependencies must be present.
+numpy>=2.3.5
+scipy>=1.11.0
+networkx>=3.2
+litellm>=1.81.16
+scikit-learn>=1.4.0
+colorama>=0.4.6
+dspy>=3.1.2
+
+# Evaluator dependencies shared by the math / co_bench benchmark families
+# (union of the small benchmarks/*/requirements.txt files). Heavy,
+# hardware-specific extras (torch, jax, triton, kernelbench) are NOT here —
+# install them with `scripts/server/setup_env.sh --extra <name>` only if you
+# actually run those benchmarks.
+sympy>=1.14.0
+pandas
+matplotlib
+tqdm
