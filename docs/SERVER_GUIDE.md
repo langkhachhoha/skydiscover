@@ -472,9 +472,24 @@ nhận biết log là BLADE hay baseline và làm đúng việc:
 
 ```bash
 ./scripts/server/result.sh                      # run mới nhất, tự động
+./scripts/server/result.sh -2                   # run gần thứ 2 (không cần gõ tên log)
+./scripts/server/result.sh --recent 3           # in luôn 3 run gần nhất, mỗi cái 1 header
 ./scripts/server/result.sh <đường-dẫn-run.log>  # chỉ định log cụ thể
-./scripts/server/result.sh --list               # liệt kê các run gần đây để chọn
+./scripts/server/result.sh --list               # liệt kê các run gần đây (kèm số -1 -2 -3)
 ```
+
+**Không cần gõ tên log** — tham chiếu theo độ mới: `-1` là mới nhất, `-2` là
+trước đó… Chạy `--list` để xem danh sách đánh số. Mỗi lần in đều có dòng
+`# log: ...` ở trên cho biết kết quả lấy từ file nào.
+
+```bash
+./scripts/server/result.sh -1          # = mặc định, run mới nhất
+./scripts/server/result.sh -3 -B 1     # run gần thứ 3, kèm 1 dòng test score phía trên
+./scripts/server/result.sh --recent 5  # 5 run gần nhất một thể, mỗi run có header + trạng thái
+```
+
+`--recent` tự nhận diện từng log riêng, nên một loạt trộn cả BLADE lẫn baseline
+vẫn hiển thị đúng kiểu cho từng cái.
 
 **Với baseline / CO-Bench** — nó tìm dòng `New best` **cuối cùng** và in kèm
 mấy dòng phía trên (chính là dòng `Dev Score | Test Score | Overall`). Dòng có
@@ -510,6 +525,8 @@ Các cờ chính:
 
 | Cờ | Ý nghĩa | Mặc định |
 | --- | --- | --- |
+| `-N` (vd `-2`) | Chọn run gần thứ N thay vì gõ tên log | `-1` (mới nhất) |
+| `-R, --recent N` | In N run gần nhất một thể, mỗi cái 1 header | — |
 | `-k, --keyword RE` | Từ khoá cần tìm (regex) | tự nhận: `New best` cho baseline |
 | `-B, --before N` | Số dòng in phía **trên** mỗi lần khớp | `3` |
 | `-A, --after N` | Số dòng in phía **dưới** mỗi lần khớp | `1` |
