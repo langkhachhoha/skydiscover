@@ -465,6 +465,60 @@ Phần cuối `run.log` cũng in sẵn bảng tổng kết chi phí + `exit stat
 - Baseline: `outputs/server/<run-id>/run/best/` và `run/checkpoints/`
 - BLADE: các file kết quả nằm thẳng trong `outputs/server/<run-id>/`
 
+### Lấy nhanh điểm cuối cùng: `scripts/server/result.sh`
+
+Thay cho việc `tail -f` rồi tự Ctrl-F tìm "New best", dùng script này. Nó tự
+nhận biết log là BLADE hay baseline và làm đúng việc:
+
+```bash
+./scripts/server/result.sh                      # run mới nhất, tự động
+./scripts/server/result.sh <đường-dẫn-run.log>  # chỉ định log cụ thể
+./scripts/server/result.sh --list               # liệt kê các run gần đây để chọn
+```
+
+**Với baseline / CO-Bench** — nó tìm dòng `New best` **cuối cùng** và in kèm
+mấy dòng phía trên (chính là dòng `Dev Score | Test Score | Overall`). Dòng có
+dấu `>>` là dòng khớp keyword, các dòng còn lại là ngữ cảnh:
+
+```bash
+./scripts/server/result.sh                  # mặc định: New best cuối + 3 dòng trên
+./scripts/server/result.sh -B 1 -A 0        # chỉ 1 dòng trên (đúng dòng test score)
+./scripts/server/result.sh -n 3             # 3 lần New best cuối, không chỉ 1
+./scripts/server/result.sh -n all           # tất cả các lần New best
+```
+
+**Với BLADE** — nó in **cả khối báo cáo cuối** (`Best score`, `Total cost`,
+`Runtime`…) từ đầu báo cáo tới hết file, nên không bao giờ bị cắt cụt như
+`tail -N`:
+
+```bash
+./scripts/server/result.sh path/to/blade/run.log   # tự nhận ra là BLADE
+```
+
+**Tìm keyword bất kỳ (linh hoạt hoàn toàn):** hai cờ `-B` (before, số dòng
+phía trên) và `-A` (after, phía dưới) giống hệt `grep`, gõ dính hay tách đều
+được (`-B3` hoặc `-B 3`):
+
+```bash
+./scripts/server/result.sh -k "Test Score" -B0 -A0      # chỉ các dòng Test Score
+./scripts/server/result.sh -k "🌟" -B2                   # emoji cũng được
+./scripts/server/result.sh -k "combined_score" -n all   # mọi lần xuất hiện
+./scripts/server/result.sh --from "Runtime"             # in từ dòng 'Runtime' cuối tới hết
+```
+
+Các cờ chính:
+
+| Cờ | Ý nghĩa | Mặc định |
+| --- | --- | --- |
+| `-k, --keyword RE` | Từ khoá cần tìm (regex) | tự nhận: `New best` cho baseline |
+| `-B, --before N` | Số dòng in phía **trên** mỗi lần khớp | `3` |
+| `-A, --after N` | Số dòng in phía **dưới** mỗi lần khớp | `1` |
+| `-n, --num N` | Chỉ lấy N lần khớp **cuối** (`all` = tất cả) | `1` |
+| `--from RE` | In từ dòng cuối khớp RE tới hết file (tail linh hoạt) | — |
+| `--report` | Ép chế độ báo cáo BLADE (= `--from 'Best score'`) | — |
+| `-f, --follow` | In xong rồi `tail -f` theo dõi tiếp | tắt |
+| `-l, --list` | Liệt kê các run gần đây rồi thoát | — |
+
 ---
 
 ## 9. Lấy kết quả từ server về máy

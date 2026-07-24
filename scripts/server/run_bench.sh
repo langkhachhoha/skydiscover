@@ -309,6 +309,7 @@ Started in tmux.
 
 Watch it live   :  tmux attach -t $SESSION      (detach again with Ctrl-b then d)
 Follow the log  :  tail -f $LOG_FILE
+Final result    :  ./scripts/server/result.sh $LOG_FILE
 List sessions   :  tmux ls
 Stop the run    :  tmux kill-session -t $SESSION
 
