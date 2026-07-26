@@ -298,6 +298,11 @@ if [[ "$USE_TMUX" == "1" && "${RUN_BENCH_INSIDE_TMUX:-0}" != "1" ]]; then
         INNER+=(--baseline "$BASELINE" --benchmark-dir "$BENCHMARK_DIR"
                 --iterations "$ITERATIONS" --model "$MODEL")
     fi
+    # --session is passed through purely so the pane can record it in the log
+    # header: the run dir is named after the run id, but what a human remembers
+    # months later is the session name. scripts/server/collect_logs.sh maps one
+    # back to the other, and needs the name to survive the session being killed.
+    INNER+=(--session "$SESSION")
     INNER+=(--run-id "$RUN_ID" --output-dir "$OUTPUT_DIR" --conda-env "$CONDA_ENV")
     [[ "$USE_CONDA"    == "0" ]] && INNER+=(--no-conda)
     [[ "$INSTALL_DEPS" == "0" ]] && INNER+=(--no-install-deps)
@@ -404,6 +409,9 @@ fi
         echo " budget      : dollars='${DOLLARS}'"
     fi
     echo " seed label  : $SEED"
+    if [[ "${RUN_BENCH_INSIDE_TMUX:-0}" == "1" ]]; then
+        echo " tmux session: $SESSION"
+    fi
     echo " timeout     : ${TIMEOUT_SECS:-none}${TIMEOUT_SECS:+s}"
     echo " python      : $(command -v python)  ($(python -V 2>&1))"
     echo " conda env   : ${CONDA_DEFAULT_ENV:-<none>}"
