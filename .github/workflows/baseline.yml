@@ -8,6 +8,10 @@ run-name: Baselines Smoke — ${{ inputs.baseline }} · ${{ inputs.benchmark_dir
 #
 # Per-LLM-call OpenRouter usage.cost is appended to cost_log.jsonl with a
 # running cost_log.totals.json (skydiscover.llm.cost_tracker).
+#
+# The `dollars` input is the money-side counterpart of that 3-hour cap, and
+# the analogue of blade.yml's `dollars`: the run stops itself once the
+# tracked spend reaches the cap, instead of running `iterations` to the end.
 
 on:
   workflow_dispatch:
@@ -30,6 +34,10 @@ on:
         description: "Number of iterations to run"
         required: false
         default: "100"
+      dollars:
+        description: "Max USD spend — the run stops gracefully at the next iteration boundary once tracked LLM cost reaches it (blank or 0 = no cap). Soft cap: in-flight calls still finish, so the total can overshoot by roughly one iteration."
+        required: false
+        default: ""
       model:
         description: "OpenRouter model id routed through SkyDiscover"
         required: false
@@ -150,6 +158,7 @@ jobs:
             --search "${{ inputs.baseline }}" \
             --model "${{ inputs.model }}" \
             --iterations "${{ inputs.iterations }}" \
+            --dollars "${{ inputs.dollars }}" \
             --output "outputs/github-actions/baseline_${{ inputs.baseline }}_${{ github.run_id }}/run"
 
       - name: Cost summary
@@ -159,6 +168,9 @@ jobs:
           TOTALS="$OUT_DIR/cost_log.totals.json"
           LOG="$OUT_DIR/cost_log.jsonl"
           echo "## ${{ inputs.baseline }} on ${{ inputs.benchmark_dir }}" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.dollars }}" ]; then
+            echo "Spend budget: \$${{ inputs.dollars }}" >> $GITHUB_STEP_SUMMARY
+          fi
           if [ -f "$TOTALS" ]; then
             echo '```json' >> $GITHUB_STEP_SUMMARY
             cat "$TOTALS" >> $GITHUB_STEP_SUMMARY

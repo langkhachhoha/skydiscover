@@ -124,6 +124,11 @@ baseline options (defaults match baseline.yml)
   --benchmark-dir DIR         Benchmark directory. (default: benchmarks/math/circle_packing)
   --iterations N              Iterations to run. (default: 100)
   --model ID                  OpenRouter model id. (default: openrouter/openai/gpt-5)
+  --dollars N                 Max USD spend; the run stops itself at the next iteration
+                              boundary once tracked LLM cost reaches it, keeping every
+                              result written so far. Soft cap — in-flight calls still
+                              finish, so the total can overshoot by ~one iteration.
+                              (default: unset = no cap)
 
 Examples
   ./scripts/server/run_bench.sh blade --tmux \
@@ -131,6 +136,9 @@ Examples
   ./scripts/server/run_bench.sh baseline --tmux \
       --baseline openevolve_native --benchmark-dir benchmarks/math/heilbronn_triangle \
       --iterations 100 --model openrouter/openai/gpt-5
+  ./scripts/server/run_bench.sh baseline --tmux \
+      --baseline evox --benchmark-dir benchmarks/co_bench/tsp \
+      --iterations 500 --dollars 5      # stops itself at $5, whichever comes first
 EOF
 }
 
@@ -154,10 +162,10 @@ while [[ $# -gt 0 ]]; do
         --cobench-max-cases)     COBENCH_MAX_CASES_IN="$2"; shift 2 ;;
         --cobench-max-instances) COBENCH_MAX_INSTANCES_IN="$2"; shift 2 ;;
         --timeout)               TIMEOUT_IN="$2"; shift 2 ;;
+        --dollars)               DOLLARS="$2"; shift 2 ;;   # both modes
         # blade
         --benchmark)             BENCHMARK="$2"; shift 2 ;;
         --evaluations|--evals)   EVALUATIONS="$2"; shift 2 ;;
-        --dollars)               DOLLARS="$2"; shift 2 ;;
         --seconds)               SECONDS_CAP="$2"; shift 2 ;;
         --mutation-model)        MUTATION_MODEL="$2"; shift 2 ;;
         --paradigm-model)        PARADIGM_MODEL="$2"; shift 2 ;;
@@ -216,6 +224,13 @@ if [[ "$TIMEOUT_IN" == "__unset__" ]]; then
 fi
 TIMEOUT_SECS="$(parse_duration "$TIMEOUT_IN")"
 
+# --dollars is a plain USD amount; blank/0 means "no cap". Reject anything
+# non-numeric here rather than letting it surface hours into a run.
+if [[ -n "$DOLLARS" ]]; then
+    [[ "$DOLLARS" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+        || die "invalid --dollars '$DOLLARS' (use a number of USD, e.g. 5 or 2.50, or leave it unset)"
+fi
+
 if [[ "$MODE" == "blade" ]]; then
     grep -qw -- "$ABLATION" <<<"$VALID_ABLATIONS" || die "invalid --ablation '$ABLATION' (one of: $VALID_ABLATIONS)"
     [[ -d "$BENCHMARK" ]] || die "--benchmark directory not found: $BENCHMARK"
@@ -271,9 +286,9 @@ if [[ "$USE_TMUX" == "1" && "${RUN_BENCH_INSIDE_TMUX:-0}" != "1" ]]; then
     INNER=("$REPO_ROOT/scripts/server/run_bench.sh" "$MODE")
     INNER+=(--seed "$SEED" --cobench-timeout "$COBENCH_TIMEOUT_IN")
     INNER+=(--cobench-max-cases "$COBENCH_MAX_CASES_IN" --cobench-max-instances "$COBENCH_MAX_INSTANCES_IN")
-    INNER+=(--timeout "${TIMEOUT_SECS:-0}")
+    INNER+=(--timeout "${TIMEOUT_SECS:-0}" --dollars "$DOLLARS")
     if [[ "$MODE" == "blade" ]]; then
-        INNER+=(--benchmark "$BENCHMARK" --evaluations "$EVALUATIONS" --dollars "$DOLLARS"
+        INNER+=(--benchmark "$BENCHMARK" --evaluations "$EVALUATIONS"
                 --seconds "$SECONDS_CAP" --mutation-model "$MUTATION_MODEL"
                 --paradigm-model "$PARADIGM_MODEL" --workers "$WORKERS"
                 --pe-interval "$PE_INTERVAL" --eval-timeout "$EVAL_TIMEOUT"
@@ -386,6 +401,7 @@ fi
         echo " baseline    : $BASELINE"
         echo " model       : $MODEL"
         echo " iterations  : $ITERATIONS"
+        echo " budget      : dollars='${DOLLARS}'"
     fi
     echo " seed label  : $SEED"
     echo " timeout     : ${TIMEOUT_SECS:-none}${TIMEOUT_SECS:+s}"
@@ -557,6 +573,7 @@ else
          --search "$BASELINE"
          --model "$MODEL"
          --iterations "$ITERATIONS"
+         --dollars "$DOLLARS"
          --output "$OUTPUT_DIR/run")
     WORKDIR="$REPO_ROOT"
 fi
@@ -660,6 +677,9 @@ fi
     fi
     if [[ -f "$OUTPUT_DIR/cost_log.jsonl" ]]; then
         echo " LLM calls recorded: $(wc -l < "$OUTPUT_DIR/cost_log.jsonl" | tr -d ' ')"
+    fi
+    if [[ -n "$DOLLARS" ]]; then
+        echo " spend budget: \$$DOLLARS"
     fi
     echo " finished at : $(date '+%Y-%m-%d %H:%M:%S %Z')"
     if [[ "$TIMED_OUT" == "1" ]]; then

@@ -308,6 +308,11 @@ cd ~/skydiscover
 # Baseline khác trên benchmark khác
 ./scripts/server/run_bench.sh baseline --tmux \
     --baseline evox --benchmark-dir benchmarks/co_bench/bin_packing_1d --iterations 150
+
+# Baseline có trần chi phí: chạy tới 400 vòng nhưng tiêu đủ $3 là tự dừng
+./scripts/server/run_bench.sh baseline --tmux \
+    --baseline adaevolve --benchmark-dir benchmarks/math/circle_packing \
+    --iterations 400 --dollars 3
 ```
 
 ### Giới hạn thời gian: `--timeout`
@@ -336,6 +341,40 @@ Khác biệt giữa hai loại giới hạn:
 Khi bị timeout, **kết quả dở dang vẫn được giữ nguyên** (log, cost_log,
 checkpoint đã ghi tới thời điểm đó), và dòng cuối log ghi rõ:
 `exit status : 124  (TIMED OUT after 10800s — partial results kept)`.
+
+### Giới hạn tiền: `--dollars` (cả blade lẫn baseline)
+
+`--timeout` chặn theo **thời gian**, `--dollars` chặn theo **tiền**. Baseline
+giờ cũng có tham số này (giống `dollars` trong `blade.yml`), vừa là cờ của
+`run_bench.sh` vừa là ô nhập trên form "Run workflow" của `baseline.yml`:
+
+```bash
+# Chạy tối đa 500 vòng, NHƯNG tiêu đủ $5 là tự dừng — cái nào đến trước thì thắng
+./scripts/server/run_bench.sh baseline --tmux \
+    --baseline evox --benchmark-dir benchmarks/co_bench/tsp \
+    --iterations 500 --dollars 5
+```
+
+Cách nó hoạt động: mỗi lần gọi LLM, OpenRouter trả về `usage.cost` và
+`skydiscover.llm.cost_tracker` cộng dồn vào `cost_log.totals.json`. Khi tổng
+chạm ngưỡng, nó yêu cầu vòng lặp dừng **êm** — vòng lặp đang chạy dở được làm
+nốt, best program + checkpoint được ghi đầy đủ, chấm điểm test cuối cùng vẫn
+chạy, và **exit status vẫn là 0** (không phải 124 như timeout).
+
+Vài điểm cần biết:
+
+- **Đây là trần mềm.** Các request đã bay đi rồi vẫn hoàn thành, nên tổng cuối
+  cùng thường **nhỉnh hơn** con số bạn đặt một chút (khoảng 1 vòng lặp; nếu
+  `max_parallel_iterations` > 1 thì tối đa là bấy nhiêu vòng). Đặt $5 mà tiêu ra
+  $5.12 là bình thường, không phải lỗi. Muốn chặn cứng tuyệt đối thì dùng thêm
+  `--timeout`.
+- Ngưỡng dựa trên chi phí do **nhà cung cấp báo về**, nên chỉ có tác dụng với
+  OpenRouter (mọi model `openrouter/...` — tức là toàn bộ cấu hình mặc định ở đây).
+- Bỏ trống hoặc để `0` = không giới hạn (y như trước khi có tham số này).
+- Log in kèm tiến độ tiêu tiền ngay trên từng dòng iteration:
+  `[cost=$1.2345/$5.00, llm_calls=87]`. Lúc dừng có dòng
+  `💸 Spend budget reached: $5.0100 of $5.0000 ...`.
+- Cuối `run.log` có thêm dòng `spend budget: $5` bên cạnh bảng `cost totals`.
 
 ### Thử trước khi chạy thật: `--dry-run`
 
@@ -616,6 +655,7 @@ Xem danh sách benchmark có sẵn: `ls levi/examples/` và `ls levi/examples/co
 | `--benchmark-dir DIR` | `benchmarks/math/circle_packing` |
 | `--iterations N` | `100` |
 | `--model ID` | `openrouter/openai/gpt-5` |
+| `--dollars N` | rỗng (tắt) — trần chi phí USD, xem mục dưới |
 
 Xem danh sách benchmark: `ls benchmarks/math/` và `ls benchmarks/co_bench/`.
 

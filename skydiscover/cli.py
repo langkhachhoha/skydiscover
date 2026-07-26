@@ -92,8 +92,33 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Search algorithm to use",
     )
+    parser.add_argument(
+        "--dollars",
+        default=None,
+        help=(
+            "Stop once total LLM spend reaches this many USD (e.g. 5 or 2.50). "
+            "Blank/0 disables the cap. Soft cap: the current iteration finishes "
+            "first, so the final total can overshoot slightly. Needs a provider "
+            "that reports per-call cost (OpenRouter)."
+        ),
+    )
 
     return parser.parse_args()
+
+
+def _parse_dollars(value: Optional[str]) -> Optional[float]:
+    """Parse the ``--dollars`` budget. Blank / none / non-positive -> no cap.
+
+    Blank must stay legal: the GitHub workflow and run_bench.sh always pass
+    the flag through, empty when the user left the field alone.
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if not text or text.lower() in {"none", "off"}:
+        return None
+    amount = float(text)  # ValueError is caught by the caller
+    return amount if amount > 0 else None
 
 
 def main() -> int:
@@ -112,6 +137,21 @@ async def main_async() -> int:
     if not os.path.exists(args.evaluation_file):
         print(f"Error: Evaluation file '{args.evaluation_file}' not found", file=sys.stderr)
         return 1
+
+    # Publish the spend budget before anything can issue an LLM call: the cost
+    # tracker reads it from the environment on every call and asks the
+    # discovery controller to stop once the total reaches it.
+    try:
+        budget = _parse_dollars(args.dollars)
+    except ValueError:
+        print(
+            f"Error: --dollars must be a number (got '{args.dollars}')",
+            file=sys.stderr,
+        )
+        return 1
+    if budget is not None:
+        os.environ["SKYDISCOVER_MAX_COST_USD"] = f"{budget}"
+        print(f"Spend budget: ${budget:.4f} (run stops gracefully once reached)")
 
     has_overrides = any((args.api_base, args.model, args.agentic, args.search))
     config = None
@@ -180,6 +220,12 @@ async def main_async() -> int:
 
             # External backends (openevolve, shinkaevolve, gepa)
             if is_external(search_type):
+                if budget is not None:
+                    print(
+                        f"Warning: --dollars is not enforced by the external '{search_type}' "
+                        "backend — it runs its own loop. Spend is still logged.",
+                        file=sys.stderr,
+                    )
                 if evaluator_env_vars:
                     env_var_names = ", ".join(sorted(evaluator_env_vars))
                     print(

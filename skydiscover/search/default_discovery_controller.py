@@ -21,7 +21,7 @@ from skydiscover.context_builder.evox import EvoxContextBuilder
 from skydiscover.evaluation import create_evaluator
 from skydiscover.evaluation.llm_judge import LLMJudge
 from skydiscover.llm.base import LLMResponse
-from skydiscover.llm.cost_tracker import format_cost_suffix
+from skydiscover.llm.cost_tracker import format_cost_suffix, register_budget_hook
 from skydiscover.llm.llm_pool import LLMPool
 from skydiscover.search.base_database import Program, ProgramDatabase
 from skydiscover.search.utils.discovery_utils import SerializableResult, build_image_content
@@ -69,6 +69,14 @@ class DiscoveryController:
 
         self.shutdown_event = mp.Event()
         self.early_stopping_triggered = False
+        self.budget_stop_triggered = False
+
+        # SKYDISCOVER_MAX_COST_USD: stop spending once the cap is reached.
+        # Every loop below (and in the subclasses) already breaks on
+        # ``shutdown_event``, so turning the budget into that same signal
+        # gives a graceful stop — the current iteration finishes, results
+        # and checkpoints are written, and the run exits 0.
+        register_budget_hook(self._on_budget_exhausted)
 
         self.llms = LLMPool(self.config.llm.models)
         self.evaluator_llms = LLMPool(self.config.llm.evaluator_models)
@@ -903,6 +911,22 @@ class DiscoveryController:
     def request_shutdown(self) -> None:
         """Request graceful shutdown"""
         logger.info("Graceful shutdown requested...")
+        self.shutdown_event.set()
+
+    def _on_budget_exhausted(self, total_cost: float, budget: float) -> None:
+        """Stop the loop once LLM spend reaches the configured USD budget.
+
+        Called from the cost tracker on whichever thread made the final LLM
+        call, so it does nothing but flip flags: the loop notices at the next
+        iteration boundary. Requests already in flight still complete, which
+        is why the cap is a soft one.
+        """
+        self.budget_stop_triggered = True
+        self.early_stopping_triggered = True
+        logger.warning(
+            f"Spend budget of ${budget:.4f} reached (${total_cost:.4f} spent) — "
+            f"stopping discovery after the current iteration."
+        )
         self.shutdown_event.set()
 
     def _process_iteration_result(

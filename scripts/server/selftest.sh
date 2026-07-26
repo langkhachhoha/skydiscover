@@ -124,6 +124,12 @@ grep -q "timeout     : 10800s" <<<"$("$RB" blade --dry-run --no-conda --timeout 
 "$RB" blade --dry-run --no-conda --timeout 5d >/dev/null 2>&1 \
   && no "invalid --timeout unit accepted" || ok "invalid --timeout rejected"
 
+OUT="$("$RB" baseline --dry-run --no-conda --dollars 5 2>&1)"
+grep -q -- "--dollars 5" <<<"$OUT" && ok "baseline --dollars reaches skydiscover-run" \
+  || no "baseline --dollars not passed through"
+"$RB" baseline --dry-run --no-conda --dollars 5usd >/dev/null 2>&1 \
+  && no "non-numeric --dollars accepted" || ok "invalid --dollars rejected"
+
 # ---------------------------------------------------------------------------
 sec "6. tmux detached execution (2 throwaway sessions, no API calls)"
 if command -v tmux >/dev/null 2>&1; then
