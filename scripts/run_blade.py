@@ -551,6 +551,22 @@ def main() -> int:
     print(f"Runtime           : {result.runtime_seconds:.1f}s")
     print(f"Output dir        : {output_dir}")
 
+    # Search trace: which Navigator mode fired when, and who produced each
+    # new best. Written incrementally during the run by the orchestrator.
+    snap_path = output_dir / "snap.json"
+    if snap_path.exists():
+        try:
+            snap = json.loads(snap_path.read_text())
+            nav = snap["summary"]["navigator"]
+            nb = snap["summary"]["new_best"]
+            modes = ", ".join(f"{k}={v}" for k, v in nav["by_mode"].items() if v)
+            producers = ", ".join(f"{k}={v}" for k, v in nb["by_producer"].items() if v)
+            print(f"Navigator calls   : {nav['calls']}" + (f"  ({modes})" if modes else ""))
+            print(f"New bests         : {nb['count']}" + (f"  ({producers})" if producers else ""))
+            print(f"Search trace      : {snap_path}")
+        except Exception as e:  # pragma: no cover — never fail a run on a summary line
+            print(f"Search trace      : {snap_path}  (unreadable: {e})")
+
     # Last thing on screen: the ablation's ten error-rate measurements.
     if args.error_rate_interval > 0:
         from levi.blade import format_error_rate_table

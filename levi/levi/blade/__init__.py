@@ -23,11 +23,14 @@ from .orchestrator import (
     ParadigmTrial,
     format_error_rate_table,
 )
+from .snaplog import SnapLog, classify_producer
 
 __all__ = [
     "BladeConfig",
     "BladeOrchestrator",
     "BladeResult",
     "ParadigmTrial",
+    "SnapLog",
+    "classify_producer",
     "format_error_rate_table",
 ]

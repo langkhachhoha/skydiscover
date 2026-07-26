@@ -541,10 +541,70 @@ Every run writes three files into the output directory:
   path) — the best-scoring program as a standalone module.
 * **`summary.json`** (driver path only) — flat summary keys for
   benchmark aggregators.
+* **`snap.json`** — the search *trace* (see below).
 
 The snapshot schema is intentionally close to LEVI's so benchmark
 tooling that already reads LEVI's `snapshot.json` requires minimal
 changes.
+
+### 8.1 `snap.json` — the search trace
+
+`snapshot.json` is a terminal dump: it says what the archive looked like
+when the run stopped. It cannot answer *how the search got there*.
+`snap.json` is the complementary timeline, written incrementally and
+flushed after every event — a run killed by a timeout or a cancelled CI
+job still leaves a complete trace up to the moment it died. It is always
+on; there is no flag.
+
+Two event kinds are recorded, both carrying the full **code** and
+**description** of the program involved plus the **evaluation index**
+they occurred at:
+
+* **`navigator`** — one frontier call. Records which of the three modes
+  was routed to (`synthesis` / `surgical` / `shift`), the stagnation
+  that routed it, the anchors it was shown, what came back
+  (`accepted` / `rejected` / `eval_error` / `parse_miss` / `llm_error`),
+  the delta vs the previous best, and a `fanout` block summarising how
+  its cheap variants did.
+* **`new_best`** — every improvement of the run's best score. Records
+  the `producer` (`init` / `speculator` / `navigator` /
+  `navigator_variant`), the exact operator label (`mutate_targeted`,
+  `crossover_structural`, …), the model, the improvement, and how many
+  evaluations passed since the previous record.
+
+A rolling `summary` block above the events answers the headline
+attribution question without parsing the timeline:
+
+```jsonc
+"summary": {
+  "navigator": {
+    "calls": 12,
+    "by_mode":          {"synthesis": 5, "surgical": 4, "shift": 3},
+    "accepted_by_mode": {"synthesis": 3, "surgical": 4, "shift": 2},
+    "new_best_by_mode": {"synthesis": 1, "surgical": 0, "shift": 2},
+    "fanout_variants": 48, "fanout_accepted": 19
+  },
+  "new_best": {
+    "count": 18,
+    "by_producer":           {"init": 1, "speculator": 12, "navigator": 2, "navigator_variant": 3},
+    "score_gain_by_producer": {"speculator": 0.031, "navigator": 0.118, ...},
+    "by_source": {"mutate_targeted": 6, "crossover_structural": 3, ...}
+  }
+}
+```
+
+The driver echoes the two headline lines at the end of a run:
+
+```text
+Navigator calls   : 12  (synthesis=5, surgical=4, shift=3)
+New bests         : 18  (init=1, speculator=12, navigator=2, navigator_variant=3)
+Search trace      : outputs/.../snap.json
+```
+
+Note that the phase-1 bootstrap seeds also come from the frontier model
+but are **not** `navigator` events — the three-mode routing only applies
+to paradigm shifts. Bootstrap contributions show up as `new_best` events
+with `producer: "init"`.
 
 ---
 

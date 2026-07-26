@@ -75,6 +75,7 @@ from .prompts import (
     build_targeted_mutate_prompt,
     error_signature,
 )
+from .snaplog import SnapLog
 
 logger = logging.getLogger(__name__)
 
@@ -473,6 +474,28 @@ class BladeOrchestrator:
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Live search trace (``snap.json``) — always on, no flag. Records
+        # every Navigator call (with its routed mode) and every new best,
+        # code included, flushed after each event.
+        self.snap = SnapLog(
+            self.output_dir / "snap.json",
+            run={
+                "method": "blade-lite",
+                "mutation_model": config.mutation_model,
+                "paradigm_model": config.paradigm_model,
+                "embedding_model": config.embedding_model,
+                "pe_cron_interval": config.pe_cron_interval,
+                "n_workers": config.n_workers,
+                "n_diverse_seeds": config.n_diverse_seeds,
+                "n_variants_per_seed": config.n_variants_per_seed,
+                "n_paradigm_variants": config.n_paradigm_variants,
+                "p_crossover": config.p_crossover,
+                "p_targeted_mutate": config.p_targeted_mutate,
+                "paradigm_force_mode": config.paradigm_force_mode,
+                "seed": config.seed,
+            },
+        )
+
         self._eval_processes: ResilientProcessPool | None = None
         self._semaphore = asyncio.Semaphore(config.n_workers)
 
@@ -870,7 +893,8 @@ class BladeOrchestrator:
         parent_score: float | None,
         force_on_drop: bool = False,
         metrics: dict | None = None,
-    ) -> tuple[bool, str]:
+        navigator_mode: str | None = None,
+    ) -> tuple[bool, str, bool]:
         """Admit a candidate into the archive.
 
         ``force_on_drop=True`` is the paradigm-shift escape valve: if the
@@ -879,6 +903,13 @@ class BladeOrchestrator:
         lowest-score program currently in the archive and retry. Used only
         for frontier ``paradigm`` seeds in mode=``shift`` so a deeply
         stalled search can still inject a fresh paradigm.
+
+        ``navigator_mode`` is carried through purely for the ``snap.json``
+        trace: ``source`` collapses every frontier seed to ``"paradigm"``,
+        so the routed mode has to be passed in explicitly to attribute a
+        new best to synthesis / surgical / shift.
+
+        Returns ``(accepted, reason, is_new_best)``.
         """
         embedding = await asyncio.to_thread(self.embedder.embed, description)
         program = Program(
@@ -891,6 +922,8 @@ class BladeOrchestrator:
             metrics=metrics if isinstance(metrics, dict) else {},
         )
         prev_best = self.monitor.best_score
+        prev_best_eval = self.monitor.last_best_eval
+        stagnation_before = self.monitor.stagnation_level()
         if force_on_drop:
             accepted, reason = self.archive.force_add(program)
         else:
@@ -907,6 +940,22 @@ class BladeOrchestrator:
                 self._advisor_attempts_by_cell.get(program.cell_id, 0) + 1
             )
         is_new_best = accepted and score > prev_best
+        if is_new_best:
+            self.snap.new_best(
+                at_eval=self.monitor.eval_count,
+                source=source,
+                navigator_mode=navigator_mode,
+                model=self._model_label(source),
+                score=score,
+                prev_best=prev_best,
+                evals_since_prev_best=self.monitor.eval_count - prev_best_eval,
+                stagnation_before=stagnation_before,
+                cell_id=program.cell_id,
+                description=description,
+                code=code,
+                metrics=metrics,
+                cost_usd=self.cost.cost,
+            )
         self._log_eval(source=source, score=score, accepted=accepted, is_new_best=is_new_best, metrics=metrics)
         self._ablation_after_eval(None)
         if not accepted and reason == "dropped_worse":
@@ -916,7 +965,7 @@ class BladeOrchestrator:
                 "[BLADE PE] force-admitted paradigm seed (score=%.4f) by evicting weakest program",
                 score,
             )
-        return accepted, reason
+        return accepted, reason, is_new_best
 
     # ------------------------------------------------------------------
     # Worker steps
@@ -1274,6 +1323,25 @@ class BladeOrchestrator:
         )
 
         source_label = f"paradigm_{mode}"
+        snap_event = self.snap.navigator_call(
+            trigger=self.pe_trigger_count,
+            mode=mode,
+            forced=cfg.paradigm_force_mode is not None,
+            at_eval=self.monitor.eval_count,
+            stagnation=self.monitor.stagnation_level(),
+            global_stagnation=self.monitor.global_stagnation(),
+            local_stagnation=self.monitor.local_stagnation(),
+            prev_best=prev_best,
+            occupied_cells=self.archive.num_occupied_cells(),
+            archive_size=len(self.archive),
+            anchors=[
+                {"cell_id": p.cell_id, "score": p.score, "source": p.source,
+                 "description": p.description}
+                for p in anchors
+            ],
+            n_inspirations=len(_insps),
+            cost_usd=self.cost.cost,
+        )
 
         # ---- frontier paradigm seed ----
         try:
@@ -1285,6 +1353,10 @@ class BladeOrchestrator:
         except Exception as e:
             logger.exception("[BLADE PE] frontier call failed; counting as reject")
             self._record_reject(source=source_label, error_msg=f"LLM error: {e}")
+            self.snap.navigator_result(
+                snap_event, outcome="llm_error", error=f"LLM error: {e}",
+                eval_index=self.monitor.eval_count, cost_usd=self.cost.cost,
+            )
             return
 
         parsed = self.parser.parse(raw)
@@ -1297,11 +1369,18 @@ class BladeOrchestrator:
             self.paradigm_trials.append(trial)
             self.recent_trials.append(trial.render())
             self._record_reject(source=source_label, error_msg="parse_miss (no code in output)")
+            self.snap.navigator_result(
+                snap_event, outcome="parse_miss",
+                error="parse_miss (no code in output)",
+                description=parsed.description,
+                eval_index=self.monitor.eval_count, cost_usd=self.cost.cost,
+            )
             return
 
         score, scores, err = await self._evaluate_code(parsed.code)
         description = await self._summarize_if_needed(parsed.code, parsed.description)
         accepted = False
+        seed_is_new_best = False
         if err is None:
             # mode=="shift" fires only when stagnation is high; the
             # frontier seed is the search's escape attempt. If it would
@@ -1310,11 +1389,12 @@ class BladeOrchestrator:
             # losing one weak slot is cheaper than missing the chance to
             # break out of the stuck paradigm family.
             force_on_drop = (mode == "shift")
-            accepted, _reason = await self._admit(
+            accepted, _reason, seed_is_new_best = await self._admit(
                 code=parsed.code, description=description, score=score,
                 source="paradigm",
                 parent_score=prev_best if prev_best != float("-inf") else None,
                 force_on_drop=force_on_drop, metrics=scores,
+                navigator_mode=mode,
             )
         else:
             self._record_reject(source=source_label, score=score, error_msg=err)
@@ -1324,6 +1404,19 @@ class BladeOrchestrator:
             delta = score - prev_best
         elif accepted:
             delta = 0.0
+        self.snap.navigator_result(
+            snap_event,
+            outcome=("eval_error" if err is not None
+                     else ("accepted" if accepted else "rejected")),
+            eval_index=self.monitor.eval_count,
+            score=score if err is None else None,
+            delta_vs_prev_best=delta,
+            is_new_best=seed_is_new_best,
+            description=description or parsed.description,
+            code=parsed.code,
+            error=err,
+            cost_usd=self.cost.cost,
+        )
         trial = ParadigmTrial(
             trial_idx=len(self.paradigm_trials) + 1,
             description=description or parsed.description,
@@ -1363,9 +1456,16 @@ class BladeOrchestrator:
             step = (hi - lo) / (n_variants - 1)
             variant_temps = [lo + step * i for i in range(n_variants)]
 
-        async def _one_paradigm_variant(v_idx: int) -> None:
+        async def _one_paradigm_variant(v_idx: int) -> dict[str, Any]:
+            """Run one cheap variant; return its outcome for the snap trace.
+
+            The fanout stats are aggregated from these return values rather
+            than read off the global best, because the main-loop workers keep
+            running concurrently — a best-score change during the fanout is
+            not necessarily the fanout's doing.
+            """
             if self._budget_exhausted():
-                return
+                return {"outcome": "skipped_budget"}
             v_temp = variant_temps[v_idx]
             v_prompt = build_paradigm_variant_prompt(
                 problem_description=cfg.problem_description,
@@ -1377,22 +1477,41 @@ class BladeOrchestrator:
             except Exception as e:
                 logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
                 self._record_reject(source="paradigm_variant", error_msg=f"LLM error: {e}")
-                return
+                return {"outcome": "llm_error"}
             parsed_v = self.parser.parse(raw_v)
             if not parsed_v.has_code:
                 self._record_reject(source="paradigm_variant", error_msg="parse_miss (no code in output)")
-                return
+                return {"outcome": "parse_miss"}
             v_score, v_scores, v_err = await self._evaluate_code(parsed_v.code)
             if v_err is not None:
                 self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err)
-                return
+                return {"outcome": "eval_error"}
             v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
-            await self._admit(
+            v_accepted, _v_reason, v_new_best = await self._admit(
                 code=parsed_v.code, description=v_description, score=v_score,
                 source="paradigm_variant", parent_score=base_score, metrics=v_scores,
+                navigator_mode=mode,
             )
+            return {
+                "outcome": "accepted" if v_accepted else "rejected",
+                "score": v_score,
+                "is_new_best": v_new_best,
+            }
 
-        await asyncio.gather(*(_one_paradigm_variant(i) for i in range(n_variants)))
+        fanout = await asyncio.gather(*(_one_paradigm_variant(i) for i in range(n_variants)))
+        scored = [r["score"] for r in fanout if r.get("score") is not None]
+        self.snap.navigator_fanout(snap_event, {
+            "n_variants": len(fanout),
+            "n_accepted": sum(1 for r in fanout if r["outcome"] == "accepted"),
+            "n_failed": sum(
+                1 for r in fanout
+                if r["outcome"] in ("llm_error", "parse_miss", "eval_error")
+            ),
+            "n_new_best": sum(1 for r in fanout if r.get("is_new_best")),
+            "best_variant_score": max(scored) if scored else None,
+            "seed_score": base_score,
+            "outcomes": [r["outcome"] for r in fanout],
+        })
 
     # ------------------------------------------------------------------
     # Bootstrap
@@ -1625,6 +1744,7 @@ class BladeOrchestrator:
             error_rate_windows=list(self._error_rate_windows),
         )
         self._save_snapshot(result)
+        self._save_snap_trace(result)
         self._report_error_rate()
         return result
 
@@ -1981,6 +2101,39 @@ class BladeOrchestrator:
         (self.output_dir / "snapshot.json").write_text(json.dumps(snap, indent=2))
         if result.best_program:
             (self.output_dir / "best.py").write_text(result.best_program)
+
+    def _save_snap_trace(self, result: BladeResult) -> None:
+        """Close out ``snap.json`` with run totals and log the headline split.
+
+        The trace is already complete on disk at this point — every event
+        flushed as it happened. This only appends the ``final`` block and
+        echoes the attribution to the run log so the split is visible
+        without opening the file.
+        """
+        self.snap.finalize({
+            "best_score": result.best_score if result.best_score != float("-inf") else None,
+            "best_metrics": result.best_metrics,
+            "total_evaluations": result.total_evaluations,
+            "post_init_eval_count": self._post_init_eval_count,
+            "total_cost": result.total_cost,
+            "runtime_seconds": result.runtime_seconds,
+            "archive_size": result.archive_size,
+            "num_occupied_cells": self.archive.num_occupied_cells(),
+            "pe_triggers": self.pe_trigger_count,
+            "advisor_triggers": self.meta_advice_trigger_count,
+            "analyzer_triggers": self.analyzer_trigger_count,
+            "targeted_mutate_count": self.targeted_mutate_count,
+        })
+        s = self.snap.summary()
+        nav, nb = s["navigator"], s["new_best"]
+        logger.info(
+            "[BLADE snap] navigator calls=%d %s | new bests=%d %s → %s",
+            nav["calls"],
+            {k: v for k, v in nav["by_mode"].items() if v},
+            nb["count"],
+            {k: v for k, v in nb["by_producer"].items() if v},
+            self.output_dir / "snap.json",
+        )
 
 
 # ---------------------------------------------------------------------------
