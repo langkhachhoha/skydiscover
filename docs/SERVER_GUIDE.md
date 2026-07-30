@@ -21,6 +21,7 @@ Trên server bạn **không sửa code**, chỉ `git pull` rồi chạy script.
 4. [Tạo file `.env` (chứa API key)](#4-tạo-file-env-chứa-api-key)
 5. [Cài môi trường conda tên `minhhieu`](#5-cài-môi-trường-conda-tên-minhhieu)
 6. [Chạy benchmark](#6-chạy-benchmark)
+   — [6b. LLM-SRBench / LSR-Synth](#6b-llm-srbench--lsr-synth--dùng-script-riêng)
 7. [tmux — chạy rồi tắt máy vẫn không sao](#7-tmux--chạy-rồi-tắt-máy-vẫn-không-sao)
 8. [Xem log / xem kết quả](#8-xem-log--xem-kết-quả)
 9. [Lấy kết quả từ server về máy](#9-lấy-kết-quả-từ-server-về-máy)
@@ -405,39 +406,191 @@ bọc cả vòng lặp trong **một** tmux session.
 ### 6b. LLM-SRBench / LSR-Synth — dùng script riêng
 
 LSR-Synth không phải một benchmark đơn lẻ mà là **một tập bài toán độc lập**
-(10 bài mỗi domain trong cấu hình rút gọn), nên nó có script riêng chạy lần lượt
-từng bài, tự lưu checkpoint và **tự tiếp tục được nếu bị ngắt giữa đường** (hết
-API, mất SSH, Ctrl-C):
+(10 bài mỗi domain trong cấu hình rút gọn, 129 bài nếu chạy full), nên nó có
+script riêng chạy lần lượt từng bài, tự lưu checkpoint và **tự tiếp tục được nếu
+bị ngắt giữa đường** (hết API, mất SSH, Ctrl-C).
+
+Chỉ cần CPU — chấm điểm là BFGS của scipy + numpy, không dùng GPU.
+
+#### 6b.1 Setup (một lần cho mỗi server)
+
+Nếu bạn đã có env `minhhieu` từ mục 5 thì đã có sẵn `huggingface_hub` và
+`pyarrow` (chúng nằm trong `requirements-server.txt`). Chỉ còn hai bước:
 
 ```bash
-# Chuẩn bị dữ liệu một lần (~9 MB, chạy lại nhiều lần cũng không sao)
-pip install "huggingface_hub>=0.24" "pyarrow>=15.0"
-python benchmarks/llm_srbench/prepare_data.py
+conda activate minhhieu
 
-# SpecEvo trên cả 4 domain, 500 iteration mỗi bài
+# 1. Tải dataset — ~9 MB, một lần duy nhất cho cả 4 domain
+python benchmarks/llm_srbench/prepare_data.py
+python benchmarks/llm_srbench/prepare_data.py --check     # xác nhận
+
+# 2. Self-test: 16 kiểm tra, KHÔNG gọi API, không tốn tiền
+bash scripts/server/selftest_lsr_synth.sh
+```
+
+Self-test phải ra `16 passed, 0 failed` trước khi chạy thật. Nó kiểm tra:
+packages, dataset toàn vẹn, cả 40 problem cho **điểm giống nhau trên cả hai
+path** (baseline và SpecEvo), equation ground-truth recover đúng tham số, mọi
+failure mode trả về 0 kèm lý do, timeout 30 s bắn đúng giờ, và dry-run runner.
+
+#### 6b.2 Dataset: `git pull` **không** phải tải lại
+
+Không. Dữ liệu nằm ở `benchmarks/llm_srbench/data/`, thư mục này **nằm trong
+`.gitignore`** nên git không bao giờ chạm vào nó — `git pull` không xoá, không
+ghi đè, không cần tải lại. Nó nằm nguyên trên đĩa server qua mọi lần pull.
+
+`prepare_data.py` cũng **idempotent**: nếu dữ liệu đã đủ, nó thoát ngay mà không
+tải và không ghi gì (~0.7 s):
+
+```text
+LSR-Synth data already prepared in .../benchmarks/llm_srbench/data — nothing to do.
+```
+
+Vì vậy `run_lsr_synth.sh` gọi nó trước **mỗi** lần chạy cũng không tốn gì — đó
+chính là lý do đường fast-path đó tồn tại (và nó dùng file lock, nên 4 domain
+launch cùng lúc cũng không đua nhau ghi `problems.json`).
+
+Khi nào thật sự phải tải lại:
+
+| tình huống | có tải lại? |
+| --- | --- |
+| `git pull` / `git checkout` / đổi branch | **không** |
+| bạn tự xoá `benchmarks/llm_srbench/data/` | có — nhưng thường lấy từ cache HuggingFace (`~/.cache/huggingface/hub`), không cần mạng |
+| clone mới sang máy/server khác | có, một lần |
+| `--force` (ghi lại `.npz` đã có) | có |
+
+Muốn bỏ qua bước chuẩn bị hoàn toàn khi đã biết dữ liệu sẵn sàng:
+`run_lsr_synth.sh --no-install-deps`.
+
+Server không có internet? Tải parquet ở máy khác rồi:
+`python benchmarks/llm_srbench/prepare_data.py --from-local <dir>`.
+
+#### 6b.3 Chạy
+
+Một lệnh cho mỗi (method, domain). `--tmux` để job sống qua SSH disconnect:
+
+```bash
+# SpecEvo trên cả 4 domain, cấu hình rút gọn (10 bài/domain, 500 evals/bài)
 for d in chem_react bio_pop_growth phys_osc matsci; do
     ./scripts/server/run_lsr_synth.sh --method specevo --domain "$d" --tmux
 done
 
 # Một baseline
-./scripts/server/run_lsr_synth.sh --method evox --domain matsci --tmux
-
-# Xem tiến độ (không gọi API)
-./scripts/server/run_lsr_synth.sh --method specevo --domain chem_react --status
-
-# Bị ngắt? Chạy lại **đúng câu lệnh cũ** — bài nào xong rồi sẽ được bỏ qua
+./scripts/server/run_lsr_synth.sh --method openevolve_native --domain matsci --tmux
 ```
 
-Kết quả cuối cùng được đánh giá trên hai tập test giữ riêng: **ID** (in-domain)
-và **OOD** (out-of-domain), tổng hợp bằng:
+Method: `specevo` (alias `blade`), `openevolve_native`, `gepa_native`,
+`adaevolve`, `evox`. Domain: `chem_react`, `bio_pop_growth`, `phys_osc`,
+`matsci`.
+
+**Full benchmark** — toàn bộ bài của domain thay vì 10 bài đầu. Repo chỉ commit
+thư mục cho 10 bài đầu, phần còn lại script tự sinh khi bắt đầu chạy:
 
 ```bash
-python scripts/lsr_summarize.py outputs/lsr_synth
+./scripts/server/run_lsr_synth.sh --method specevo --domain matsci --full --tmux
 ```
 
-Chi tiết đầy đủ (tham số, cách resume, cách đọc bảng kết quả, xử lý sự cố):
-[`docs/LSR_SYNTH_GUIDE.md`](LSR_SYNTH_GUIDE.md). Kiểm tra toàn bộ tích hợp mà
-không tốn tiền: `bash scripts/server/selftest_lsr_synth.sh`.
+| domain | full | rút gọn |
+| --- | --- | --- |
+| `chem_react` | 36 | 10 |
+| `phys_osc` | 44 | 10 |
+| `matsci` | 25 | 10 |
+| `bio_pop_growth` | 24 | 10 |
+| **tổng mỗi method** | **129** | 40 |
+
+Cờ hay dùng: `--problems N`, `--iterations N`, `--dollars N` (trần USD **mỗi
+bài**), `--problem-timeout N` (mặc định 7200 s, `0` = tắt), `--seed N`,
+`--score-mode log_nmse|inv_nmse`, `--dry-run`.
+
+#### 6b.4 Ngân sách — đọc trước khi launch full sweep
+
+~95% wall clock là **chờ LLM**, không phải chấm điểm: một completion của
+qwen3-30b mất 15–25 s, còn fit BFGS + chấm một hypothesis chỉ 0.5–2 s.
+
+| method | s/iteration | 500 iterations |
+| --- | --- | --- |
+| `specevo` | ~3–6 (4 worker song song) | ~40–60 min ✓ vừa |
+| `adaevolve` | ~15 | ~2 h — sát mép |
+| `openevolve_native` | ~20 | ~2.8 h ✗ bị cắt ở trần 2 h |
+| `evox` | ~110 | ~15 h ✗ bị cắt |
+
+Baseline chạy **một iteration tại một thời điểm** theo đúng thiết kế của nó, còn
+SpecEvo phát 4 completion song song — toàn bộ khoảng cách 4x ở trên chỉ là chỗ
+đó. Nên **wall clock không phải trục so sánh công bằng giữa hai họ; eval budget
+mới là.**
+
+Với baseline chậm, hoặc nâng trần thời gian:
+
+```bash
+./scripts/server/run_lsr_synth.sh --method evox --domain chem_react \
+    --problem-timeout 0 --tmux
+```
+
+hoặc — tốt hơn cho kết quả định công bố — cân bằng theo **tiền** thay vì theo
+iteration, giống các thực nghiệm khác trong repo:
+
+```bash
+./scripts/server/run_lsr_synth.sh --method evox --domain chem_react \
+    --dollars 2 --problem-timeout 21600 --tmux
+```
+
+Đo thử một bài trước để calibrate: `--problems 1 --iterations 20`.
+
+Muốn nhanh hơn thì chạy **nhiều domain song song** thành nhiều process riêng
+(output dir riêng) — mỗi search vẫn tuần tự y nguyên, nên không ảnh hưởng gì đến
+tính so sánh được của kết quả.
+
+#### 6b.5 Theo dõi
+
+```bash
+# Bảng tiến độ — không gọi API, an toàn gọi bất cứ lúc nào
+./scripts/server/run_lsr_synth.sh --method specevo --domain chem_react --status
+
+tail -f outputs/lsr_synth/specevo/chem_react/seed1/run.log
+tmux attach -t lsr_specevo_chem_react_seed1        # detach: Ctrl-b rồi d
+```
+
+#### 6b.6 Ngắt và tiếp tục
+
+Dừng: `Ctrl-C` trong pane, hoặc `tmux kill-session -t <session>`. Cả `SIGINT`,
+`SIGTERM` và `SIGHUP` đều được xử lý: search bị terminate và bài đang chạy **bị
+bỏ, không ghi vào kết quả**, nên không có gì nửa vời lọt vào `results.jsonl`.
+
+⚠️ **Đừng `kill -9` runner.** `SIGKILL` không trap được, search sẽ sống sót và
+tiếp tục đốt API credit. (Lần chạy sau phát hiện và diệt nó trước khi resume,
+nhưng bạn đã trả tiền cho khoảng thời gian đó.)
+
+Tiếp tục: **chạy lại đúng câu lệnh cũ.** Output dir suy ra từ (method, domain,
+seed) và không có timestamp, nên bài nào có `.done` sẽ bị bỏ qua; baseline resume
+từ checkpoint mới nhất và chỉ chạy đúng số iteration còn nợ; SpecEvo chạy lại bài
+đó từ đầu (BLADE không resume giữa search) và attempt cũ được archive vào
+`prev_attempt_<ts>/` chứ không bị xoá.
+
+Exit code `3` = còn bài chưa xong, `0` = xong cả domain — dùng được trong loop:
+
+```bash
+until ./scripts/server/run_lsr_synth.sh --method specevo --domain chem_react; do
+    sleep 60
+done
+```
+
+Bỏ hết chạy lại từ đầu: `--fresh`.
+
+#### 6b.7 Kết quả
+
+```bash
+python scripts/lsr_summarize.py outputs/lsr_synth                    # mọi method/domain
+python scripts/lsr_summarize.py outputs/lsr_synth --csv lsr_synth.csv
+python scripts/lsr_summarize.py outputs/lsr_synth/specevo/chem_react/seed1
+```
+
+Chương trình tìm được sẽ được **chấm lại từ đầu** trên hai tập test giữ riêng:
+**ID** (in-domain) và **OOD** (out-of-domain, thời điểm muộn hơn / nhiệt độ,
+biến dạng cao hơn). Không tập nào được dùng để dẫn dắt search — chỉ train NMSE.
+
+Chi tiết đầy đủ: [`docs/LSR_SYNTH_GUIDE.md`](LSR_SYNTH_GUIDE.md) — §2.1 chế độ
+full, §5.1 score mode (tại sao log hiện `score: 3.0` thay vì `0.999`), §5.2 định
+nghĩa và công thức từng metric, §7 xử lý sự cố.
 
 ---
 
