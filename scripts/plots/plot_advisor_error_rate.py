@@ -43,7 +43,7 @@ def main() -> None:
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",
-            "font.size": 9,
+            "font.size": 13,
             "axes.linewidth": 0.9,
             "figure.dpi": 300,
             "pdf.fonttype": 42,
@@ -51,7 +51,7 @@ def main() -> None:
         }
     )
 
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
 
     for task, cfg in DATA.items():
         c = cfg["color"]
@@ -82,14 +82,14 @@ def main() -> None:
             zorder=3,
         )
 
-    ax.set_xlabel("Iteration", fontsize=10, labelpad=4)
-    ax.set_ylabel("Error rate (%)", fontsize=10, labelpad=4)
+    ax.set_xlabel("Iteration", fontsize=14, labelpad=5)
+    ax.set_ylabel("Error rate (%)", fontsize=14, labelpad=5)
     ax.set_xticks(ITERATIONS)
     ax.set_xlim(40, 410)
     ax.set_ylim(0, 48)
     ax.set_yticks([0, 10, 20, 30, 40])
 
-    ax.tick_params(axis="both", labelsize=8, length=3.5, pad=2)
+    ax.tick_params(axis="both", labelsize=12, length=3.5, pad=2)
     ax.grid(True, which="major", color="#E6E6E6", linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
     for spine in ("top", "right"):
@@ -110,17 +110,17 @@ def main() -> None:
         loc="upper center",
         bbox_to_anchor=(0.45, 0.98),
         ncol=2,
-        fontsize=7,
+        fontsize=12,
         frameon=True,
         fancybox=False,
         edgecolor="#CCCCCC",
         framealpha=0.95,
-        handlelength=1.5,
-        handleheight=0.8,
-        borderpad=0.4,
-        labelspacing=0.35,
-        columnspacing=1.0,
-        handletextpad=0.4,
+        handlelength=1.8,
+        handleheight=0.9,
+        borderpad=0.5,
+        labelspacing=0.4,
+        columnspacing=1.2,
+        handletextpad=0.5,
     )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

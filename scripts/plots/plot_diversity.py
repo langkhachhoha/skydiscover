@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""SWDI / CDI vs checkpoint for SpecEvo multi-prompt vs single-prompt.
+"""SWDI / CDI vs iteration for SpecEvo multi-prompt vs single-prompt.
 
 Two figures (one per diversity index), each with two benchmarks (Circle Packing,
 Circle Packing Rect). Color encodes benchmark; line style encodes prompt setting
 -- the same visual grammar as scripts/plots/plot_advisor_error_rate.py.
 
 Reads the JSON emitted by scripts/diversity/compute_diversity.py.
+Checkpoints 1..8 map to iterations 50..400 (step 50).
 
 Usage:
   .venv/bin/python scripts/plots/plot_diversity.py
@@ -24,6 +25,8 @@ from matplotlib.patches import Patch
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "result" / "diversity"
+
+ITERATIONS = [50, 100, 150, 200, 250, 300, 350, 400]
 
 BENCHMARKS = {
     "Circle Packing": {"dir": "circle_packing", "color": "#D6263A"},
@@ -48,14 +51,13 @@ def load() -> dict:
 def plot_metric(data: dict, metric: str) -> None:
     label, ylim, yticks = METRICS[metric]
 
-    fig, ax = plt.subplots(figsize=(5.4, 3.5))
+    fig, ax = plt.subplots(figsize=(5.8, 3.8))
 
     for name, cfg in BENCHMARKS.items():
         c = cfg["color"]
         rows = data[name]
-        x = [r["checkpoint"] for r in rows["multi_prompt"]]
         ax.plot(
-            x,
+            ITERATIONS,
             [r[metric] for r in rows["multi_prompt"]],
             color=c,
             linestyle="--",
@@ -68,7 +70,7 @@ def plot_metric(data: dict, metric: str) -> None:
             zorder=3,
         )
         ax.plot(
-            [r["checkpoint"] for r in rows["single_prompt"]],
+            ITERATIONS,
             [r[metric] for r in rows["single_prompt"]],
             color=c,
             linestyle="-",
@@ -81,14 +83,14 @@ def plot_metric(data: dict, metric: str) -> None:
             zorder=3,
         )
 
-    ax.set_xlabel("Checkpoint", fontsize=10, labelpad=4)
-    ax.set_ylabel(f"{label} ($\\uparrow$)", fontsize=10, labelpad=4)
-    ax.set_xticks(range(1, 9))
-    ax.set_xlim(0.7, 8.3)
+    ax.set_xlabel("Iteration", fontsize=14, labelpad=5)
+    ax.set_ylabel(f"{label} ($\\uparrow$)", fontsize=14, labelpad=5)
+    ax.set_xticks(ITERATIONS)
+    ax.set_xlim(40, 410)
     ax.set_ylim(*ylim)
     ax.set_yticks(yticks)
 
-    ax.tick_params(axis="both", labelsize=8, length=3.5, pad=2)
+    ax.tick_params(axis="both", labelsize=12, length=3.5, pad=2)
     ax.grid(True, which="major", color="#E6E6E6", linewidth=0.7, zorder=0)
     ax.set_axisbelow(True)
     for spine in ("top", "right"):
@@ -106,17 +108,17 @@ def plot_metric(data: dict, metric: str) -> None:
         loc="upper center",
         bbox_to_anchor=(0.5, 0.99),
         ncol=2,
-        fontsize=7,
+        fontsize=12,
         frameon=True,
         fancybox=False,
         edgecolor="#CCCCCC",
         framealpha=0.95,
-        handlelength=1.5,
-        handleheight=0.8,
-        borderpad=0.4,
-        labelspacing=0.35,
-        columnspacing=1.0,
-        handletextpad=0.4,
+        handlelength=1.8,
+        handleheight=0.9,
+        borderpad=0.5,
+        labelspacing=0.4,
+        columnspacing=1.2,
+        handletextpad=0.5,
     )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,7 +134,7 @@ def main() -> None:
     plt.rcParams.update(
         {
             "font.family": "DejaVu Sans",
-            "font.size": 9,
+            "font.size": 13,
             "axes.linewidth": 0.9,
             "figure.dpi": 300,
             "pdf.fonttype": 42,

@@ -44,12 +44,17 @@ STYLE = {
     "evox":   ("EvoX", "#B9770E", False),
 }
 
-# per-task display config; y-limits/ticks are auto-derived if omitted
+# per-task display config; y-limits/ticks are auto-derived if omitted.
+# Axis labels are deliberately generic ("Cost" / "Score") across every task so
+# the panels can sit side by side without reading as three different plots.
 TASKS = {
-    "circle_packing_rect": dict(title="Circle Packing (n=21)", ylabel="Sum of Radii"),
-    "heilbronn_triangle":  dict(title="Heilbronn Triangle (n=11)", ylabel="Min Area (normalized)"),
-    "EPLB":                dict(title="EPLB", ylabel="Combined Score"),
+    "circle_packing_rect": dict(title="Circle Packing Rectangle"),
+    "heilbronn_triangle":  dict(title="Heilbronn Triangle"),
+    "EPLB":                dict(title="EPLB"),
 }
+
+XLABEL = "Cost"
+YLABEL = "Score"
 
 
 def task_benchmark(task: str) -> float | None:
@@ -117,7 +122,7 @@ def style_axes(ax):
 
 
 def main(task: str = "circle_packing_rect") -> None:
-    cfg = TASKS.get(task, dict(title=task, ylabel="Score"))
+    cfg = TASKS.get(task, dict(title=task))
     benchmark = task_benchmark(task)
     methods = discover_methods(task)
     if not methods:
@@ -164,8 +169,8 @@ def main(task: str = "circle_packing_rect") -> None:
 
     ax.set_xlim(0, xmax)
     ax.set_ylim(ymin, ymax)
-    ax.set_xlabel("Cumulative Cost (USD)", fontsize=13, fontweight="bold")
-    ax.set_ylabel(cfg["ylabel"], fontsize=13, fontweight="bold")
+    ax.set_xlabel(XLABEL, fontsize=13, fontweight="bold")
+    ax.set_ylabel(YLABEL, fontsize=13, fontweight="bold")
     ax.set_title(cfg["title"], fontsize=15, fontweight="bold", pad=12)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
 
