@@ -414,12 +414,34 @@ Chỉ cần CPU — chấm điểm là BFGS của scipy + numpy, không dùng GP
 
 #### 6b.1 Setup (một lần cho mỗi server)
 
-Nếu bạn đã có env `minhhieu` từ mục 5 thì đã có sẵn `huggingface_hub` và
-`pyarrow` (chúng nằm trong `requirements-server.txt`). Chỉ còn hai bước:
+**Cần gì so với env `minhhieu` đã có:** đúng **hai** thư viện, và chỉ cho bước
+tải dataset một lần — `huggingface_hub` và `pyarrow`. Nếu env của bạn được tạo
+trước khi LSR-Synth được thêm vào repo thì chưa có chúng; cài bằng cách chạy lại
+script setup (idempotent, chỉ bổ sung phần thiếu):
 
 ```bash
 conda activate minhhieu
+bash scripts/server/setup_env.sh          # = pip install -e . + requirements-server.txt
 
+# hoặc tối giản, chỉ hai gói đó:
+pip install "huggingface_hub>=0.24" "pyarrow>=15.0"
+```
+
+Kiểm tra:
+
+```bash
+python -c "import numpy, scipy, huggingface_hub, pyarrow; print('deps OK')"
+```
+
+**Không cần dependency của repo LLM-SRBench gốc** (torch, transformers, vllm...).
+Repo này không import repo đó: giao thức chấm điểm được viết lại trong
+`benchmarks/llm_srbench/lsr_eval.py`, và nó chỉ dùng **numpy + scipy** — cả hai
+đã nằm trong dependency nền của `skydiscover`. Dataset thì đọc thẳng từ parquet
+trên HuggingFace.
+
+Sau đó hai bước:
+
+```bash
 # 1. Tải dataset — ~9 MB, một lần duy nhất cho cả 4 domain
 python benchmarks/llm_srbench/prepare_data.py
 python benchmarks/llm_srbench/prepare_data.py --check     # xác nhận
@@ -427,6 +449,9 @@ python benchmarks/llm_srbench/prepare_data.py --check     # xác nhận
 # 2. Self-test: 16 kiểm tra, KHÔNG gọi API, không tốn tiền
 bash scripts/server/selftest_lsr_synth.sh
 ```
+
+Self-test báo thiếu gói nào thì nó nói rõ tên gói và câu lệnh cài (mục 1 của nó
+là "Packages").
 
 Self-test phải ra `16 passed, 0 failed` trước khi chạy thật. Nó kiểm tra:
 packages, dataset toàn vẹn, cả 40 problem cho **điểm giống nhau trên cả hai
