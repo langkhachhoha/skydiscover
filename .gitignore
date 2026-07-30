@@ -56,6 +56,8 @@ benchmarks/ADRS/cloudcast/evaluator/examples/
 benchmarks/ADRS/cloudcast/evaluator/paths/
 benchmarks/ADRS/cloudcast/evaluator/evals/
 benchmarks/ADRS/llm_sql/evaluator/datasets/
+# LLM-SRBench / LSR-Synth: fetched by benchmarks/llm_srbench/prepare_data.py
+benchmarks/llm_srbench/data/
 
 # Generated test outputs (re-generate with test_all_benchmarks.sh)
 tests/**/test_outputs_*/

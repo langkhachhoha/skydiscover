@@ -105,7 +105,9 @@ python - <<'PY'
 import importlib, sys
 
 core = ["skydiscover", "openai", "yaml", "numpy", "scipy", "networkx", "dotenv",
-        "litellm", "sklearn", "colorama", "dspy"]
+        "litellm", "sklearn", "colorama", "dspy",
+        # LLM-SRBench / LSR-Synth dataset preparation.
+        "huggingface_hub", "pyarrow"]
 missing = []
 for mod in core:
     try:

@@ -402,6 +402,43 @@ Ba job chạy **song song** trong ba tmux session. Nếu server yếu, giảm
 `--workers` xuống, hoặc chạy tuần tự bằng cách bỏ `--tmux` trong vòng lặp và
 bọc cả vòng lặp trong **một** tmux session.
 
+### 6b. LLM-SRBench / LSR-Synth — dùng script riêng
+
+LSR-Synth không phải một benchmark đơn lẻ mà là **một tập bài toán độc lập**
+(10 bài mỗi domain trong cấu hình rút gọn), nên nó có script riêng chạy lần lượt
+từng bài, tự lưu checkpoint và **tự tiếp tục được nếu bị ngắt giữa đường** (hết
+API, mất SSH, Ctrl-C):
+
+```bash
+# Chuẩn bị dữ liệu một lần (~9 MB, chạy lại nhiều lần cũng không sao)
+pip install "huggingface_hub>=0.24" "pyarrow>=15.0"
+python benchmarks/llm_srbench/prepare_data.py
+
+# SpecEvo trên cả 4 domain, 500 iteration mỗi bài
+for d in chem_react bio_pop_growth phys_osc matsci; do
+    ./scripts/server/run_lsr_synth.sh --method specevo --domain "$d" --tmux
+done
+
+# Một baseline
+./scripts/server/run_lsr_synth.sh --method evox --domain matsci --tmux
+
+# Xem tiến độ (không gọi API)
+./scripts/server/run_lsr_synth.sh --method specevo --domain chem_react --status
+
+# Bị ngắt? Chạy lại **đúng câu lệnh cũ** — bài nào xong rồi sẽ được bỏ qua
+```
+
+Kết quả cuối cùng được đánh giá trên hai tập test giữ riêng: **ID** (in-domain)
+và **OOD** (out-of-domain), tổng hợp bằng:
+
+```bash
+python scripts/lsr_summarize.py outputs/lsr_synth
+```
+
+Chi tiết đầy đủ (tham số, cách resume, cách đọc bảng kết quả, xử lý sự cố):
+[`docs/LSR_SYNTH_GUIDE.md`](LSR_SYNTH_GUIDE.md). Kiểm tra toàn bộ tích hợp mà
+không tốn tiền: `bash scripts/server/selftest_lsr_synth.sh`.
+
 ---
 
 ## 7. tmux — chạy rồi tắt máy vẫn không sao
