@@ -269,7 +269,8 @@ fi
 if [[ "$USE_TMUX" == "1" && "${LSR_INSIDE_TMUX:-0}" != "1" ]]; then
     command -v tmux >/dev/null 2>&1 || die "tmux is not installed (sudo apt-get install -y tmux)"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
-        die "a tmux session named '$SESSION' is already running (attach with: tmux attach -t $SESSION)"
+        die "a tmux session named '$SESSION' is already running" \
+            "(attach with: tmux attach -t $SESSION, or pick another name with --session NAME)"
     fi
     mkdir -p "$OUTPUT_DIR"
 

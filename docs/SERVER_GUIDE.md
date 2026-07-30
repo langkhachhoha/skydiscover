@@ -478,7 +478,7 @@ launch cùng lúc cũng không đua nhau ghi `problems.json`).
 Khi nào thật sự phải tải lại:
 
 | tình huống | có tải lại? |
-| --- | --- |
+|---|---|
 | `git pull` / `git checkout` / đổi branch | **không** |
 | bạn tự xoá `benchmarks/llm_srbench/data/` | có — nhưng thường lấy từ cache HuggingFace (`~/.cache/huggingface/hub`), không cần mạng |
 | clone mới sang máy/server khác | có, một lần |
@@ -516,24 +516,149 @@ thư mục cho 10 bài đầu, phần còn lại script tự sinh khi bắt đ�
 ```
 
 | domain | full | rút gọn |
-| --- | --- | --- |
+|---|---|---|
 | `chem_react` | 36 | 10 |
 | `phys_osc` | 44 | 10 |
 | `matsci` | 25 | 10 |
 | `bio_pop_growth` | 24 | 10 |
 | **tổng mỗi method** | **129** | 40 |
 
-Cờ hay dùng: `--problems N`, `--iterations N`, `--dollars N` (trần USD **mỗi
-bài**), `--problem-timeout N` (mặc định 7200 s, `0` = tắt), `--seed N`,
-`--score-mode log_nmse|inv_nmse`, `--dry-run`.
+#### 6b.4 Đặt tên tmux session để dễ track
 
-#### 6b.4 Ngân sách — đọc trước khi launch full sweep
+Giống các benchmark khác, session được sinh tự động theo run, nhưng bạn đổi được
+bằng `--session`. Quy tắc mặc định:
+
+```text
+lsr_<method>_<domain>_seed<N>
+```
+
+Ví dụ, 8 job của một sweep 2 method × 4 domain sẽ tự có tên phân biệt sẵn:
+
+```text
+lsr_specevo_chem_react_seed1        lsr_openevolve_native_chem_react_seed1
+lsr_specevo_bio_pop_growth_seed1    lsr_openevolve_native_bio_pop_growth_seed1
+lsr_specevo_phys_osc_seed1          lsr_openevolve_native_phys_osc_seed1
+lsr_specevo_matsci_seed1            lsr_openevolve_native_matsci_seed1
+```
+
+Chạy ablation thì tên có thêm ablation: `lsr_specevo-no_crossover_matsci_seed1`.
+Dấu `.` và `:` bị đổi thành `_` (tmux không cho phép).
+
+Đặt tên tay khi cần phân biệt hai lần chạy cùng cấu hình — ví dụ một lần full,
+một lần rút gọn:
+
+```bash
+./scripts/server/run_lsr_synth.sh --method specevo --domain matsci --full \
+    --session lsr_specevo_matsci_FULL --output-dir outputs/lsr_synth_full/specevo/matsci/seed1 --tmux
+```
+
+⚠️ Nếu đổi `--session` mà **không** đổi `--output-dir` thì hai job vẫn ghi vào
+cùng một thư mục và sẽ phá nhau. Muốn hai run song song thật sự độc lập thì đổi
+`--seed` (nó nằm trong đường dẫn output) hoặc đặt `--output-dir` riêng.
+
+```bash
+tmux ls                                        # xem tất cả session đang chạy
+tmux attach -t lsr_specevo_matsci_seed1        # vào xem; detach: Ctrl-b rồi d
+tmux kill-session -t lsr_specevo_matsci_seed1  # dừng (được handle sạch)
+```
+
+Job đã chạy rồi mà launch lại trùng tên thì script **từ chối** và nhắc cách
+attach hoặc `--session NAME` khác, chứ không âm thầm chạy chồng lên.
+
+#### 6b.5 Bảng tham số đầy đủ của `run_lsr_synth.sh`
+
+**Bắt buộc**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--method NAME` | `specevo` | `specevo` (alias `blade`), `openevolve_native`, `gepa_native`, `adaevolve`, `evox` |
+| `--domain NAME` | **không có** | `chem_react`, `bio_pop_growth`, `phys_osc`, `matsci`. Phải truyền |
+
+**Chọn bài**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--problems N` | `10` | N bài đầu của domain. Nhận cả `all` (= toàn bộ) |
+| `--full` | tắt | Viết tắt của `--problems all` (129 bài trên cả 4 domain) |
+| `--problem-list LIST` | rỗng | Danh sách id cách nhau bằng dấu phẩy, ghi đè `--problems`. Prefix theo domain: `crk*`, `bpg*`, `po*`, `matsci*` — **id không liên tục** (matsci có 25 bài nhưng đánh số tới `matsci28`), nên lấy id thật bằng `--dry-run` |
+
+Thư mục cho bài chưa có sẽ **tự sinh** khi bắt đầu chạy — không phải chạy
+`generate_dirs.py` bằng tay.
+
+**Ngân sách — tất cả áp dụng cho MỖI bài, không phải cho cả domain**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--iterations N` | `500` | Số eval mỗi bài. **Chính xác** với baseline. Với `specevo` thì bootstrap của BLADE (`--n-diverse-seeds` × `--n-variants-per-seed`, ~105 eval ở mặc định) luôn chạy hết trước, nên giá trị dưới ~105 không thu nhỏ run — phải hạ hai knob bootstrap cùng lúc |
+| `--dollars N` | rỗng (tắt) | Trần USD mỗi bài; search tự dừng êm ở ranh giới iteration kế tiếp. 10 bài × `--dollars 2` ≈ \$20/domain |
+| `--seconds N` | rỗng (tắt) | Trần thời gian mỗi bài, **chỉ specevo** |
+| `--problem-timeout N` | `7200` (2 h) | Trần thời gian thực cứng mỗi bài. Hết giờ thì search bị kill, **giữ lại những gì đã tìm được**, ghi kết quả rồi sang bài kế. `0` = tắt |
+| `--eval-timeout N` | `30` | Giây cho mỗi hypothesis (fit BFGS + chấm 3 split). Đúng `T = 30s` của paper. SpecEvo nhận `N+60` cho timeout ngoài của nó, để cảnh báo 30 s của ta bắn trước và hypothesis bị cho 0 điểm thay vì worker bị kill |
+
+Bài bị `--problem-timeout` cắt **không mất** — nhưng một method bị cắt ở điểm
+khác các method còn lại thì không còn là so sánh công bằng, nên kiểm tra cột
+`evaluations` trong `results.jsonl` trước khi kết luận.
+
+**Dữ liệu và cách chấm điểm**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--score-mode MODE` | `log_nmse` | Tín hiệu search. `log_nmse` = `log10(1 + 1/NMSE)`, đọc là "số decade NMSE dưới 1" (3.0 ⇒ NMSE 1e-3). `inv_nmse` = `1/(1+NMSE)` — thang cũ, bão hoà thành `1.0000` với mọi NMSE < 1e-4; chỉ dùng để reproduce run cũ. Cả hai đều đơn điệu theo NMSE nên xếp hạng như nhau |
+| `--max-fit-points N` | `0` | `0` = fit trên **toàn bộ** 4000 điểm train, tức benchmark đúng như công bố. Khác `0` là smoke test và header sẽ in cảnh báo |
+
+**Model**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--model ID` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | Model của baseline |
+| `--mutation-model ID` | cùng qwen3-30b | SpecEvo Speculator (model nhỏ) |
+| `--paradigm-model ID` | cùng qwen3-30b | SpecEvo Navigator (model mạnh). Ở thực nghiệm này cố tình đặt **bằng** Speculator thay vì tách nhỏ/frontier |
+| `--embedding-model ID` | `openrouter/openai/text-embedding-3-small` | Embed description cho archive hành vi của SpecEvo |
+
+**Hình dạng SpecEvo (baseline bỏ qua hết)**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--workers N` | `4` | Số LLM worker song song. Đây là toàn bộ lý do SpecEvo nhanh hơn baseline ~4× về wall clock |
+| `--eval-processes N` | `4` | Số process chấm điểm song song |
+| `--pe-interval N` | `10` | Nhịp gọi Navigator (paradigm shift) |
+| `--n-diverse-seeds N` | `5` | Số seed đa dạng ở pha 1 |
+| `--n-variants-per-seed N` | `20` | Số biến thể mỗi seed ở pha 2 |
+| `--ablation NAME` | `full` | `full`, `ast_only`, `emb_only`, `static_cells`, `no_meta_advice`, `meta_errors_only`, `no_targeted_mutate`, `no_crossover`, `no_paradigm`. Khác `full` thì tên run và output dir có kèm ablation |
+
+**Điều khiển run**
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--seed N` | `1` | Nhãn seed; nằm trong đường dẫn output nên đây là cách chạy nhiều lần độc lập |
+| `--output-dir DIR` | `outputs/lsr_synth/<method>/<domain>/seed<N>` | Không có timestamp — **đó chính là cơ chế resume** |
+| `--fresh` | tắt | Xoá kết quả cũ của (method, domain, seed) và làm lại từ đầu. Không có cờ này thì run cũ được **tiếp tục** |
+| `--status` | – | In tiến độ rồi thoát. Không gọi API, không tác dụng phụ |
+| `--tmux` | tắt | Chạy nền trong tmux (sống qua SSH disconnect) |
+| `--session NAME` | `lsr_<method>_<domain>_seed<N>` | Tên tmux session (mục 6b.4) |
+| `--conda-env NAME` | `minhhieu` | Env conda cần activate |
+| `--no-conda` | – | Dùng python đang active, không đụng conda |
+| `--no-install-deps` | – | Bỏ bước chuẩn bị dataset (vốn chỉ mất ~0.7 s khi đã có dữ liệu) |
+| `--dry-run` | – | Chỉ in lệnh sẽ chạy rồi thoát: không gọi API, không tốn tiền, không chạy search. (Nó **vẫn** tạo thư mục output và `run.log`; nhưng không sinh thư mục problem của benchmark, nên đây là cách an toàn để xem `--full` sẽ chọn đúng những bài nào) |
+| `-h`, `--help` | – | Toàn bộ cờ, ngay trong terminal |
+
+**Exit code:** `0` = xong cả domain, `3` = còn bài chưa xong (chạy lại để tiếp),
+`2` = sai tham số.
+
+Xem trước một cấu hình mà không tốn gì:
+
+```bash
+./scripts/server/run_lsr_synth.sh --method openevolve_native --domain matsci \
+    --full --iterations 10 --dry-run
+```
+
+#### 6b.6 Ngân sách — đọc trước khi launch full sweep
 
 ~95% wall clock là **chờ LLM**, không phải chấm điểm: một completion của
 qwen3-30b mất 15–25 s, còn fit BFGS + chấm một hypothesis chỉ 0.5–2 s.
 
 | method | s/iteration | 500 iterations |
-| --- | --- | --- |
+|---|---|---|
 | `specevo` | ~3–6 (4 worker song song) | ~40–60 min ✓ vừa |
 | `adaevolve` | ~15 | ~2 h — sát mép |
 | `openevolve_native` | ~20 | ~2.8 h ✗ bị cắt ở trần 2 h |
@@ -565,7 +690,7 @@ Muốn nhanh hơn thì chạy **nhiều domain song song** thành nhiều proces
 (output dir riêng) — mỗi search vẫn tuần tự y nguyên, nên không ảnh hưởng gì đến
 tính so sánh được của kết quả.
 
-#### 6b.5 Theo dõi
+#### 6b.7 Theo dõi
 
 ```bash
 # Bảng tiến độ — không gọi API, an toàn gọi bất cứ lúc nào
@@ -575,7 +700,7 @@ tail -f outputs/lsr_synth/specevo/chem_react/seed1/run.log
 tmux attach -t lsr_specevo_chem_react_seed1        # detach: Ctrl-b rồi d
 ```
 
-#### 6b.6 Ngắt và tiếp tục
+#### 6b.8 Ngắt và tiếp tục
 
 Dừng: `Ctrl-C` trong pane, hoặc `tmux kill-session -t <session>`. Cả `SIGINT`,
 `SIGTERM` và `SIGHUP` đều được xử lý: search bị terminate và bài đang chạy **bị
@@ -601,7 +726,7 @@ done
 
 Bỏ hết chạy lại từ đầu: `--fresh`.
 
-#### 6b.7 Kết quả
+#### 6b.9 Kết quả
 
 ```bash
 python scripts/lsr_summarize.py outputs/lsr_synth                    # mọi method/domain
