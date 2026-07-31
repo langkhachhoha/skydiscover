@@ -73,13 +73,24 @@ Defaults, all overridable:
 | search signal | `log_nmse` (`--score-mode log_nmse\|inv_nmse`, §5.1) |
 | training points used for the fit | all of them (`--max-fit-points N` to subsample) |
 | Speculator + Navigator model | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` |
-| baseline model | the same qwen3-30b |
+| baseline model | the same qwen3-30b, EvoX's meta level included (see below) |
 | time per equation hypothesis | 30 s (`--eval-timeout N`) |
 | wall-clock cap per problem | 7200 s (`--problem-timeout N`, `0` disables) |
 | conda env | `minhhieu` (`--conda-env NAME`) |
 
 Methods: `specevo` (alias `blade`), `openevolve_native`, `gepa_native`,
 `adaevolve`, `evox`.
+
+EvoX needs one extra precaution to stay a like-for-like baseline. Besides the
+solution loop it co-evolves its own *search strategy*, and that meta level reads
+`skydiscover/search/evox/config/search.yaml`, which pins `openai/gpt-5` (plus
+`gpt-5-mini` for its guide). `--model` only rewrites the problem's `config.yaml`,
+so by default EvoX would be the one baseline steered by a frontier model — and at
+roughly 50x qwen's price per output token, a couple of strategy switches cost more
+than an entire 500-evaluation run of any other method. The generated `config.yaml`
+therefore carries `search.share_llm: true`, which makes the meta level, its guide
+and its evaluator all inherit whatever `--model` was passed. If you hand-write a
+config for EvoX, carry that key over.
 
 Everything lands in a directory named after the run, with no timestamp:
 
@@ -160,6 +171,10 @@ on qwen3-30b with these problems:
 | `openevolve_native` | ~20 | ~2.8 h ✗ truncated at the 2 h cap |
 | `evox` | ~110 (it also evolves its search strategy) | ~15 h ✗ truncated |
 | `gepa_native` | untimed here | verify with a short run |
+
+The `evox` row was measured *before* `search.share_llm: true` was added, i.e. while
+its meta level was still on gpt-5 — a reasoning model, and much of that 110 s was
+its thinking time. Re-time it on qwen before trusting the figure.
 
 Almost all of that is LLM latency, not the benchmark: the BFGS fit plus scoring
 of one hypothesis takes **0.5–2 s**, while one qwen3-30b completion takes 15–25 s.

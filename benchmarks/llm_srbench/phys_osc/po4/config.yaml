@@ -73,6 +73,8 @@ prompt:
       with additional non-linear structure where the data demands it.
     - Keep the skeleton cheap to evaluate: it is called many times inside the
       parameter fit.
+search:
+  share_llm: true
 evaluator:
   timeout: 600
   cascade_evaluation: false

@@ -88,6 +88,14 @@ def config_yaml(domain: str, pid: str, *, iterations: int, model: str) -> str:
             "timeout": 600,
         },
         "prompt": {"system_message": L.system_message(domain, pid)},
+        # EvoX co-evolves its own *search strategy* alongside the solution, and
+        # that meta level loads skydiscover/search/evox/config/search.yaml, which
+        # pins openai/gpt-5 (and gpt-5-mini for its guide). --model only rewrites
+        # the config below, so without share_llm EvoX would be the one baseline
+        # steered by a frontier model — ~50x the price per output token and not a
+        # like-for-like comparison against the other four methods. Ignored by
+        # every search type except evox.
+        "search": {"share_llm": True},
         # Our own per-hypothesis cap (LSR_EVAL_TIMEOUT, default 30s per the
         # paper) is enforced inside the evaluator; this outer timeout only has
         # to be comfortably larger so it never pre-empts the graded result.
