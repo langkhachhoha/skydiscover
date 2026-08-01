@@ -49,6 +49,14 @@ DEFAULT_MODEL = "openrouter/qwen/qwen3-30b-a3b-instruct-2507"
 # under. Kept as a module constant because run_lsr_synth.sh greps for it.
 SCORE_MODE_STAMP = "# score-mode:"
 
+# Bumped whenever ``config_yaml`` starts emitting something a previously
+# generated config.yaml does not have. run_lsr_synth.sh greps for the current
+# value and regenerates any problem directory that predates it, the same way it
+# already does for the score-mode stamp — otherwise a committed directory would
+# silently keep running under the old settings.
+CONFIG_REV_STAMP = "# config-rev:"
+CONFIG_REV = 2
+
 
 # --------------------------------------------------------------------------- #
 # File bodies
@@ -87,7 +95,27 @@ def config_yaml(domain: str, pid: str, *, iterations: int, model: str) -> str:
             "models": [{"name": model, "weight": 1.0}],
             "timeout": 600,
         },
-        "prompt": {"system_message": L.system_message(domain, pid)},
+        "prompt": {
+            "system_message": L.system_message(domain, pid),
+            # `feedback` is a human-readable restatement of numbers that are
+            # already in the metric dict as floats (train/ID/OOD NMSE, R2,
+            # Acc(0.1), within-0.1). The default prompt renders the metric dict
+            # once per context program, once per previous attempt, once in the
+            # header and once on the current program, so the same 315-character
+            # paragraph was being paid for nine times on every single call —
+            # 20% of the input tokens of a 500-iteration run, carrying nothing
+            # the model could not read off the floats beside it. It still lands
+            # in results.jsonl and in every checkpoint; it just no longer rides
+            # along in the context. Ignored by SpecEvo, which never renders a
+            # metric dict into its prompts.
+            "exclude_metrics": ["feedback"],
+        },
+        # SpecEvo runs the LSR-Synth searches with --workers 4; the baselines
+        # default to one iteration in flight, which is why a 500-iteration
+        # baseline problem takes ~3.5h against SpecEvo's ~40min on identical
+        # hardware and an identical model. Matching the width makes the
+        # wall-clock and $/hour columns comparable. Cost per call is unaffected.
+        "max_parallel_iterations": 4,
         # EvoX co-evolves its own *search strategy* alongside the solution, and
         # that meta level loads skydiscover/search/evox/config/search.yaml, which
         # pins openai/gpt-5 (and gpt-5-mini for its guide). --model only rewrites
@@ -112,6 +140,7 @@ def config_yaml(domain: str, pid: str, *, iterations: int, model: str) -> str:
         # reads this stamp and regenerates when the mode changes; the SpecEvo path
         # needs no stamp because it builds its prompt at import time.
         f"{SCORE_MODE_STAMP} {L.score_mode()}\n"
+        f"{CONFIG_REV_STAMP} {CONFIG_REV}\n"
     )
     return header + _BlockDumper.dump(cfg)
 

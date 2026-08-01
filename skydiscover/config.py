@@ -116,6 +116,19 @@ class ContextBuilderConfig:
 
     suggest_simplification_after_chars: Optional[int] = 500
 
+    # Metric names to keep out of the rendered prompt. The metrics still reach
+    # the database, the checkpoints and the result records untouched — this only
+    # stops them being pasted into the LLM's context.
+    #
+    # The default prompt repeats the parent's metric dict up to nine times (once
+    # in the header, once per context program, once per previous attempt, once
+    # on the current program), so one long metric value is paid for nine times
+    # per call. An evaluator that returns a human-readable summary string
+    # alongside the numbers it summarises — as LLM-SRBench's does — is paying
+    # for the same numbers twice over on top of that. Empty by default: every
+    # benchmark that has already been measured keeps its exact prompt.
+    exclude_metrics: List[str] = field(default_factory=list)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. Solution Generator — produces candidates via LLM calls (llm/)
@@ -828,6 +841,7 @@ class Config:
                 "template_dir": self.context_builder.template_dir,
                 "system_message": self.context_builder.system_message,
                 "evaluator_system_message": self.context_builder.evaluator_system_message,
+                "exclude_metrics": list(self.context_builder.exclude_metrics),
             },
             "search": {
                 "type": self.search.type,

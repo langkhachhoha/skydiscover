@@ -435,6 +435,12 @@ fi
 # SpecEvo path builds its prompt at import time and is never stale.)
 # ===========================================================================
 ensure_problem_dirs() {
+    # The revision generate_dirs.py currently writes. A directory stamped with
+    # anything older predates a change to the emitted config (prompt trimming,
+    # parallelism, ...) and is regenerated rather than run as-is.
+    local want_rev
+    want_rev="$("$PY" -c 'import sys; sys.path.insert(0, "benchmarks/llm_srbench"); import generate_dirs as g; print(g.CONFIG_REV)')"
+
     local missing=() pid cfg
     for pid in $PROBLEMS; do
         cfg="$BDIR_ROOT/$pid/config.yaml"
@@ -442,7 +448,8 @@ ensure_problem_dirs() {
            || [[ ! -f "$BDIR_ROOT/$pid/evaluator.py" ]] \
            || [[ ! -f "$BDIR_ROOT/$pid/initial_program.py" ]] \
            || [[ ! -f "$LEVI_ROOT/$pid/problem.py" ]] \
-           || ! grep -q "^# score-mode: $SCORE_MODE\$" "$cfg"; then
+           || ! grep -q "^# score-mode: $SCORE_MODE\$" "$cfg" \
+           || ! grep -q "^# config-rev: $want_rev\$" "$cfg"; then
             missing+=("$pid")
         fi
     done

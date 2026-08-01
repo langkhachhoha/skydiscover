@@ -23,7 +23,7 @@ _format_previous_attempts, _format_other_context_programs, _format_current_progr
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from skydiscover.config import Config
 from skydiscover.context_builder.base import ContextBuilder
@@ -36,8 +36,11 @@ _TEMPLATES_DIR = str(Path(__file__).parent / "templates")
 _TEXT_LANGUAGES = {"text", "prompt", "text/plain"}
 
 
-def _filter_other_metrics(metrics: dict) -> dict:
-    return {k: v for k, v in metrics.items() if k not in {"combined_score", "error"}}
+def _filter_other_metrics(metrics: dict, exclude: Optional[Iterable[str]] = None) -> dict:
+    skip = {"combined_score", "error"}
+    if exclude:
+        skip |= set(exclude)
+    return {k: v for k, v in metrics.items() if k not in skip}
 
 
 class DefaultContextBuilder(ContextBuilder):
@@ -50,6 +53,8 @@ class DefaultContextBuilder(ContextBuilder):
         self.system_template_override = None
         self.user_template_override = None
         self.template_manager = TemplateManager(_TEMPLATES_DIR, self.context_config.template_dir)
+        # Metric names the prompt must not carry. See ContextBuilderConfig for why.
+        self.excluded_metrics = set(getattr(self.context_config, "exclude_metrics", ()) or ())
 
     def set_templates(
         self, system_template: Optional[str] = None, user_template: Optional[str] = None
@@ -209,7 +214,7 @@ class DefaultContextBuilder(ContextBuilder):
             if error:
                 lines.append(f"error: {error}\n")
 
-            other_metrics = _filter_other_metrics(metrics)
+            other_metrics = _filter_other_metrics(metrics, self.excluded_metrics)
             if other_metrics:
                 lines.append("Score breakdown:")
                 for key, value in other_metrics.items():
@@ -297,7 +302,7 @@ class DefaultContextBuilder(ContextBuilder):
             if error:
                 lines.append(f"- error: {error}\n")
 
-            other_metrics = _filter_other_metrics(metrics)
+            other_metrics = _filter_other_metrics(metrics, self.excluded_metrics)
             if other_metrics:
                 lines.append("Score breakdown:")
                 for key, value in other_metrics.items():
@@ -401,6 +406,8 @@ class DefaultContextBuilder(ContextBuilder):
             changes = metadata.get("changes", "Unknown changes")
             performance_parts = []
             for name, value in metrics.items():
+                if name in self.excluded_metrics:
+                    continue
                 if isinstance(value, (int, float)):
                     try:
                         performance_parts.append(f"{name}: {value:.4f}")
@@ -451,7 +458,7 @@ class DefaultContextBuilder(ContextBuilder):
         if error:
             lines.append(f"- error: {error}")
 
-        other_metrics = _filter_other_metrics(metrics)
+        other_metrics = _filter_other_metrics(metrics, self.excluded_metrics)
         if other_metrics:
             lines.append("")
             lines.append("Metrics:")

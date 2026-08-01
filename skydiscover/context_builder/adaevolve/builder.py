@@ -441,6 +441,8 @@ class AdaEvolveContextBuilder(DefaultContextBuilder):
             changes = metadata.get("changes", "Unknown changes")
             performance_parts = []
             for name, value in metrics.items():
+                if name in self.excluded_metrics:
+                    continue
                 if not isinstance(value, bool) and isinstance(value, (int, float)):
                     try:
                         performance_parts.append(f"{name}: {value:.4f}")
