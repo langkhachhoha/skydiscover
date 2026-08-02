@@ -113,8 +113,29 @@ def config_yaml(domain: str, pid: str, *, iterations: int, model: str) -> str:
         # SpecEvo runs the LSR-Synth searches with --workers 4; the baselines
         # default to one iteration in flight, which is why a 500-iteration
         # baseline problem takes ~3.5h against SpecEvo's ~40min on identical
-        # hardware and an identical model. Matching the width makes the
-        # wall-clock and $/hour columns comparable. Cost per call is unaffected.
+        # hardware and an identical model.
+        #
+        # READ THIS BEFORE PUTTING WALL-CLOCK IN A TABLE: only openevolve_native
+        # honours this. AdaEvolveController, GEPANativeController and
+        # CoEvolutionController each override run_discovery with their own
+        # sequential loop and never look at max_parallel_iterations, so those
+        # three still run one iteration at a time. (FORE delegates to
+        # super().run_discovery and does get it.)
+        #
+        # They are not simply unwired — each has real per-iteration state that
+        # concurrency would corrupt: AdaEvolve closes every iteration with
+        # database.end_iteration(), which picks the next island by UCB and
+        # drives migration; GEPA's loop is a state machine over _merge_due,
+        # _iterations_without_improvement and _best_score_seen, with acceptance
+        # gating comparing child to parent inline; EvoX swaps its whole database
+        # when it evolves its search strategy. Widening them means changing the
+        # algorithms, at which point they stop being the published baselines.
+        #
+        # Left on for openevolve_native deliberately (decision 2026-08-01): it
+        # cuts the re-run time and costs nothing, at the price of OE finishing
+        # sooner than the other three for reasons that have nothing to do with
+        # its search. Cost per call is unaffected by width, so the $ columns
+        # stay comparable across all five methods either way.
         "max_parallel_iterations": 4,
         # EvoX co-evolves its own *search strategy* alongside the solution, and
         # that meta level loads skydiscover/search/evox/config/search.yaml, which

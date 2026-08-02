@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Horizontal bar charts of per-method averages across CO-Bench categories.
+Per-method averages across CO-Bench categories.
 
-Data = Average rows from the results table (8 categories + overall).
-Style mirrors the "Base LLMs" horizontal-bar reference: bold section header,
-value labels to the right of each bar, light vertical grid, x-axis cropped
-to the near-data band so gaps between methods stay legible.
+Primary output: one 2×4 grid of *vertical* bar charts (8 categories) with a
+shared colour legend at the bottom (no per-panel method names).
 
-The overall (36-problem) chart also annotates each method with best/second
-counts across problems (e.g. 20/1), coloured red/blue with a legend.
+Also emits the legacy per-category horizontal charts and the overall
+(36-problem) chart with best/second annotations.
 
 Usage:
   .venv/bin/python scripts/plots/plot_category_averages.py
@@ -23,14 +21,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.transforms import blended_transform_factory
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "result" / "category_averages"
 
-# Fixed top→bottom order (do not sort by score).
-# Table columns are OpenEvolve → GEPA → AdaEvolve → EvoX → SpecEvo;
-# we plot the reverse so SpecEvo leads.
+# Left→right bar order (and legend order). SpecEvo first (ours).
 METHODS = ("SpecEvo", "EvoX", "AdaEvolve", "GEPA", "OpenEvolve")
+
+CATEGORY_ORDER = (
+    "Packing Problems",
+    "Cutting Problems",
+    "Facility Location Problems",
+    "Scheduling Problems",
+    "Routing Problems",
+    "Assignment Problems",
+    "Tree Problems",
+    "Graph and Set Problems",
+)
 
 # Same palette as plot_frontier / plot_benchmark_cost_score
 COLORS = {
@@ -127,15 +136,8 @@ BEST_COLOR = "#C0392B"
 SECOND_COLOR = "#1A5276"
 
 
-def _style_axes(ax, methods: list[str], vals: list[float], title: str = "", right_pad: float = 0.28) -> None:
-    n = len(methods)
-    y = np.arange(n)
-    ax.set_yticks(y)
-    ax.set_yticklabels(methods, fontsize=14)
-    ax.invert_yaxis()
-
-    # value frame = data band; exactly 5 evenly spaced ticks inside it.
-    # xlim extends a bit past the last tick so value labels have room.
+def _value_band(vals: list[float]) -> tuple[float, float, np.ndarray, str]:
+    """Return (tick_lo, tick_hi, ticks, tick_fmt) cropped to the near-data band."""
     lo, hi = min(vals), max(vals)
     span = max(hi - lo, 1e-6)
     pad = max(0.012, 0.18 * span)
@@ -145,10 +147,22 @@ def _style_axes(ax, methods: list[str], vals: list[float], title: str = "", righ
         pad = max(0.0008, 0.35 * span)
     tick_lo, tick_hi = lo - pad, hi + pad
     ticks = np.linspace(tick_lo, tick_hi, 5)
+    tick_fmt = "{:.4f}" if (ticks[-1] - ticks[0]) < 0.05 else "{:.2f}"
+    return tick_lo, tick_hi, ticks, tick_fmt
+
+
+def _style_axes(ax, methods: list[str], vals: list[float], title: str = "", right_pad: float = 0.28) -> None:
+    n = len(methods)
+    y = np.arange(n)
+    ax.set_yticks(y)
+    ax.set_yticklabels(methods, fontsize=14)
+    ax.invert_yaxis()
+
+    # value frame = data band; exactly 5 evenly spaced ticks inside it.
+    # xlim extends a bit past the last tick so value labels have room.
+    tick_lo, tick_hi, ticks, tick_fmt = _value_band(vals)
     ax.set_xlim(tick_lo, tick_hi + right_pad * (tick_hi - tick_lo))
     ax.set_xticks(ticks)
-    # More decimals when the band is narrow so ticks don't collide after rounding
-    tick_fmt = "{:.4f}" if (ticks[-1] - ticks[0]) < 0.05 else "{:.2f}"
     ax.set_xticklabels([tick_fmt.format(t) for t in ticks])
 
     ax.xaxis.grid(True, linestyle="-", color="#D8D8D8", lw=0.8, zorder=0)
@@ -165,6 +179,117 @@ def _style_axes(ax, methods: list[str], vals: list[float], title: str = "", righ
         ax.set_title(title, loc="left", fontsize=16, fontweight="bold", pad=10)
     else:
         ax.set_title("")
+
+
+def _style_axes_v(ax, vals: list[float]) -> tuple[float, float]:
+    """Vertical-bar axes: no method names (shared legend), cropped y-band.
+
+    Returns (tick_lo, tick_hi) — the value band used for headroom math.
+    """
+    n = len(vals)
+    tick_lo, tick_hi, ticks, tick_fmt = _value_band(vals)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([tick_fmt.format(t) for t in ticks])
+
+    ax.set_xticks(np.arange(n))
+    ax.set_xticklabels([])
+    ax.tick_params(axis="x", length=0)
+    ax.tick_params(axis="y", labelsize=13)
+
+    ax.yaxis.grid(True, linestyle="-", color="#D8D8D8", lw=0.8, zorder=0)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(1.2)
+    ax.yaxis.set_ticks_position("none")
+    ax.set_ylabel("")
+    ax.set_xlabel("")
+    ax.set_title("")
+    return tick_lo, tick_hi
+
+
+def _draw_category_v(ax, title: str, scores: dict[str, float]) -> None:
+    methods = list(METHODS)
+    vals = [scores[m] for m in methods]
+    n = len(methods)
+    x = np.arange(n)
+
+    bars = ax.bar(
+        x,
+        vals,
+        width=0.72,
+        color=[COLORS[m] for m in methods],
+        edgecolor="none",
+        zorder=3,
+    )
+    tick_lo, tick_hi = _style_axes_v(ax, vals)
+    band = max(tick_hi - tick_lo, 1e-6)
+    max_v = max(vals)
+
+    # Tight headroom: value labels, then title directly on top of them.
+    label_h = 0.09 * band
+    title_h = 0.08 * band
+    ax.set_ylim(tick_lo, max_v + label_h + title_h)
+
+    for bar, val in zip(bars, vals):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            val + 0.008 * band,
+            f"{val:.4f}",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color="#222222",
+            zorder=4,
+        )
+
+    # Title immediately above the tallest value label (x=axes, y=data).
+    trans = blended_transform_factory(ax.transAxes, ax.transData)
+    ax.text(
+        0.0, max_v + label_h, title,
+        transform=trans,
+        ha="left", va="bottom",
+        fontsize=14, fontweight="bold",
+        color="#111111",
+        zorder=6,
+        clip_on=False,
+        bbox={
+            "facecolor": "white",
+            "edgecolor": "none",
+            "alpha": 0.9,
+            "pad": 0.8,
+        },
+    )
+
+
+def plot_all_categories(out: Path) -> None:
+    """2×4 grid of vertical category charts + shared method colour legend."""
+    fig, axes = plt.subplots(2, 4, figsize=(15.2, 7.2))
+    for ax, title in zip(axes.flat, CATEGORY_ORDER):
+        _draw_category_v(ax, title, CATEGORIES[title])
+
+    handles = [
+        Patch(facecolor=COLORS[m], edgecolor="none", label=m) for m in METHODS
+    ]
+    fig.legend(
+        handles=handles,
+        loc="lower center",
+        ncol=len(METHODS),
+        frameon=False,
+        fontsize=14,
+        handlelength=1.2,
+        handleheight=1.0,
+        handletextpad=0.45,
+        columnspacing=1.6,
+        borderaxespad=0.0,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    fig.subplots_adjust(
+        left=0.055, right=0.995, top=0.98, bottom=0.09,
+        wspace=0.28, hspace=0.18,
+    )
+    _save(fig, out, tight=False)
 
 
 def plot_category(title: str, scores: dict[str, float], out: Path) -> None:
@@ -401,14 +526,15 @@ def _crop_pdf_margins(pdf_path: Path, cuts_px: tuple[int, int, int, int], png_si
         writer.write(f)
 
 
-def _save(fig, out: Path) -> None:
+def _save(fig, out: Path, *, tight: bool = True) -> None:
     # Tight crop for LaTeX \includegraphics (no wasted whitespace).
-    fig.tight_layout(pad=0.02)
+    if tight:
+        fig.tight_layout(pad=0.02)
     out.parent.mkdir(parents=True, exist_ok=True)
     png_path = out if out.suffix.lower() == ".png" else out.with_suffix(".png")
     pdf_path = out.with_suffix(".pdf")
-    fig.savefig(png_path, dpi=200, bbox_inches="tight", pad_inches=0)
-    fig.savefig(pdf_path, bbox_inches="tight", pad_inches=0)
+    fig.savefig(png_path, dpi=200, bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(pdf_path, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 
     from PIL import Image
@@ -436,8 +562,12 @@ def main() -> None:
         "Tree Problems": "tree",
         "Graph and Set Problems": "graph_set",
     }
-    for title, scores in CATEGORIES.items():
-        plot_category(title, scores, OUT_DIR / f"avg_{slug[title]}.png")
+
+    # Combined 2×4 vertical-bar PDF (primary figure for papers).
+    plot_all_categories(OUT_DIR / "avg_categories_grid.png")
+
+    for title in CATEGORY_ORDER:
+        plot_category(title, CATEGORIES[title], OUT_DIR / f"avg_{slug[title]}.png")
 
     plot_overall(
         OVERALL["scores"],

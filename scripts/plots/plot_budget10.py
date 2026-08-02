@@ -71,7 +71,7 @@ TASKS = {
     "signal":              ("signal processing",   None, 0.80),
     "sql":                 ("LLM-SQL",             None, 0.85),
     "eplb":                ("EPLB",                None, None),
-    "txn":                 ("txn",                 None, None),
+    "txn":                 ("TXN Scheduling",      None, None),
     "circle_packing":      ("Circle Packing",      2.42, 2.65),
     "circle_packing_rect": ("Circle Packing Rectangle", 2.25, 2.38),
 }
@@ -236,6 +236,7 @@ def load_method(run_log: Path) -> Curve | None:
 
     Only the logged points get markers — the $0 lead-in (when the log doesn't
     report a starting score) and the flat tail out to the budget are synthetic.
+    Incomplete runs are flat-extended to $10 the same way as finished-early ones.
     """
     text = run_log.read_text(errors="replace")
     if not text.strip():

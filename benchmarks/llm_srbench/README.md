@@ -175,12 +175,37 @@ adds.
 | `LSR_BFGS_MAXITER` | `0` (SciPy default) | cap BFGS iterations |
 | `LSR_DATA_DIR` | `benchmarks/llm_srbench/data` | where the `.npz` files live |
 
+## Symbolic accuracy (SA)
+
+The paper's other axis asks GPT-4o whether a discovered skeleton is
+mathematically equivalent to the ground truth. It is scored *after* the search,
+from what `results.jsonl` already holds (`gt_expression` + `best_program`), so it
+never re-runs a search and can be re-run when a new baseline lands:
+
+```bash
+./scripts/server/symbolic_accuracy.sh                       # everything finished so far
+./scripts/server/symbolic_accuracy.sh --methods specevo --domain matsci
+python scripts/lsr_symbolic_accuracy.py outputs/lsr_synth --dry-run   # no API calls
+```
+
+The judge is asked the paper's question (App. B, Fig. 11) — *do there exist
+constant parameter values that make the hypothesis equivalent to the ground
+truth?* — which is why the program can go over as-is: its `params[i]` are free
+constants. Following App. B.2 the prompt is pre-processed by stripping comments
+and docstrings from the program, and by replacing the ground truth's fitted
+coefficients with placeholder symbols (`--gt-constants`), so the verdict turns on
+structure and not on whether a coefficient came out as 0.1899 or 0.19. Exponents
+are left literal: `A(t)**2` and `A(t)**3` are different hypotheses. This also
+absorbs the mangled `0.189…_z` constant names noted above — the whole token is
+one placeholder.
+
+Per-domain SA is the fraction of *attempted* problems judged equivalent;
+problems that produced no usable equation stay in the denominator. Judgements
+(verdict + reasoning + tokens) are cached in
+`outputs/symbolic_accuracy/judgments.jsonl` and reused, so re-running is free and
+an interrupted sweep resumes.
+
 ## What is not implemented
 
-**Symbolic accuracy (SA).** The paper's headline metric asks GPT-4o to judge
-whether a discovered skeleton is mathematically equivalent to the ground truth.
-That needs an LLM judge and a hand-validated prompt, and the released
-`llm-srbench` pipeline does not compute it either (its `EvaluationPipeline` emits
-only MSE / NMSE / R² / Kendall-tau / MAPE). Every finished problem's
-`results.jsonl` record keeps both `gt_expression` and the full `best_program`, so
-SA can be scored offline later without re-running any search.
+**LSR-Transform.** Only the LSR-Synth half of LLM-SRBench is wired up here; the
+111 transformed-Feynman problems are not.

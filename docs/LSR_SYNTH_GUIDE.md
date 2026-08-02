@@ -416,10 +416,38 @@ Then, across problems, `scripts/lsr_summarize.py` reports per (method, domain):
 Check it before comparing methods: a method truncated by `--problem-timeout` at a
 different point from the others is not a fair comparison.
 
-Symbolic accuracy (the paper's other axis, an LLM judge on the discovered vs
-ground-truth expression) is **not** computed here. Every record keeps
-`best_program` and `gt_expression` so it can be scored offline later without
-re-running any search.
+### 5.3 Symbolic accuracy — the paper's other axis
+
+`lsr_summarize.py` reports data fidelity only. Symbolic accuracy — GPT-4o judging
+whether the discovered equation is mathematically equivalent to the ground truth
+(paper §2.3 / App. B.2, Fig. 11) — is scored separately, from what the records
+already hold. No search is re-run:
+
+```bash
+# Everything that has finished, all four domains, per-method table:
+./scripts/server/symbolic_accuracy.sh --workers 16
+
+# Only the methods that have run so far, plus a CSV for the paper table:
+./scripts/server/symbolic_accuracy.sh --methods specevo,openevolve_native \
+    --csv outputs/symbolic_accuracy/table.csv
+
+# See the task counts and one example prompt without spending anything:
+./scripts/server/symbolic_accuracy.sh --dry-run
+```
+
+It prints per-domain SA (% of attempted problems judged equivalent) plus a pooled
+and macro-averaged total per method, and writes
+`outputs/symbolic_accuracy/symbolic_accuracy.json` alongside
+`judgments.jsonl` — one line per problem with the verdict, the judge's reasoning
+and the exact strings it compared. Domains that do not yet cover every problem in
+the dataset are marked `*`, so a partial sweep cannot be mistaken for the
+full-dataset number.
+
+Judgements are cached by (ground truth, hypothesis, model), so re-running after
+another baseline finishes only pays for the new baseline, and an interrupted
+sweep resumes for free. `--fresh` re-judges everything. The judge defaults to
+`gpt-4o` — via OpenRouter as `openai/gpt-4o` when `.env` holds an `sk-or-` key,
+matching how the runs themselves are configured.
 
 ---
 
