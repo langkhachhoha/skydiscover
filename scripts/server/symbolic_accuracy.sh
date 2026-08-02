@@ -32,10 +32,15 @@ PATHS=()
 METHODS=""
 DOMAINS=""
 LIMIT="0"
-MODEL=""                     # default: openai/gpt-4o (OpenRouter) or gpt-4o
+MODEL="${SA_MODEL:-}"        # default: openai/gpt-4o (OpenRouter) or gpt-4o
 BASE_URL=""
-TEMPERATURE="0.0"
-WORKERS="8"
+# Judge sampling temperature. Edit this line, export SA_TEMPERATURE, or pass
+# --temperature. The paper never states the evaluator's temperature (its
+# tau = 0.8 in Table 2 is the *discovery* methods' sampling), so 0.0 is this
+# repo's choice: the same (ground truth, hypothesis) pair should not change
+# verdict between runs, and judgements are cached per temperature.
+TEMPERATURE="${SA_TEMPERATURE:-0.0}"
+WORKERS="${SA_WORKERS:-8}"
 MAX_RETRIES="4"
 GT_CONSTANTS="symbol"
 OUT_DIR="outputs/symbolic_accuracy"
@@ -68,8 +73,11 @@ Judge
   --model ID         Judge model. (default: openai/gpt-4o via OpenRouter, or
                      gpt-4o against api.openai.com — matches the paper)
   --base-url URL     OpenAI-compatible endpoint. (default: from .env / the key)
-  --temperature N    (default: 0.0 — the verdict should not wobble between runs)
-  --workers N        Parallel judge calls. (default: 8)
+  --temperature N    Judge sampling temperature. (default: 0.0 — the verdict
+                     should not wobble between runs. The paper does not state
+                     the evaluator's temperature. Also settable with
+                     SA_TEMPERATURE, or by editing the Defaults block.)
+  --workers N        Parallel judge calls. (default: 8, or SA_WORKERS)
   --max-retries N    Retries per call. (default: 4)
   --gt-constants M   symbol (default) | shared | raw — how the ground truth's
                      fitted constants are placeholdered before judging.
