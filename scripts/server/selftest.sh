@@ -112,6 +112,19 @@ grep -q -- "--no-crossover" <<<"$OUT" && ok "ablation maps to the right CLI flag
 OUT="$("$RB" blade --dry-run --no-conda --advanced-options '{"n_cells":50,"p_crossover":0.2}' 2>&1)"
 grep -q -- "--n-cells 50" <<<"$OUT" && grep -q -- "--p-crossover 0.2" <<<"$OUT" \
   && ok "advanced_options reach the CLI" || no "advanced_options mapping broken"
+
+# Combining ablation axes: --ablation takes one name, so the multi-axis
+# configurations are only reachable through advanced_options. JSON booleans
+# must survive as the lowercase literal the flags are matched against.
+OUT="$("$RB" blade --dry-run --no-conda --advanced-options \
+  '{"meta_advice_disabled":true,"paradigm_force_mode":"reframe","single_prompt_operators":true,"p_crossover":0,"targeted_mutate_disabled":true}' 2>&1)"
+MISSING=""
+for f in --no-meta-advice "--paradigm-force-mode shift" --single-prompt-operators \
+         "--p-crossover 0" --no-targeted-mutate; do
+  grep -q -- "$f" <<<"$OUT" || MISSING="$MISSING $f"
+done
+[ -z "$MISSING" ] && ok "combined ablation axes reach the CLI (JSON booleans included)" \
+  || no "advanced_options ablation axes dropped:$MISSING"
 OUT="$("$RB" baseline --dry-run --no-conda --benchmark-dir benchmarks/math/circle_packing 2>&1)"
 grep -q "evaluator.py" <<<"$OUT" && ok "baseline evaluator resolution works" || no "evaluator resolution broken"
 

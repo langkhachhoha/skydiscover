@@ -312,7 +312,10 @@ jobs:
               opts = json.loads(sys.stdin.read())
               for k, v in opts.items():
                   env_name = f'ADV_{k.upper()}'
-                  print(f'{env_name}={v}')
+                  # JSON true -> 'true', not Python 'True': the boolean knobs
+                  # below are matched against the lowercase literal.
+                  val = str(v).lower() if isinstance(v, bool) else str(v)
+                  print(f'{env_name}={val}')
           except Exception as e:
               print(f'Error parsing advanced options: {e}', file=sys.stderr)
               sys.exit(1)
@@ -384,6 +387,11 @@ jobs:
           [ -n "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-synthesis-n-anchors $ADV_PARADIGM_SYNTHESIS_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SHIFT_N_ANCHORS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-shift-n-anchors $ADV_PARADIGM_SHIFT_N_ANCHORS"
           [ -n "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-surgical-n-inspirations $ADV_PARADIGM_SURGICAL_N_INSPIRATIONS"
+          # A8 axis. "reframe" is the paper-facing name of the mode the code calls "shift".
+          [ "$ADV_PARADIGM_FORCE_MODE" = "reframe" ] && ADV_PARADIGM_FORCE_MODE="shift"
+          [ -n "$ADV_PARADIGM_FORCE_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-force-mode $ADV_PARADIGM_FORCE_MODE"
+          # A6 axis.
+          [ "$ADV_SINGLE_PROMPT_OPERATORS" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --single-prompt-operators"
 
           # Paper-facing ablation toggles. ``pe_interval`` is set to the
           # workflow input by default but the ``no_paradigm`` ablation

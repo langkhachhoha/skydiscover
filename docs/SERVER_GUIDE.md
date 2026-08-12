@@ -995,17 +995,35 @@ trục thì bật chúng qua `--advanced-options`, các khoá này kết hợp t
 | A4 — bỏ Advisor | `"meta_advice_disabled": true` | `--no-meta-advice` |
 | A6 — Speculator một prompt mỗi operator | `"single_prompt_operators": true` | `--single-prompt-operators` |
 | A8 — Navigator khoá một mode | `"paradigm_force_mode": "reframe"` | `--paradigm-force-mode shift` |
+| A5 — bỏ targeted-mutate | `"targeted_mutate_disabled": true` | `--no-targeted-mutate` |
+| A7 — bỏ crossover | `"p_crossover": 0` | `--p-crossover 0` |
 
 `paradigm_force_mode` nhận `reframe` (tên trong paper — script tự đổi sang tên
-nội bộ `shift`), `synthesis`, hoặc `surgical`. Ví dụ bỏ Advisor + Navigator chỉ
-reframe + Speculator single:
+nội bộ `shift`), `synthesis`, hoặc `surgical`.
+
+⚠️ **A6 một mình KHÔNG cho Speculator một prompt duy nhất.** Nó chỉ thu mỗi
+operator về một template; lúc chạy vẫn còn ba đường prompt sống: mutate general,
+crossover structural (xác suất `p_crossover` = 0.35) và targeted-mutate (xác
+suất `p_targeted_mutate` = 0.5 khi parent đã có analysis). Muốn **đúng một**
+prompt (`MUTATE_PROMPT_GENERAL`) thì phải tắt cả hai đường kia:
 
 ```bash
+# Bỏ Advisor + Navigator chỉ reframe + Speculator đúng 1 prompt duy nhất
 ./scripts/server/run_bench.sh blade --tmux \
     --session eplb_noadv_reframe_single \
     --benchmark levi/examples/ADRS/eplb --seconds 10800 \
-    --advanced-options '{"meta_advice_disabled":true,"paradigm_force_mode":"reframe","single_prompt_operators":true}'
+    --advanced-options '{"meta_advice_disabled":true,"paradigm_force_mode":"reframe","single_prompt_operators":true,"p_crossover":0,"targeted_mutate_disabled":true}'
 ```
+
+Hai loại prompt vẫn còn sống sau cấu hình trên, **theo thiết kế**: prompt của
+pha khởi tạo (`build_diverse_seed_prompt` / `build_init_variant_prompt` — không
+có chúng thì không có quần thể ban đầu) và prompt fanout của Navigator
+(`build_paradigm_variant_prompt`, dùng chung cho cả ba mode). Muốn tắt luôn
+fanout thì đặt `"n_paradigm_variants": 0`.
+
+Ngữ nghĩa của cấu hình này được khoá bằng test trong
+`levi/tests/blade/test_lean_ablation_combo.py`, và đường JSON → cờ CLI được
+`scripts/server/selftest.sh` (mục 5) kiểm tra.
 
 Xem danh sách benchmark có sẵn: `ls levi/examples/` và `ls levi/examples/co_bench/`.
 
