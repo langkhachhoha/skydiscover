@@ -983,7 +983,29 @@ Sau đó vẽ hình bằng các script sẵn có trên máy bạn (xem `scripts/
 `targeted_mutate_disabled`, `analyzer_interval`, `analyzer_top_k`,
 `p_targeted_mutate`, `p_crossover`, `paradigm_synthesis_max_stagnation`,
 `paradigm_surgical_max_stagnation`, `paradigm_synthesis_n_anchors`,
-`paradigm_shift_n_anchors`, `paradigm_surgical_n_inspirations`.
+`paradigm_shift_n_anchors`, `paradigm_surgical_n_inspirations`,
+`single_prompt_operators`, `paradigm_force_mode`.
+
+**Chạy nhiều trục ablation cùng lúc.** `--ablation` chỉ nhận **một** tên, và
+workflow `blade_ablation.yml` cũng chọn đúng một trục mỗi run. Muốn gộp nhiều
+trục thì bật chúng qua `--advanced-options`, các khoá này kết hợp tự do:
+
+| trục | khoá | tương đương cờ |
+|---|---|---|
+| A4 — bỏ Advisor | `"meta_advice_disabled": true` | `--no-meta-advice` |
+| A6 — Speculator một prompt mỗi operator | `"single_prompt_operators": true` | `--single-prompt-operators` |
+| A8 — Navigator khoá một mode | `"paradigm_force_mode": "reframe"` | `--paradigm-force-mode shift` |
+
+`paradigm_force_mode` nhận `reframe` (tên trong paper — script tự đổi sang tên
+nội bộ `shift`), `synthesis`, hoặc `surgical`. Ví dụ bỏ Advisor + Navigator chỉ
+reframe + Speculator single:
+
+```bash
+./scripts/server/run_bench.sh blade --tmux \
+    --session eplb_noadv_reframe_single \
+    --benchmark levi/examples/ADRS/eplb --seconds 10800 \
+    --advanced-options '{"meta_advice_disabled":true,"paradigm_force_mode":"reframe","single_prompt_operators":true}'
+```
 
 Xem danh sách benchmark có sẵn: `ls levi/examples/` và `ls levi/examples/co_bench/`.
 

@@ -118,6 +118,10 @@ blade options (defaults match blade.yml)
                               | meta_errors_only | no_targeted_mutate | no_crossover
                               | no_paradigm   (default: full)
   --advanced-options JSON     Low-level overrides, e.g. '{"n_cells":50,"p_crossover":0.2}'
+                              Ablation axes reachable here (unlike --ablation, these
+                              combine freely): "meta_advice_disabled":true (A4),
+                              "single_prompt_operators":true (A6), and
+                              "paradigm_force_mode":"reframe"|"synthesis"|"surgical" (A8).
 
 baseline options (defaults match baseline.yml)
   --baseline NAME             openevolve_native | gepa_native | adaevolve | evox (default: evox)
@@ -490,7 +494,10 @@ if not isinstance(opts, dict):
     sys.stderr.write("--advanced-options must be a JSON object\n")
     sys.exit(1)
 for k, v in opts.items():
-    print(f"export ADV_{k.upper()}={shlex.quote(str(v))}")
+    # JSON true -> "true", not Python "True": the boolean flags below are
+    # matched against the lowercase literal.
+    s = str(v).lower() if isinstance(v, bool) else str(v)
+    print(f"export ADV_{k.upper()}={shlex.quote(s)}")
 ' "$ADVANCED_OPTIONS")" || die "could not parse --advanced-options"
         eval "$ADV_EXPORTS"
     fi
@@ -521,6 +528,11 @@ for k, v in opts.items():
     [[ -n "${ADV_PARADIGM_SYNTHESIS_N_ANCHORS:-}" ]]      && EXTRA_OPTS+=(--paradigm-synthesis-n-anchors "$ADV_PARADIGM_SYNTHESIS_N_ANCHORS")
     [[ -n "${ADV_PARADIGM_SHIFT_N_ANCHORS:-}" ]]          && EXTRA_OPTS+=(--paradigm-shift-n-anchors "$ADV_PARADIGM_SHIFT_N_ANCHORS")
     [[ -n "${ADV_PARADIGM_SURGICAL_N_INSPIRATIONS:-}" ]]  && EXTRA_OPTS+=(--paradigm-surgical-n-inspirations "$ADV_PARADIGM_SURGICAL_N_INSPIRATIONS")
+    # A8 axis. "reframe" is the paper-facing name of the mode the code calls "shift".
+    [[ "${ADV_PARADIGM_FORCE_MODE:-}" == "reframe" ]]     && ADV_PARADIGM_FORCE_MODE="shift"
+    [[ -n "${ADV_PARADIGM_FORCE_MODE:-}" ]]               && EXTRA_OPTS+=(--paradigm-force-mode "$ADV_PARADIGM_FORCE_MODE")
+    # A6 axis.
+    [[ "${ADV_SINGLE_PROMPT_OPERATORS:-}" == "true" ]]    && EXTRA_OPTS+=(--single-prompt-operators)
 
     # Paper-facing ablation toggles (identical mapping to blade.yml).
     PE_INTERVAL_EFFECTIVE="$PE_INTERVAL"
