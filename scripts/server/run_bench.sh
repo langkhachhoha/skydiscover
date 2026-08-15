@@ -698,6 +698,31 @@ fi
     if [[ -f "$OUTPUT_DIR/cost_log.jsonl" ]]; then
         echo " LLM calls recorded: $(wc -l < "$OUTPUT_DIR/cost_log.jsonl" | tr -d ' ')"
     fi
+    # BLADE/SpecEvo bypasses skydiscover's LLM wrapper, so it has no
+    # cost_log.totals.json; it counts tokens itself and reports them in
+    # summary.json. Surface the same two numbers here so the footer reads
+    # the same way for both families.
+    SUMMARY="$OUTPUT_DIR/summary.json"
+    if [[ ! -f "$TOTALS" && -f "$SUMMARY" ]]; then
+        python - "$SUMMARY" <<'PY' || true
+import json, sys
+try:
+    s = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+if "total_prompt_tokens" not in s:
+    sys.exit(0)
+init = s.get("init_usage") or {}
+print(" token totals:")
+print(f"   llm_calls        : {s.get('total_llm_calls', 0)}")
+print(f"   input tokens     : {s['total_prompt_tokens']}")
+print(f"   output tokens    : {s.get('total_completion_tokens', 0)}")
+if init:
+    print(f"   init input/output: {init.get('prompt_tokens', 0)} / "
+          f"{init.get('completion_tokens', 0)}  "
+          f"({init.get('llm_calls', 0)} calls, {init.get('evaluations', 0)} evals)")
+PY
+    fi
     if [[ -n "$DOLLARS" ]]; then
         echo " spend budget: \$$DOLLARS"
     fi

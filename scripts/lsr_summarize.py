@@ -10,6 +10,8 @@ run directories, or the files themselves) and reports, per (method, domain):
            split stays within 10% (the paper's Acc_tau with tau = 0.1)
     R2     mean coefficient of determination per split
     cost   total USD and total search evaluations
+    tokens total input/output tokens (JSON/CSV only, not the table), plus
+           SpecEvo's initialization-phase share of them
 
 ``within0.1`` is also shown: the mean *fraction of points* inside the 10%
 tolerance. Acc0.1 is all-or-nothing per problem, so on problems whose target
@@ -112,6 +114,19 @@ def aggregate(records: list[dict]) -> list[dict]:
         ood_within = [_get(r, "ood_frac_within") or 0.0 for r in recs]
         costs = [r["cost_usd"] for r in recs if isinstance(r.get("cost_usd"), (int, float))]
         evals = [r["evaluations"] for r in recs if isinstance(r.get("evaluations"), (int, float))]
+        in_tok = [r["prompt_tokens"] for r in recs if isinstance(r.get("prompt_tokens"), int)]
+        out_tok = [r["completion_tokens"] for r in recs if isinstance(r.get("completion_tokens"), int)]
+        # SpecEvo's init phase (diverse seeds + variants); baselines have none.
+        init_in = [
+            (r.get("init_usage") or {}).get("prompt_tokens")
+            for r in recs
+            if isinstance((r.get("init_usage") or {}).get("prompt_tokens"), int)
+        ]
+        init_out = [
+            (r.get("init_usage") or {}).get("completion_tokens")
+            for r in recs
+            if isinstance((r.get("init_usage") or {}).get("completion_tokens"), int)
+        ]
 
         rows.append(
             {
@@ -139,6 +154,12 @@ def aggregate(records: list[dict]) -> list[dict]:
                 "ood_r2_worst": min(ood_r2) if ood_r2 else None,
                 "total_cost_usd": sum(costs) if costs else None,
                 "total_evaluations": int(sum(evals)) if evals else None,
+                # Token totals are JSON/CSV-only — the fixed-width table is
+                # already at the width of a terminal.
+                "total_prompt_tokens": int(sum(in_tok)) if in_tok else None,
+                "total_completion_tokens": int(sum(out_tok)) if out_tok else None,
+                "init_prompt_tokens": int(sum(init_in)) if init_in else None,
+                "init_completion_tokens": int(sum(init_out)) if init_out else None,
             }
         )
 

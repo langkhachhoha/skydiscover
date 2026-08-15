@@ -496,6 +496,14 @@ def main() -> int:
         "best_metrics": result.best_metrics,
         "total_evaluations": result.total_evaluations,
         "total_cost": result.total_cost,
+        # Token accounting, same shape the baselines report in
+        # cost_log.totals.json: whole-run totals, plus the init phase
+        # (diverse seeds + variants) broken out on its own.
+        "total_llm_calls": result.total_llm_calls,
+        "total_prompt_tokens": result.total_prompt_tokens,
+        "total_completion_tokens": result.total_completion_tokens,
+        "total_tokens": result.total_prompt_tokens + result.total_completion_tokens,
+        "init_usage": result.init_usage,
         "archive_size": result.archive_size,
         "runtime_seconds": result.runtime_seconds,
         "n_paradigm_trials": len(result.paradigm_trials),
@@ -546,6 +554,18 @@ def main() -> int:
         print(f"Overall score     : {float(_m['overall_score']):.6f}")
     print(f"Evaluations used  : {result.total_evaluations}")
     print(f"Total cost        : ${result.total_cost:.4f}")
+    print(f"LLM calls         : {result.total_llm_calls}")
+    print(f"Input tokens      : {result.total_prompt_tokens}")
+    print(f"Output tokens     : {result.total_completion_tokens}")
+    print(f"Total tokens      : {result.total_prompt_tokens + result.total_completion_tokens}")
+    _init = result.init_usage or {}
+    if _init:
+        print(
+            f"Init input tokens : {_init.get('prompt_tokens', 0)}"
+            f"  (init phase: {_init.get('llm_calls', 0)} calls,"
+            f" {_init.get('evaluations', 0)} evals, ${float(_init.get('cost_usd', 0.0)):.4f})"
+        )
+        print(f"Init output tokens: {_init.get('completion_tokens', 0)}")
     print(f"Archive size      : {result.archive_size}")
     print(f"Paradigm trials   : {len(result.paradigm_trials)}")
     print(f"Runtime           : {result.runtime_seconds:.1f}s")

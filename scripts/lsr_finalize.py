@@ -68,6 +68,9 @@ def find_best_program(run_dir: Path) -> tuple[Path | None, dict]:
                 "search_metrics": s.get("best_metrics"),
                 "evaluations": s.get("total_evaluations"),
                 "cost_usd": s.get("total_cost"),
+                "prompt_tokens": s.get("total_prompt_tokens"),
+                "completion_tokens": s.get("total_completion_tokens"),
+                "init_usage": s.get("init_usage"),
                 "runtime_seconds": s.get("runtime_seconds"),
                 "archive_size": s.get("archive_size"),
             }
@@ -191,11 +194,72 @@ def read_cost(run_dir: Path, info: dict) -> float | None:
     return total if found else None
 
 
+def read_tokens(run_dir: Path, info: dict) -> tuple[int | None, int | None]:
+    """``(input_tokens, output_tokens)`` for this problem, across every attempt.
+
+    Same precedence as :func:`read_cost`, for the same reason: the per-call
+    ``cost_log.jsonl`` a baseline appends to survives resumes, so it wins;
+    SpecEvo keeps no call log and reports its totals in ``summary.json``.
+    """
+    prompt = 0
+    completion = 0
+    found = False
+
+    for log in sorted(run_dir.glob("**/cost_log.jsonl")):
+        for line in log.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(rec.get("prompt_tokens"), (int, float)):
+                prompt += int(rec["prompt_tokens"])
+                found = True
+            if isinstance(rec.get("completion_tokens"), (int, float)):
+                completion += int(rec["completion_tokens"])
+                found = True
+    if found:
+        return prompt, completion
+
+    for summary in sorted(run_dir.glob("prev_attempt_*/summary.json")):
+        try:
+            s = json.loads(summary.read_text())
+        except Exception:  # noqa: BLE001
+            continue
+        if isinstance(s.get("total_prompt_tokens"), int):
+            prompt += s["total_prompt_tokens"]
+            found = True
+        if isinstance(s.get("total_completion_tokens"), int):
+            completion += s["total_completion_tokens"]
+            found = True
+
+    if isinstance(info.get("prompt_tokens"), int) or isinstance(info.get("completion_tokens"), int):
+        return prompt + int(info.get("prompt_tokens") or 0), completion + int(
+            info.get("completion_tokens") or 0
+        )
+
+    for totals in sorted(run_dir.glob("**/cost_log.totals.json")):
+        try:
+            t = json.loads(totals.read_text())
+        except Exception:  # noqa: BLE001
+            continue
+        if isinstance(t.get("total_prompt_tokens"), int) or isinstance(
+            t.get("total_completion_tokens"), int
+        ):
+            return prompt + int(t.get("total_prompt_tokens") or 0), completion + int(
+                t.get("total_completion_tokens") or 0
+            )
+    return (prompt, completion) if found else (None, None)
+
+
 def build_record(
     *, domain: str, problem: str, method: str, seed: str, run_dir: Path, iterations: int | None
 ) -> tuple[dict, bool]:
     meta = L.problem_meta(domain, problem)
     prog_path, info = find_best_program(run_dir)
+    prompt_tokens, completion_tokens = read_tokens(run_dir, info)
     record: dict = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "method": method,
@@ -211,6 +275,9 @@ def build_record(
         "n_ood_test": meta["n_ood_test"],
         "run_dir": str(run_dir),
         "cost_usd": read_cost(run_dir, info),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "init_usage": info.get("init_usage"),
         "evaluations": info.get("evaluations") or iterations_completed(run_dir),
         "runtime_seconds": info.get("runtime_seconds"),
         "found_at_iteration": info.get("found_at_iteration"),

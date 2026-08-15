@@ -839,6 +839,40 @@ wc -l outputs/server/<run-id>/cost_log.jsonl          # số lần gọi LLM
 Phần cuối `run.log` cũng in sẵn bảng tổng kết chi phí + `exit status`
 (`exit status : 0` = chạy xong bình thường; khác 0 = có lỗi).
 
+#### Số token (input / output) — cả blade lẫn baseline
+
+Baseline lấy token từ `cost_log.totals.json` (`total_prompt_tokens` /
+`total_completion_tokens`). **SpecEvo/BLADE không đi qua wrapper đó**, nên nó tự
+đếm và báo trong `summary.json` + mấy dòng cuối `run.log`:
+
+```text
+LLM calls         : 640
+Input tokens      : 1843201
+Output tokens     : 214883
+Total tokens      : 2058084
+Init input tokens : 402118  (init phase: 105 calls, 105 evals, $0.4821)
+Init output tokens: 47330
+```
+
+Hai dòng `Init …` tách riêng **pha khởi tạo** — phase 1 (sinh diverse seed) +
+phase 2 (sinh variants cho mỗi seed), tính tới đúng lúc bootstrap xong. Phần
+của vòng lặp tiến hoá = tổng trừ init (init là một *tiền tố* của run, không
+chồng lấn).
+
+```bash
+# Đọc thẳng bằng máy
+python -c "import json,sys; s=json.load(open(sys.argv[1])); \
+print(s['total_prompt_tokens'], s['total_completion_tokens'], s['init_usage'])" \
+  outputs/server/<run-id>/summary.json
+```
+
+Cùng bộ số này cũng nằm trong `snapshot.json` và khối `final` của `snap.json`.
+Với LSR-Synth, `results.jsonl` có thêm `prompt_tokens` / `completion_tokens` /
+`init_usage` cho **mọi** method, nên so token giữa SpecEvo và baseline được.
+
+Lưu ý: token **embedding** không nằm trong các con số này (cả hai phía đều
+không đếm) — đây là token sinh văn bản.
+
 ### Kết quả chương trình tốt nhất
 
 - Baseline: `outputs/server/<run-id>/run/best/` và `run/checkpoints/`

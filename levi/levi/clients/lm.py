@@ -103,6 +103,34 @@ def _cost_from_explicit_pricing(client: "LM", response: Any) -> Optional[float]:
     )
 
 
+def _extract_tokens(response: Any) -> tuple[int, int]:
+    """Return ``(prompt_tokens, completion_tokens)`` for one response.
+
+    OpenAI-shaped providers use ``prompt_tokens`` / ``completion_tokens``;
+    Anthropic-shaped ones use ``input_tokens`` / ``output_tokens``. Both
+    spellings are accepted, and anything missing or malformed counts as 0
+    rather than failing the call — token accounting must never be able to
+    break a search.
+    """
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0, 0
+
+    def _raw(field: str) -> Any:
+        if isinstance(usage, dict):
+            return usage.get(field)
+        return getattr(usage, field, None)
+
+    def _first(*fields: str) -> int:
+        for field in fields:
+            value = _coerce_non_negative_float(_raw(field))
+            if value:
+                return int(value)
+        return 0
+
+    return _first("prompt_tokens", "input_tokens"), _first("completion_tokens", "output_tokens")
+
+
 def _extract_cost(client: "LM", response: Any) -> float:
     explicit_cost = _cost_from_explicit_pricing(client, response)
     if explicit_cost is not None:
@@ -177,8 +205,14 @@ class LM(BaseClient):
             response = await litellm.acompletion(**retry_request)
 
         cost = _extract_cost(self, response)
+        prompt_tokens, completion_tokens = _extract_tokens(response)
         text = _extract_text(self.model, response)
-        return ClientResult(text=text, cost=cost)
+        return ClientResult(
+            text=text,
+            cost=cost,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
 
 class _LMResolver:

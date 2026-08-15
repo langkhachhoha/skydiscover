@@ -401,6 +401,16 @@ class BladeResult:
     error_rate_windows: list[dict] = field(default_factory=list)
     """One entry per closed instrumentation window; empty unless
     ``BladeConfig.ablation_window_evals`` was set."""
+    total_llm_calls: int = 0
+    total_prompt_tokens: int = 0
+    """Input tokens over every LLM call of the run, provider-reported."""
+    total_completion_tokens: int = 0
+    """Output tokens over every LLM call of the run, provider-reported."""
+    init_usage: dict = field(default_factory=dict)
+    """Token/cost/call totals for the initialization phase alone — phase 1
+    (diverse seeds) plus phase 2 (variants per seed), measured the moment
+    bootstrap returns. Same keys as :meth:`_CallLog.snapshot`, plus
+    ``evaluations``."""
 
 
 # ---------------------------------------------------------------------------
@@ -412,10 +422,24 @@ class BladeResult:
 class _CallLog:
     cost: float = 0.0
     calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
-    def record(self, cost: float) -> None:
+    def record(self, cost: float, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
         self.cost += float(cost or 0.0)
         self.calls += 1
+        self.prompt_tokens += int(prompt_tokens or 0)
+        self.completion_tokens += int(completion_tokens or 0)
+
+    def snapshot(self) -> dict[str, float | int]:
+        """Running totals as a plain dict, for summaries and phase splits."""
+        return {
+            "llm_calls": self.calls,
+            "cost_usd": round(self.cost, 6),
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.prompt_tokens + self.completion_tokens,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +464,9 @@ class BladeOrchestrator:
         self.paradigm_lm: BaseClient = LM(config.paradigm_model)
 
         self.cost = _CallLog()
+        # Frozen copy of ``self.cost`` taken when the init phase ends, so the
+        # bootstrap's share of tokens/spend stays separable from the search's.
+        self.init_usage: dict[str, float | int] = {}
         self.paradigm_trials: list[ParadigmTrial] = []
         self.recent_trials: deque[str] = deque(maxlen=6)
         # Signal streams the Advisor reads each cycle. Attempts are counted
@@ -556,7 +583,11 @@ class BladeOrchestrator:
                 result = await call_coro
         finally:
             self._client_in_flight -= 1
-        self.cost.record(result.cost)
+        self.cost.record(
+            result.cost,
+            getattr(result, "prompt_tokens", 0),
+            getattr(result, "completion_tokens", 0),
+        )
         return result.text or ""
 
     async def _summarize_if_needed(self, code: str, description: str) -> str:
@@ -1667,10 +1698,22 @@ class BladeOrchestrator:
             logger.info("[BLADE init] phase 1 starting — %d diverse seeds (sequential, frontier model)",
                         cfg.n_diverse_seeds)
             await self._bootstrap_population()
+            # Everything the init phase spent — both bootstrap phases, their
+            # retries and their description summaries — is exactly what the
+            # counters hold right now, before any monitor task exists.
+            self.init_usage = {
+                **self.cost.snapshot(),
+                "evaluations": self.monitor.eval_count,
+            }
             logger.info("[BLADE] bootstrap complete — archive=%d best=%.6f cost=$%.3f evals=%d",
                         len(self.archive),
                         self.monitor.best_score if self.monitor.best_score != float("-inf") else float("nan"),
                         self.cost.cost, self.monitor.eval_count)
+            logger.info(
+                "[BLADE init] usage — llm_calls=%d input_tokens=%d output_tokens=%d cost=$%.4f",
+                self.init_usage["llm_calls"], self.init_usage["prompt_tokens"],
+                self.init_usage["completion_tokens"], self.init_usage["cost_usd"],
+            )
             # BLADE PE only counts eval-cadence from the end of the init
             # phase. Init evals (phase 1 frontier seeds + phase 2 mutation
             # variants) must not push PE toward its first trigger.
@@ -1742,6 +1785,10 @@ class BladeOrchestrator:
             output_dir=str(self.output_dir),
             paradigm_trials=list(self.paradigm_trials),
             error_rate_windows=list(self._error_rate_windows),
+            total_llm_calls=self.cost.calls,
+            total_prompt_tokens=self.cost.prompt_tokens,
+            total_completion_tokens=self.cost.completion_tokens,
+            init_usage=dict(self.init_usage),
         )
         self._save_snapshot(result)
         self._save_snap_trace(result)
@@ -2044,6 +2091,10 @@ class BladeOrchestrator:
             "best_metrics": result.best_metrics,
             "total_evaluations": result.total_evaluations,
             "total_cost": result.total_cost,
+            "total_llm_calls": result.total_llm_calls,
+            "total_prompt_tokens": result.total_prompt_tokens,
+            "total_completion_tokens": result.total_completion_tokens,
+            "init_usage": result.init_usage,
             "archive_size": result.archive_size,
             "num_occupied_cells": self.archive.num_occupied_cells(),
             "runtime_seconds": result.runtime_seconds,
@@ -2116,6 +2167,10 @@ class BladeOrchestrator:
             "total_evaluations": result.total_evaluations,
             "post_init_eval_count": self._post_init_eval_count,
             "total_cost": result.total_cost,
+            "total_llm_calls": result.total_llm_calls,
+            "total_prompt_tokens": result.total_prompt_tokens,
+            "total_completion_tokens": result.total_completion_tokens,
+            "init_usage": result.init_usage,
             "runtime_seconds": result.runtime_seconds,
             "archive_size": result.archive_size,
             "num_occupied_cells": self.archive.num_occupied_cells(),

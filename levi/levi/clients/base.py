@@ -9,10 +9,18 @@ ClientInput = str | list[dict[str, Any]]
 
 @dataclass(slots=True)
 class ClientResult:
-    """Normalized text-generation result."""
+    """Normalized text-generation result.
+
+    ``prompt_tokens`` / ``completion_tokens`` mirror the provider's
+    ``usage`` block (input and output tokens for this call). They default
+    to 0 for backends that report no usage — CLI-driven clients, or a
+    provider that omits the field — so a caller can always sum them.
+    """
 
     text: str
     cost: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 class BaseClient(ABC):
