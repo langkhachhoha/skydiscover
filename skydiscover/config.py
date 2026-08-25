@@ -499,6 +499,12 @@ class RelayDatabaseConfig(OpenEvolveNativeDatabaseConfig):
     # paper's default and the peak of its budget-split sensitivity sweep.
     strong_reserve: float = 0.85
 
+    # LLM attempts per generation. 1 = no retry: a generation that produces an
+    # unparseable or invalid program just spends its slot and the search moves
+    # on, which is both faster and a truthful accounting of the generation
+    # budget (a retry is another model call, so it is another generation).
+    retry_times: int = 1
+
     # --- Grow/Deepen block scheduling (RelayEvolve) ----------------------
     block_size: int = 5              # h: generations advanced per block
     max_trajectories: int = 5        # cap on concurrent cheap trajectories

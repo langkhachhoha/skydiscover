@@ -86,6 +86,14 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--eval-timeout", type=int, default=60, help="Per-candidate evaluation timeout, seconds."
     )
+    p.add_argument(
+        "--retries",
+        type=int,
+        default=1,
+        help="LLM attempts per generation. 1 (default) = no retry: a generation that "
+        "produces an invalid program spends its slot and the search moves on, which "
+        "is faster and keeps one generation == one model call.",
+    )
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--output", default=None, help="Output directory.")
     p.add_argument("--checkpoint", default=None, help="Resume from this checkpoint directory.")
@@ -191,6 +199,7 @@ def _apply_overrides(db_config: Any, args: argparse.Namespace) -> Dict[str, Any]
         applied[field] = value
 
     put("random_seed", args.seed)
+    put("retry_times", args.retries)
     put("strong_reserve", args.strong_reserve)
     put("block_size", args.block_size)
     put("max_trajectories", args.max_trajectories)
@@ -317,6 +326,7 @@ async def _main_async() -> int:
         "dollars": budget,
         "workers": config.max_parallel_iterations,
         "eval_timeout": args.eval_timeout,
+        "retries": args.retries,
         "seed": args.seed,
         "curation": args.curation,
         "relay_control": args.relay_control,

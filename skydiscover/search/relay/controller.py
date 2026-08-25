@@ -138,7 +138,7 @@ class RelayEvolveController(TieredController):
                 max_iterations,
                 checkpoint_callback,
                 post_process_result,
-                retry_times,
+                self.retry_times,
             )
 
         main_database = self.database
@@ -146,7 +146,7 @@ class RelayEvolveController(TieredController):
         self.bank.add_to_pool([self._to_candidate(self._root, trajectory=-1)])
         self.mark_phase("start", start_iteration)
 
-        cursor = await self._cheap_phase(start_iteration, max_iterations, retry_times or 3)
+        cursor = await self._cheap_phase(start_iteration, max_iterations, self.retry_times)
         # Dispatched vs completed: the generation cap counts what was launched,
         # the summary reports what actually produced a program.
         cheap_iterations = cursor - start_iteration
@@ -156,7 +156,7 @@ class RelayEvolveController(TieredController):
 
         remaining = max_iterations - cheap_iterations
         if remaining > 0 and not self.stop_requested():
-            await self._strong_phase(cursor, remaining, retry_times or 3, checkpoint_callback)
+            await self._strong_phase(cursor, remaining, self.retry_times, checkpoint_callback)
         elif remaining <= 0:
             logger.info("RelayEvolve: generation budget spent during the cheap phase.")
 

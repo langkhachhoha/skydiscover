@@ -36,6 +36,7 @@ ITERATIONS="300"
 DOLLARS="2"
 WORKERS="8"
 EVAL_TIMEOUT="60"
+RETRIES="1"
 SEED="1"
 TIMEOUT_IN=""
 EXTRA_ARGS=()
@@ -75,6 +76,9 @@ Models
 Execution
   --workers N               Generations in flight at once.     (default: 8)
   --eval-timeout N          Per-candidate evaluation timeout, seconds. (default: 60)
+  --retries N               LLM attempts per generation. 1 (default) = no retry: an
+                            invalid program spends its generation and the search moves
+                            on, so one generation is always one model call.
   --seed N                  Seed; tags the run name and output dir. (default: 1)
 
 RelayEvolve knobs (passed straight through to scripts/run_relay.py)
@@ -120,6 +124,7 @@ while [[ $# -gt 0 ]]; do
         --dollars)              DOLLARS="$2"; shift 2 ;;
         --workers)              WORKERS="$2"; shift 2 ;;
         --eval-timeout)         EVAL_TIMEOUT="$2"; shift 2 ;;
+        --retries)              RETRIES="$2"; shift 2 ;;
         --seed)                 SEED="$2"; shift 2 ;;
         --timeout)              TIMEOUT_IN="$2"; shift 2 ;;
         --strong-reserve|--block-size|--max-trajectories|--trajectory-horizon|\
@@ -194,7 +199,8 @@ if [[ "$USE_TMUX" == "1" && "${RUN_RELAY_INSIDE_TMUX:-0}" != "1" ]]; then
            --method "$METHOD" --benchmark-dir "$BENCHMARK_DIR"
            --cheap-model "$CHEAP_MODEL" --strong-model "$STRONG_MODEL"
            --iterations "$ITERATIONS" --dollars "$DOLLARS"
-           --workers "$WORKERS" --eval-timeout "$EVAL_TIMEOUT" --seed "$SEED"
+           --workers "$WORKERS" --eval-timeout "$EVAL_TIMEOUT" --retries "$RETRIES"
+           --seed "$SEED"
            --timeout "${TIMEOUT_SECS:-0}"
            --session "$SESSION" --run-id "$RUN_ID" --output-dir "$OUTPUT_DIR"
            --conda-env "$CONDA_ENV")
@@ -280,6 +286,7 @@ export SKYDISCOVER_COST_LOG="$OUTPUT_DIR/cost_log.jsonl"
     echo " models      : cheap=$CHEAP_MODEL"
     echo "               strong=$STRONG_MODEL"
     echo " budget      : iterations=$ITERATIONS dollars=\$${DOLLARS} eval-timeout=${EVAL_TIMEOUT}s"
+    echo " retries     : $RETRIES (1 = no retry)"
     echo " workers     : $WORKERS"
     echo " seed        : $SEED"
     [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && echo " extra       : ${EXTRA_ARGS[*]}"
@@ -316,6 +323,7 @@ CMD=(python "$REPO_ROOT/scripts/run_relay.py"
      --dollars "$DOLLARS"
      --workers "$WORKERS"
      --eval-timeout "$EVAL_TIMEOUT"
+     --retries "$RETRIES"
      --seed "$SEED"
      --output "$OUTPUT_DIR"
      ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"})

@@ -57,7 +57,7 @@ class RouterController(TieredController):
             self._track_best(best)
         self.mark_phase("start", start_iteration)
 
-        await self._route(start_iteration, max_iterations, retry_times or 3, checkpoint_callback)
+        await self._route(start_iteration, max_iterations, self.retry_times, checkpoint_callback)
 
         self.mark_phase("end", start_iteration + self.iterations_used)
         self.write_summary(self._extra_summary())
@@ -103,13 +103,21 @@ class AllStrongController(_SingleTierController):
 
 
 class FixedSwitchController(RouterController):
-    """Cheap exploration prefix, then strong for the remainder."""
+    """Cheap exploration prefix, then strong for the remainder.
+
+    The prefix ends at ``switch_fraction`` of the *generation* budget or of the
+    *dollar* budget, whichever comes first. Both bounds are needed: the cheap
+    model is roughly 14x cheaper per call, so half the dollars can be more
+    generations than the run is allowed — a dollars-only rule would never fire
+    and this baseline would silently degenerate into All-cheap.
+    """
 
     method_name = "fixed_switch"
 
     def __init__(self, controller_input: DiscoveryControllerInput):
         super().__init__(controller_input)
         self.switch_fraction = float(getattr(self.config.search.database, "switch_fraction", 0.5))
+        self._switch_reason = "generation_cap"
 
     async def _route(self, start_iteration, max_iterations, retry_times, checkpoint_callback):
         self.phase = CHEAP
@@ -123,10 +131,11 @@ class FixedSwitchController(RouterController):
         switch_iteration = start_iteration + int(round(max_iterations * self.switch_fraction))
 
         while cursor < end and not self.stop_requested():
-            if switch_budget is not None:
-                if self.spent_usd() >= switch_budget:
-                    break
-            elif cursor >= switch_iteration:
+            if cursor >= switch_iteration:
+                self._switch_reason = "generation_fraction"
+                break
+            if switch_budget is not None and self.spent_usd() >= switch_budget:
+                self._switch_reason = "budget_fraction"
                 break
             count = min(self.max_parallel, end - cursor)
             await self.run_block(
@@ -141,9 +150,11 @@ class FixedSwitchController(RouterController):
         self.handoff_iteration = cursor
         self.mark_phase("switch", cursor)
         logger.info(
-            "Fixed-switch: handing over to the strong model at generation %d ($%.4f spent)",
+            "Fixed-switch: handing over to the strong model at generation %d "
+            "($%.4f spent, trigger: %s)",
             cursor,
             self.spent_usd(),
+            self._switch_reason,
         )
 
         if cursor < end and not self.stop_requested():
@@ -157,7 +168,10 @@ class FixedSwitchController(RouterController):
             )
 
     def _extra_summary(self) -> Dict:
-        return {"switch_fraction": self.switch_fraction}
+        return {
+            "switch_fraction": self.switch_fraction,
+            "switch_reason": self._switch_reason,
+        }
 
 
 class RandomRouteController(RouterController):

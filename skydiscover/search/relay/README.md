@@ -86,6 +86,20 @@ See `docs/SERVER_GUIDE.md` §6c.
 | `relay_progress.jsonl` | One record per generation: tier, phase, score, best-so-far, cumulative cost — enough for a cost-vs-score curve |
 | `cost_log.jsonl` / `.totals.json` | Per-call spend as reported by OpenRouter |
 
+## Measured throughput
+
+`benchmarks/math/circle_packing`, 8 workers, `--retries 1`, OpenRouter:
+
+| Model | Latency / generation | Cost / generation |
+|---|---|---|
+| `qwen/qwen3-30b-a3b-instruct-2507` | 31 s (19–62 s) | $0.0007 |
+| `moonshotai/kimi-k2` | 74 s (37–179 s) | $0.0099 |
+
+So 300 generations takes roughly 20–30 min all-cheap and 30–50 min for the
+mixed methods, and a $2 cap binds only for All-strong (it buys ~200 strong
+generations). Raising `--workers` scales the wall clock down roughly linearly
+until the provider rate-limits.
+
 ## Budget
 
 `--dollars` is enforced by `skydiscover.llm.cost_tracker`: it stops the run

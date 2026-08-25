@@ -161,6 +161,55 @@ def test_methods_complete_and_report(search_type, benchmark, tmp_path, monkeypat
     assert all(record["tier"] in ("cheap", "strong") for record in progress)
 
 
+def test_retries_are_off_by_default_and_failures_spend_a_generation(
+    benchmark, tmp_path, monkeypatch
+):
+    """One generation == one model call: an invalid program is not retried."""
+    monkeypatch.delenv("SKYDISCOVER_MAX_COST_USD", raising=False)
+
+    from skydiscover import Runner
+    from skydiscover.search.relay.tiered import TieredController
+
+    config = _make_config("relay_all_cheap", workers=2)
+    config.max_iterations = 6
+    assert config.search.database.retry_times == 1
+
+    runner = Runner(
+        initial_program_path=str(benchmark / "initial_program.py"),
+        evaluation_file=str(benchmark / "evaluator.py"),
+        config=config,
+        output_dir=str(tmp_path / "out_noretry"),
+    )
+
+    counter: dict = {}
+
+    class _BrokenPool(_StubPool):
+        async def generate(self, system_message, messages, **kwargs):
+            self.counter[self.name] = self.counter.get(self.name, 0) + 1
+            await asyncio.sleep(0)
+            return LLMResponse(text="no code block here at all")
+
+    real_init = TieredController.__init__
+
+    def init(self, controller_input):
+        real_init(self, controller_input)
+        self.cheap_llms = _BrokenPool("cheap", 0.0, counter)
+        self.strong_llms = _StubPool("strong", 0.05, counter)
+        self.llms = self.cheap_llms
+
+    TieredController.__init__ = init
+    try:
+        asyncio.run(runner.run(iterations=config.max_iterations))
+    finally:
+        TieredController.__init__ = real_init
+
+    # Six generations, six calls — no generation was retried.
+    assert counter["cheap"] == 6
+
+    summary = json.loads((tmp_path / "out_noretry" / "relay_summary.json").read_text())
+    assert summary["iterations_used"] == 6
+
+
 def test_all_cheap_never_calls_the_strong_model(benchmark, tmp_path, monkeypatch):
     monkeypatch.delenv("SKYDISCOVER_MAX_COST_USD", raising=False)
     _, output_dir, counter = _run("relay_all_cheap", benchmark, tmp_path)

@@ -777,11 +777,60 @@ khác nhau **chỉ ở lịch dùng model**. Tất cả đều chạy **song son
 | Ngân sách | **$2 / run** — chạm ngưỡng là **bắt buộc dừng** (dừng êm, giữ nguyên kết quả) |
 | Timeout mỗi eval | **60 s** |
 | Worker song song | 8 |
+| Retry | **tắt** (`--retries 1`) |
+
+**Không retry.** Mặc định mỗi generation gọi model đúng **một lần**. Nếu model
+sinh ra chương trình hỏng (parse lỗi, hoặc chấm ra `validity=0`), generation đó
+coi như đã tiêu và search đi tiếp — thay vì thử lại 2–3 lần trong cùng một
+iteration. Hai lợi ích: (1) nhanh hơn hẳn, vì retry chạy *tuần tự* bên trong một
+worker và làm nghẽn slot đó; (2) kế toán trung thực — một generation luôn đúng
+bằng một lời gọi LLM, nên trần 300 iteration cũng là trần 300 lời gọi. Muốn quay
+lại hành vi cũ thì `--retries 3`.
 
 Ba trần (iteration / tiền / thời gian) cùng có hiệu lực; **cái nào chạm trước
 thì thắng**. Trần tiền là trần *mềm* ở mức một vòng lặp: các request đã bay đi
 vẫn hoàn thành, nên tổng cuối có thể nhỉnh hơn $2 chút xíu (kiểu $2.03). Muốn
 chặn cứng tuyệt đối thì thêm `--timeout`.
+
+#### 6c.1b Chạy 300 iteration mất bao lâu, tốn bao nhiêu?
+
+Đo thật trên `benchmarks/math/circle_packing`, 8 worker, `--retries 1`, mỗi
+model 16 generation liên tiếp (OpenRouter, tháng 8/2026):
+
+| Model | Trễ / generation | Chi phí / generation | Sinh code hỏng |
+|---|---|---|---|
+| `qwen3-30b-a3b-instruct` (cheap) | 31 s (19–62 s) | $0.0007 | 5/16 |
+| `kimi-k2` (strong) | 74 s (37–179 s) | $0.0099 | 3/16 |
+
+Với 8 worker, thời gian ≈ `300 × trễ / 8`. Cộng thêm ~20–50 % cho đuôi và
+jitter của provider:
+
+| Method | 300 generation mất | Tốn | Trần nào chạm trước |
+|---|---|---|---|
+| `all_cheap` | **20–30 phút** | ~$0.21 | iteration |
+| `all_strong` | **30–50 phút** | **$2 → dừng ở ~200 gen** | **tiền** |
+| `relayevolve` | **30–45 phút** | ~$1.6 | iteration |
+| `fixed_switch` | **30–45 phút** | ~$1.6 | iteration |
+| `random` (p=0.5) | **30–45 phút** | ~$1.6 | iteration |
+| `bandit` | 25–50 phút | $1–2 | tuỳ arm nào thắng |
+
+Cả 6 method của một benchmark, chạy **song song** trong 12 tmux session
+(6 × 2 seed): khoảng **45–70 phút** và **~$16–20**. Nếu chạy tuần tự thì cỡ
+6–8 tiếng. Bốn benchmark: nhân 4.
+
+Vài lưu ý đọc bảng:
+
+- **`all_strong` là method duy nhất bị tiền chặn** — $2 chỉ mua được ~200
+  generation kimi-k2. Đây đúng là tình huống bài báo dựng ra (so sánh dưới trần
+  chi phí chung), không phải lỗi cấu hình.
+- Ngân sách cheap của RelayEvolve (`(1-0.85) × $2 = $0.30`) mua được ~430
+  generation, nhiều hơn trần 150 generation của pha cheap. Nghĩa là pha cheap
+  luôn kết thúc vì **Relay Gain bão hoà** hoặc chạm trần generation, chứ không
+  phải vì hết tiền — đúng ý đồ thiết kế.
+- Trễ của provider dao động mạnh (kimi-k2 từ 37 s tới 179 s cho cùng một
+  prompt), nên coi các con số trên là khoảng ước lượng, không phải cam kết.
+- Muốn nhanh hơn: tăng `--workers`. 16 worker gần như chia đôi thời gian, đổi
+  lại nguy cơ bị OpenRouter rate-limit khi chạy nhiều job cùng lúc.
 
 #### 6c.2 Chạy một job
 
@@ -905,6 +954,7 @@ Relay block 7: DEEPEN traj=2 (+5 gens) | gain=0.0182 rel=0.0231 | bank F=0.7914 
 | `--iterations N` | `300` | Trần số generation |
 | `--dollars N` | `2` | Trần chi phí USD (0 = tắt) |
 | `--eval-timeout N` | `60` | Timeout mỗi lần chấm, giây |
+| `--retries N` | `1` | Số lần gọi model mỗi generation. `1` = không retry |
 | `--workers N` | `8` | Số generation chạy song song |
 | `--seed N` | `1` | Seed; gắn vào tên run và output dir |
 | `--strong-model ID` | `openrouter/moonshotai/kimi-k2` | Model lớn |

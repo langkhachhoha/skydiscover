@@ -68,6 +68,10 @@ class TieredController(DiscoveryController):
 
         opts = self.config.search.database
         self.max_parallel = max(1, int(self.config.max_parallel_iterations))
+        # Attempts per generation. Defaults to 1: retries inside an iteration
+        # hide model calls from the generation budget and serialise the worker,
+        # so a failed generation is counted and dropped instead.
+        self.retry_times = max(1, int(getattr(opts, "retry_times", 1)))
         self.total_budget_usd: Optional[float] = budget_usd()
         self.strong_reserve = float(getattr(opts, "strong_reserve", 0.85))
 
@@ -101,6 +105,8 @@ class TieredController(DiscoveryController):
             self.max_parallel,
             f"${self.total_budget_usd:.2f}" if self.total_budget_usd else "unbounded",
         )
+        if self.retry_times == 1:
+            logger.info("Retries disabled: a failed generation spends its slot and is dropped.")
 
     # ------------------------------------------------------------------
     # Tier routing
