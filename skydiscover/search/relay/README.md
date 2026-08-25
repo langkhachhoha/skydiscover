@@ -100,6 +100,18 @@ mixed methods, and a $2 cap binds only for All-strong (it buys ~200 strong
 generations). Raising `--workers` scales the wall clock down roughly linearly
 until the provider rate-limits.
 
+## Reading results back
+
+Run directories are self-describing, so results survive forgetting the tmux
+session name:
+
+```bash
+python scripts/relay_summarize.py                 # table of every run
+python scripts/relay_summarize.py --agg           # mean +/- std over seeds
+python scripts/relay_summarize.py --csv out.csv
+python scripts/relay_summarize.py --path outputs/server/<run-id>   # one run in full
+```
+
 ## Budget
 
 `--dollars` is enforced by `skydiscover.llm.cost_tracker`: it stops the run

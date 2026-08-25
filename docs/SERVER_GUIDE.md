@@ -933,6 +933,82 @@ Relay block 7: DEEPEN traj=2 (+5 gens) | gain=0.0182 rel=0.0231 | bank F=0.7914 
 🔀 Relay handoff at generation 63: 8 seed(s), best=2.4188, spent $0.2043 (relay_gain_saturated)
 ```
 
+#### 6c.5b Quên tên session rồi thì xem kết quả kiểu gì?
+
+**Không cần nhớ tên session.** Tên session chỉ để `tmux attach` lúc job đang
+chạy; kết quả nằm trong thư mục run, và tên thư mục đã mã hoá sẵn
+method + benchmark + seed + ngày giờ:
+
+```
+outputs/server/relay_<method>_<benchmark>_seed<N>_<YYYYmmdd-HHMMSS>/
+```
+
+Ba cách, từ nhanh tới chi tiết:
+
+**1. Bảng tổng hợp mọi run** — cách hay dùng nhất:
+
+```bash
+python scripts/relay_summarize.py
+```
+
+```
+method         benchmark              seed        score  gens     cost  cheap strong  handoff  run dir
+------------------------------------------------------------------------------------------------------
+relayevolve    circle_packing            1     2.536400   300   $1.612    150    150      151  outputs/server/relay_relayevolve_..._seed1_20260826-0913
+all_strong     circle_packing            1     2.445300   198   $2.014      0    198        -  outputs/server/relay_all_strong_..._seed1_20260826-0913  [$]
+...
+[$] = the run stopped because it reached its dollar budget.
+```
+
+Lọc lại nếu nhiều quá:
+
+```bash
+python scripts/relay_summarize.py --benchmark circle_packing
+python scripts/relay_summarize.py --method relayevolve --seed 1
+```
+
+**2. Bảng mean ± std theo seed** — đúng dạng bảng kết quả trong bài báo:
+
+```bash
+python scripts/relay_summarize.py --agg
+```
+
+```
+=== circle_packing ===
+method          n         mean        std         best   mean $
+--------------------------------------------------------------
+relayevolve     2     2.529100   0.010325     2.536400   $1.612
+all_strong      2     2.441200   0.005800     2.445300   $2.014
+```
+
+Xuất ra CSV để vẽ hình: `--csv relay.csv`.
+
+**3. Một run cụ thể, xem đầy đủ:**
+
+```bash
+python scripts/relay_summarize.py --path outputs/server/relay_relayevolve_..._seed1_20260826-0913
+```
+
+In ra tham số đã dùng, điểm test, chi phí / trần, token, thời gian, handoff ở
+generation nào vì lý do gì, và **từng block Grow/Deepen với Relay Gain** —
+đúng thứ cần để kiểm tra cơ chế relay có chạy như thiết kế không.
+
+**Các cách khác đã có sẵn:**
+
+```bash
+tmux ls                                   # session nào CÒN sống (job đã xong thì mất tên)
+./scripts/server/result.sh -l             # 20 run gần nhất, đánh số -1, -2, ...
+./scripts/server/result.sh -2             # in kết quả của run gần thứ hai
+ls -t outputs/server/ | head -20          # thô nhất, nhưng luôn đúng
+
+# Còn nhớ mang máng tên session? collect_logs.sh tra ngược session -> run dir
+./scripts/server/collect_logs.sh relay_relayevolve_cp_seed1
+```
+
+Lưu ý: job chạy xong thì tmux session **vẫn còn** (pane hiện
+`=== run finished (exit N) ===` và chờ Enter), nên `tmux ls` vẫn thấy. Chỉ khi
+bạn `kill-session` hoặc server reboot thì tên mới mất — lúc đó dùng cách 1.
+
 #### 6c.6 File kết quả
 
 | File | Nội dung |
@@ -944,6 +1020,7 @@ Relay block 7: DEEPEN traj=2 (+5 gens) | gain=0.0182 rel=0.0231 | bank F=0.7914 
 | `cost_log.jsonl` / `.totals.json` | Chi phí từng lời gọi LLM do OpenRouter báo về |
 | `checkpoints/checkpoint_N/` | Toàn bộ quần thể tại generation N |
 | `run.log` | Log đầy đủ + footer tóm tắt |
+| `run_config.json` | Tham số đã dùng cho run này (để tra ngược khi quên) |
 
 #### 6c.7 Bảng tham số `run_relay.sh`
 
