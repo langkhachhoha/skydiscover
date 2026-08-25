@@ -486,6 +486,58 @@ class OpenEvolveNativeDatabaseConfig(DatabaseConfig):
 
 
 @dataclass
+class RelayDatabaseConfig(OpenEvolveNativeDatabaseConfig):
+    """Shared knobs for RelayEvolve and the cheap/strong routing baselines.
+
+    The population fields are inherited unchanged from OpenEvolve — every
+    method in the comparison evolves the same way and differs only in which
+    model is asked for the next mutation.
+    """
+
+    # --- budget split ---------------------------------------------------
+    # Fraction of the dollar budget reserved for the strong model. 0.85 is the
+    # paper's default and the peak of its budget-split sensitivity sweep.
+    strong_reserve: float = 0.85
+
+    # --- Grow/Deepen block scheduling (RelayEvolve) ----------------------
+    block_size: int = 5              # h: generations advanced per block
+    max_trajectories: int = 5        # cap on concurrent cheap trajectories
+    trajectory_horizon: int = 6      # cap on blocks per trajectory
+    init_grow_blocks: int = 2        # warm-up Grows kept out of bandit history
+    cheap_max_iteration_frac: float = 0.5   # guard on the cheap generation cap
+    ucb_c: float = 0.5               # UCB exploration constant
+    ucb_window: int = 8              # w: recent-reward window
+
+    # --- relay objective F_C(S) -----------------------------------------
+    bank_size: int = 8               # k: relay bank / seed population size
+    quality_top_r: int = 3           # r in Q_r
+    relay_lambda: float = 0.5        # lambda in Eq. 5
+    code_view_eta: float = 0.7       # eta in Eq. 3
+    epsilon_f: float = 1e-3          # stabilising floor in Eq. 8
+    max_candidate_pool: int = 600
+
+    # --- adaptive handoff ------------------------------------------------
+    epsilon_rel: float = 0.02        # saturation threshold on relative gain
+    patience: int = 3                # p: consecutive low-gain blocks
+
+    # --- candidate embeddings -------------------------------------------
+    embedding_backend: str = "hash"  # "hash" (local, free) or "api"
+    embedding_dim: int = 512
+    embedding_model: Optional[str] = None
+    embedding_api_base: Optional[str] = None
+    embedding_api_key: Optional[str] = None
+
+    # --- routing baselines ----------------------------------------------
+    switch_fraction: float = 0.5     # Fixed-switch handover point
+    p_strong: float = 0.5            # Random: P(strong) per generation
+
+    # --- ablation switches (Figure 4) -----------------------------------
+    random_allocation: bool = False  # replace Grow/Deepen with uniform choice
+    disable_relay_stop: bool = False  # drop the Relay-Gain stopping rule
+    curation_random: bool = False    # random seeds instead of greedy curation
+
+
+@dataclass
 class ClaudeCodeConfig(DatabaseConfig):
     """Configuration for the Claude Code baseline.
 
@@ -574,6 +626,12 @@ _DB_CONFIG_BY_TYPE: Dict[str, type] = {
     "topk": DatabaseConfig,
     "adaevolve": AdaEvolveDatabaseConfig,
     "openevolve_native": OpenEvolveNativeDatabaseConfig,
+    "relayevolve": RelayDatabaseConfig,
+    "relay_all_cheap": RelayDatabaseConfig,
+    "relay_all_strong": RelayDatabaseConfig,
+    "relay_fixed_switch": RelayDatabaseConfig,
+    "relay_random": RelayDatabaseConfig,
+    "relay_bandit": RelayDatabaseConfig,
     "gepa_native": GEPANativeDatabaseConfig,
     "claude_code": ClaudeCodeConfig,
     "fore": FOREDatabaseConfig,

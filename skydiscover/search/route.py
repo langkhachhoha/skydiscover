@@ -32,6 +32,15 @@ from skydiscover.search.registry import (
     register_controller,
     register_database,
 )
+from skydiscover.search.relay.baselines import (
+    AllCheapController,
+    AllStrongController,
+    BanditRouteController,
+    FixedSwitchController,
+    RandomRouteController,
+)
+from skydiscover.search.relay.controller import RelayEvolveController
+from skydiscover.search.relay.database import RelayEvolveDatabase, RouterDatabase
 from skydiscover.search.topk.database import TopKDatabase
 
 logger = logging.getLogger(__name__)
@@ -65,6 +74,21 @@ register_controller("adaevolve", AdaEvolveController)
 
 # OpenEvolve Native
 register_database("openevolve_native", OpenEvolveNativeDatabase)
+
+# RelayEvolve: adaptive population handoff (cheap explore -> strong refine)
+register_database("relayevolve", RelayEvolveDatabase)
+register_controller("relayevolve", RelayEvolveController)
+
+# Cheap/strong routing baselines, same backend and same budget accounting
+for _relay_type, _relay_controller in (
+    ("relay_all_cheap", AllCheapController),
+    ("relay_all_strong", AllStrongController),
+    ("relay_fixed_switch", FixedSwitchController),
+    ("relay_random", RandomRouteController),
+    ("relay_bandit", BanditRouteController),
+):
+    register_database(_relay_type, RouterDatabase)
+    register_controller(_relay_type, _relay_controller)
 
 # EvoX
 register_controller("evox", CoEvolutionController)

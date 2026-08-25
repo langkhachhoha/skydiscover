@@ -22,6 +22,7 @@ Trên server bạn **không sửa code**, chỉ `git pull` rồi chạy script.
 5. [Cài môi trường conda tên `minhhieu`](#5-cài-môi-trường-conda-tên-minhhieu)
 6. [Chạy benchmark](#6-chạy-benchmark)
    — [6b. LLM-SRBench / LSR-Synth](#6b-llm-srbench--lsr-synth--dùng-script-riêng)
+   — [6c. RelayEvolve + baseline cheap/strong](#6c-relayevolve--5-baseline-cheapstrong--dùng-run_relaysh)
 7. [tmux — chạy rồi tắt máy vẫn không sao](#7-tmux--chạy-rồi-tắt-máy-vẫn-không-sao)
 8. [Xem log / xem kết quả](#8-xem-log--xem-kết-quả)
 9. [Lấy kết quả từ server về máy](#9-lấy-kết-quả-từ-server-về-máy)
@@ -741,6 +742,231 @@ biến dạng cao hơn). Không tập nào được dùng để dẫn dắt sear
 Chi tiết đầy đủ: [`docs/LSR_SYNTH_GUIDE.md`](LSR_SYNTH_GUIDE.md) — §2.1 chế độ
 full, §5.1 score mode (tại sao log hiện `score: 3.0` thay vì `0.999`), §5.2 định
 nghĩa và công thức từng metric, §7 xử lý sự cố.
+
+### 6c. RelayEvolve + 5 baseline cheap/strong — dùng `run_relay.sh`
+
+**RelayEvolve** (bài "Relay, Don't Route") không chọn model cho *từng lời gọi*
+mà chọn thời điểm **bàn giao cả quần thể**: model rẻ khám phá nhiều quỹ đạo
+song song, một *relay bank* gọn (chất lượng + đa dạng) được cập nhật sau mỗi
+block, *Relay Gain* (mức cải thiện biên của bank đó) vừa là reward cho bandit
+Grow–Deepen vừa là tín hiệu dừng; khi Relay Gain bão hoà, tập seed đã được
+curate sẽ khởi tạo **một** quần thể duy nhất cho model mạnh tinh chỉnh nốt
+ngân sách.
+
+Toàn bộ 6 method dưới đây chạy trên **cùng backend OpenEvolve** (MAP-Elites +
+island), cùng evaluator, cùng prompt, cùng trần iteration và cùng trần tiền —
+khác nhau **chỉ ở lịch dùng model**. Tất cả đều chạy **song song nhiều worker**
+(mặc định 8 generation cùng lúc), không phải bản 1 luồng.
+
+| `--method` | Là gì |
+|---|---|
+| `relayevolve` | Cheap khám phá nhiều quỹ đạo → Relay-Gain handoff → strong tinh chỉnh |
+| `all_cheap` | Toàn bộ search dùng model nhỏ |
+| `all_strong` | Toàn bộ search dùng model lớn |
+| `fixed_switch` | Cheap trong một tiền tố cố định của ngân sách, rồi strong |
+| `random` | Mỗi generation tung đồng xu độc lập giữa hai model |
+| `bandit` | UCB hai tay {cheap, strong}, reward = mức cải thiện best-so-far thực tế |
+
+#### 6c.1 Mặc định
+
+| Thứ | Giá trị |
+|---|---|
+| Model lớn (strong) | `openrouter/moonshotai/kimi-k2` |
+| Model nhỏ (cheap) | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` |
+| Iteration | **300** |
+| Ngân sách | **$2 / run** — chạm ngưỡng là **bắt buộc dừng** (dừng êm, giữ nguyên kết quả) |
+| Timeout mỗi eval | **60 s** |
+| Worker song song | 8 |
+
+Ba trần (iteration / tiền / thời gian) cùng có hiệu lực; **cái nào chạm trước
+thì thắng**. Trần tiền là trần *mềm* ở mức một vòng lặp: các request đã bay đi
+vẫn hoàn thành, nên tổng cuối có thể nhỉnh hơn $2 chút xíu (kiểu $2.03). Muốn
+chặn cứng tuyệt đối thì thêm `--timeout`.
+
+#### 6c.2 Chạy một job
+
+```bash
+cd ~/skydiscover
+./scripts/server/run_relay.sh --method relayevolve --tmux \
+    --benchmark-dir benchmarks/math/circle_packing \
+    --iterations 300 --dollars 2 --seed 1
+```
+
+Baseline thì chỉ đổi `--method`:
+
+```bash
+./scripts/server/run_relay.sh --method all_cheap     --tmux --benchmark-dir benchmarks/math/circle_packing --seed 1
+./scripts/server/run_relay.sh --method fixed_switch  --tmux --benchmark-dir benchmarks/math/circle_packing --seed 1
+./scripts/server/run_relay.sh --method random        --tmux --benchmark-dir benchmarks/math/circle_packing --seed 1
+./scripts/server/run_relay.sh --method bandit        --tmux --benchmark-dir benchmarks/math/circle_packing --seed 1
+```
+
+Thử trước khi tốn tiền — in ra đúng dòng lệnh rồi thoát, **không gọi API**:
+
+```bash
+./scripts/server/run_relay.sh --method relayevolve --dry-run \
+    --benchmark-dir benchmarks/math/circle_packing
+```
+
+#### 6c.3 Chạy đủ 6 method × 2 seed trên một benchmark
+
+Mỗi lệnh là một tmux session riêng, chạy **song song**:
+
+```bash
+cd ~/skydiscover
+BM=benchmarks/math/circle_packing
+for m in relayevolve all_cheap all_strong fixed_switch random bandit; do
+  for s in 1 2; do
+    ./scripts/server/run_relay.sh --method "$m" --tmux \
+        --benchmark-dir "$BM" \
+        --iterations 300 --dollars 2 --eval-timeout 60 --workers 8 --seed "$s" \
+        --session "relay_${m}_cp_seed${s}"
+    sleep 2
+  done
+done
+```
+
+12 job × $2 = tối đa **$24** cho một benchmark. Nếu server yếu (hoặc bị
+rate-limit), hạ `--workers` xuống 4, hoặc bỏ `--tmux` trong vòng lặp và bọc cả
+vòng lặp trong **một** session để chạy tuần tự.
+
+#### 6c.4 Chạy cả 4 benchmark của bài báo
+
+```bash
+cd ~/skydiscover
+for bm in benchmarks/math/circle_packing \
+          benchmarks/math/circle_packing_rect \
+          benchmarks/ADRS/txn_scheduling \
+          benchmarks/ADRS/prism; do
+  tag=$(basename "$bm")
+  for m in relayevolve all_cheap all_strong fixed_switch random bandit; do
+    for s in 1 2; do
+      ./scripts/server/run_relay.sh --method "$m" --tmux \
+          --benchmark-dir "$bm" \
+          --iterations 300 --dollars 2 --eval-timeout 60 --workers 8 --seed "$s" \
+          --session "relay_${m}_${tag}_seed${s}"
+      sleep 2
+    done
+  done
+done
+```
+
+48 job. **Đừng phóng hết một lúc** trên một server nhỏ: mỗi job giữ 8 request
+đồng thời, tức là tối đa 384 request song song tới OpenRouter. Chạy từng
+benchmark một, hoặc kẹp `--workers 4`.
+
+#### 6c.5 Theo dõi
+
+```bash
+tmux ls                                              # job nào đang sống
+tmux attach -t relay_relayevolve_cp_seed1            # xem trực tiếp; thoát: Ctrl-b rồi d
+tail -f outputs/server/<run-id>/run.log              # theo log
+
+# Tiêu bao nhiêu tiền rồi
+cat outputs/server/<run-id>/cost_log.totals.json
+
+# Báo cáo relay: handoff ở generation nào, vì sao, seed nào được chọn,
+# mỗi tier gọi bao nhiêu lần
+cat outputs/server/<run-id>/relay_summary.json
+
+# Đường cong cost-vs-score (mỗi generation một dòng JSON)
+tail outputs/server/<run-id>/relay_progress.jsonl
+```
+
+Dòng log của mỗi generation đã kèm sẵn tiến độ tiêu tiền:
+`[cost=$1.2345/$2.00, llm_calls=87]`. Lúc chạm trần có dòng
+`💸 Spend budget reached: ...` rồi run dừng êm với **exit status 0**.
+
+Với `relayevolve`, log còn có một dòng cho mỗi block:
+
+```
+Relay block 7: DEEPEN traj=2 (+5 gens) | gain=0.0182 rel=0.0231 | bank F=0.7914 | pool=41 | best=2.4188 | $0.1732
+🔀 Relay handoff at generation 63: 8 seed(s), best=2.4188, spent $0.2043 (relay_gain_saturated)
+```
+
+#### 6c.6 File kết quả
+
+| File | Nội dung |
+|---|---|
+| `best/best_program.py` | Chương trình tốt nhất, đã chấm lại ở chế độ `test` |
+| `best/best_program_info.json` | Điểm số của nó |
+| `relay_summary.json` | Method, model, handoff, seed, số call theo tier, tổng token/chi phí |
+| `relay_progress.jsonl` | Mỗi generation: tier, phase, score, best-so-far, chi phí tích luỹ |
+| `cost_log.jsonl` / `.totals.json` | Chi phí từng lời gọi LLM do OpenRouter báo về |
+| `checkpoints/checkpoint_N/` | Toàn bộ quần thể tại generation N |
+| `run.log` | Log đầy đủ + footer tóm tắt |
+
+#### 6c.7 Bảng tham số `run_relay.sh`
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--method NAME` | `relayevolve` | Một trong 6 method ở bảng trên |
+| `--benchmark-dir DIR` | `benchmarks/math/circle_packing` | Thư mục benchmark |
+| `--iterations N` | `300` | Trần số generation |
+| `--dollars N` | `2` | Trần chi phí USD (0 = tắt) |
+| `--eval-timeout N` | `60` | Timeout mỗi lần chấm, giây |
+| `--workers N` | `8` | Số generation chạy song song |
+| `--seed N` | `1` | Seed; gắn vào tên run và output dir |
+| `--strong-model ID` | `openrouter/moonshotai/kimi-k2` | Model lớn |
+| `--cheap-model ID` | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` | Model nhỏ |
+| `--timeout SPEC` | tắt | Trần thời gian cứng (`3h` / `180m` / `600s` / `0`) |
+| `--strong-reserve F` | `0.85` | Phần ngân sách dành cho model mạnh |
+| `--block-size N` | `5` | `h` — số generation mỗi block Grow/Deepen |
+| `--max-trajectories N` | `5` | Trần số quỹ đạo cheap |
+| `--trajectory-horizon N` | `6` | Trần số block mỗi quỹ đạo |
+| `--bank-size N` | `8` | `k` — kích thước relay bank = số seed bàn giao |
+| `--relay-lambda F` | `0.5` | `λ` — cân bằng chất lượng vs đa dạng trong `F_C(S)` |
+| `--epsilon-rel F` | `0.02` | Ngưỡng bão hoà Relay Gain |
+| `--patience N` | `3` | Số block gain thấp liên tiếp trước khi handoff |
+| `--curation MODE` | `full` | Ablation curation: `full` / `quality` / `diversity` / `random` |
+| `--relay-control MODE` | `full` | Ablation cơ chế relay: `full` / `random` / `no_stop` / `random_no_stop` |
+| `--switch-fraction F` | `0.5` | Điểm chuyển của `fixed_switch` |
+| `--p-strong F` | `0.5` | `random`: xác suất chọn model mạnh |
+| `--advanced-options JSON` | — | Override bất kỳ field nào của `search.database` |
+| `--tmux` | tắt | Chạy nền trong tmux |
+| `--session NAME` | = run id | Tên tmux session |
+| `--output-dir DIR` | `outputs/server/<run-id>` | Nơi ghi kết quả |
+| `--dry-run` | tắt | In lệnh rồi thoát, không gọi API |
+
+#### 6c.8 Ablation (Figure 4 của bài báo)
+
+```bash
+# Cơ chế relay: bỏ bandit / bỏ luật dừng
+for c in full random no_stop random_no_stop; do
+  ./scripts/server/run_relay.sh --method relayevolve --tmux \
+      --benchmark-dir benchmarks/math/circle_packing \
+      --relay-control "$c" --session "relay_ctrl_${c}"
+done
+
+# Mục tiêu curation: đủ Q+D / chỉ Q / chỉ D / seed ngẫu nhiên
+for c in full quality diversity random; do
+  ./scripts/server/run_relay.sh --method relayevolve --tmux \
+      --benchmark-dir benchmarks/math/circle_packing \
+      --curation "$c" --session "relay_cur_${c}"
+done
+
+# Độ nhạy theo tỉ lệ chia ngân sách
+for r in 0.65 0.75 0.85 0.95; do
+  ./scripts/server/run_relay.sh --method relayevolve --tmux \
+      --benchmark-dir benchmarks/math/circle_packing \
+      --strong-reserve "$r" --session "relay_split_${r/./_}"
+done
+```
+
+#### 6c.9 Chạy không qua tmux (test nhanh)
+
+```bash
+python scripts/run_relay.py --method relayevolve \
+    --benchmark-dir benchmarks/math/circle_packing \
+    --iterations 10 --dollars 0.3 --workers 4 --eval-timeout 60 --seed 1
+```
+
+Test offline (không gọi API, không tốn tiền), stub LLM nhưng chạy thật controller,
+population, evaluator và vòng lặp song song:
+
+```bash
+python -m pytest tests/search/test_relay.py -q
+```
 
 ---
 
