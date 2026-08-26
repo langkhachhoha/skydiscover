@@ -130,6 +130,7 @@ class RelayEvolveController(TieredController):
         post_process_result: Optional[bool] = True,
         retry_times: Optional[int] = 3,
     ) -> Optional[Union[Program, SerializableResult]]:
+        self.requested_iterations = max_iterations
         self._root = self._resolve_root()
         if self._root is None:
             logger.error("RelayEvolve needs an evaluated initial program; falling back.")

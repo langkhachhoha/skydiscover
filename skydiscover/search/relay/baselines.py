@@ -52,6 +52,7 @@ class RouterController(TieredController):
         post_process_result: Optional[bool] = True,
         retry_times: Optional[int] = 3,
     ) -> Optional[Union[Program, SerializableResult]]:
+        self.requested_iterations = max_iterations
         best = self.database.get_best_program()
         if best is not None:
             self._track_best(best)

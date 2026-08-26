@@ -100,6 +100,23 @@ mixed methods, and a $2 cap binds only for All-strong (it buys ~200 strong
 generations). Raising `--workers` scales the wall clock down roughly linearly
 until the provider rate-limits.
 
+## Knowing a run is done
+
+Every method closes with the same block, whichever of its three caps it hit:
+
+```
+ [OK] RUN FINISHED — all_strong on circle_packing (seed 1)
+ stopped because : dollar budget reached ($2.0143 of $2.00)
+ best score      : 2.445300   (test-mode)
+ generations     : 198 of 300
+ ...
+```
+
+`stopped because` is the field that matters: a run that ran out of money at
+generation 198 is not the same result as one that finished 300, and without
+that line the two are indistinguishable from the score alone. The `handoff`
+line appears only for the methods that actually hand over.
+
 ## Reading results back
 
 Run directories are self-describing, so results survive forgetting the tmux

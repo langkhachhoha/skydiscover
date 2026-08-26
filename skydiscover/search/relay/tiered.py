@@ -77,6 +77,7 @@ class TieredController(DiscoveryController):
 
         self.phase = CHEAP
         self.handoff_iteration: Optional[int] = None
+        self.requested_iterations: Optional[int] = None
         self._start_time = time.time()
         self._tier_calls: Dict[str, int] = {CHEAP: 0, STRONG: 0}
         self._phase_cost_marks: List[Dict[str, Any]] = []
@@ -227,6 +228,23 @@ class TieredController(DiscoveryController):
             }
         )
 
+    def stop_reason(self) -> str:
+        """Why the run ended — the same vocabulary for every method.
+
+        Every controller here can end three ways, and a run that stopped on
+        its dollar cap looks exactly like a completed one unless it says so.
+        """
+        if self.budget_stop_triggered:
+            return "budget_exhausted"
+        if self.shutdown_event.is_set():
+            return "interrupted"
+        if (
+            self.requested_iterations is not None
+            and self.iterations_used < self.requested_iterations
+        ):
+            return "generations_ended_early"
+        return "generation_cap"
+
     def _track_best(self, program: Program) -> None:
         score = get_score(program.metrics or {})
         if score > self.best_score:
@@ -280,6 +298,8 @@ class TieredController(DiscoveryController):
             "budget_usd": self.total_budget_usd,
             "strong_reserve": self.strong_reserve,
             "iterations_used": self.iterations_used,
+            "requested_iterations": self.requested_iterations,
+            "stop_reason": self.stop_reason(),
             "handoff_iteration": self.handoff_iteration,
             "best_score": None if self.best_score == float("-inf") else self.best_score,
             "llm_calls_by_tier": dict(self._tier_calls),

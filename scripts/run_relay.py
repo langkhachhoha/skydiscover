@@ -84,7 +84,10 @@ def _parse_args() -> argparse.Namespace:
         help="Generations in flight at once (max_parallel_iterations). (default: 8)",
     )
     p.add_argument(
-        "--eval-timeout", type=int, default=60, help="Per-candidate evaluation timeout, seconds."
+        "--eval-timeout",
+        type=int,
+        default=150,
+        help="Per-candidate evaluation timeout, seconds. (default: 150)",
     )
     p.add_argument(
         "--retries",
@@ -351,27 +354,110 @@ async def _main_async() -> int:
     )
     best = await runner.run(iterations=args.iterations, checkpoint_path=args.checkpoint)
 
-    print("\nDiscovery complete!")
-    if best is None:
-        print("No valid programs were found.")
-    else:
-        for name, value in best.metrics.items():
-            formatted = f"{value:.6f}" if isinstance(value, (int, float)) else str(value)
-            print(f"  {name}: {formatted}")
+    print_finish_banner(args, output_dir, best, budget)
+    return 0
 
-    totals_path = output_dir / "cost_log.totals.json"
-    if totals_path.exists():
-        print("\nCost totals:", totals_path.read_text().strip())
+
+STOP_REASONS = {
+    "budget_exhausted": "dollar budget reached",
+    "generation_cap": "generation budget spent",
+    "generations_ended_early": "stopped before the generation cap",
+    "interrupted": "interrupted (signal or shutdown request)",
+}
+
+
+def _hms(seconds: Optional[float]) -> str:
+    if not seconds:
+        return "-"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {seconds % 3600 // 60:02d}m"
+
+
+def print_finish_banner(args, output_dir: Path, best, budget: Optional[float]) -> None:
+    """One closing report, identical in shape for every method.
+
+    A run that stopped because it ran out of money used to look exactly like a
+    run that finished its generations — and for the routing baselines the tail
+    printed "handoff at generation None", which reads like a failure. This
+    always says which of the two happened, and never prints a field that does
+    not apply to the method that just ran.
+    """
+    summary = {}
     summary_path = output_dir / "relay_summary.json"
     if summary_path.exists():
-        summary = json.loads(summary_path.read_text())
-        print(
-            f"\nTiers: {summary.get('llm_calls_by_tier')} | "
-            f"handoff at generation {summary.get('handoff_iteration')} | "
-            f"reason: {summary.get('handoff_reason')}"
+        try:
+            summary = json.loads(summary_path.read_text())
+        except json.JSONDecodeError:
+            summary = {}
+
+    totals = summary.get("totals") or {}
+    tiers = summary.get("llm_calls_by_tier") or {}
+    reason_key = summary.get("stop_reason") or "unknown"
+    reason = STOP_REASONS.get(reason_key, reason_key)
+
+    spent = totals.get("total_cost_usd")
+    if reason_key == "budget_exhausted" and spent is not None and budget:
+        reason = f"dollar budget reached (${spent:.4f} of ${budget:.2f})"
+
+    score = None
+    if best is not None:
+        score = best.metrics.get("test_combined_score", best.metrics.get("combined_score"))
+
+    status = "RUN FINISHED" if best is not None else "RUN FINISHED — NO VALID PROGRAM"
+    mark = "OK" if best is not None else "!!"
+    title = (
+        f" [{mark}] {status} — {args.method} on "
+        f"{Path(args.benchmark_dir).name} (seed {args.seed})"
+    )
+
+    lines = [f" stopped because : {reason}"]
+    if score is not None:
+        kind = "test-mode" if "test_combined_score" in (best.metrics or {}) else "search-time"
+        lines.append(f" best score      : {score:.6f}   ({kind})")
+    else:
+        lines.append(
+            " best score      : none — every generation failed to produce a " "valid program"
         )
-    print(f"\nResults in: {output_dir}")
-    return 0
+    used, asked = summary.get("iterations_used"), summary.get("requested_iterations")
+    lines.append(f" generations     : {used} of {asked}" if asked else f" generations     : {used}")
+    lines.append(
+        f" llm calls       : cheap={tiers.get('cheap', 0)}  strong={tiers.get('strong', 0)}"
+    )
+    if spent is not None:
+        cap = f" of ${budget:.2f}" if budget else " (no cap)"
+        lines.append(f" cost            : ${spent:.4f}{cap}")
+    lines.append(
+        f" tokens          : in={totals.get('total_prompt_tokens', 0):,}  "
+        f"out={totals.get('total_completion_tokens', 0):,}"
+    )
+    lines.append(f" wall clock      : {_hms(summary.get('wall_clock_s'))}")
+
+    # Only the methods that actually hand over report a handoff.
+    if summary.get("handoff_iteration") is not None:
+        detail = summary.get("handoff_reason") or summary.get("switch_reason") or ""
+        seeds = summary.get("seeds")
+        extra = f", {len(seeds)} seeds" if seeds else ""
+        lines.append(
+            f" handoff         : generation {summary['handoff_iteration']}"
+            f"{f' ({detail})' if detail else ''}{extra}"
+        )
+        if summary.get("cheap_iterations") is not None:
+            lines.append(
+                f" cheap / strong  : {summary['cheap_iterations']} / "
+                f"{summary.get('strong_iterations')} generations"
+            )
+    lines.append(f" results in      : {output_dir}")
+
+    width = max(len(title), max(len(line) for line in lines)) + 2
+    bar = "=" * width
+    print(f"\n{bar}\n{title}\n{'-' * width}")
+    for line in lines:
+        print(line)
+    print(f"{bar}", flush=True)
 
 
 def main() -> int:

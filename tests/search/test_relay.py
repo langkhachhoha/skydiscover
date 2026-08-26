@@ -42,6 +42,20 @@ EVALUATOR = textwrap.dedent(
 ).strip()
 
 
+@pytest.fixture(
+    params=[
+        "relayevolve",
+        "relay_all_cheap",
+        "relay_all_strong",
+        "relay_fixed_switch",
+        "relay_random",
+        "relay_bandit",
+    ]
+)
+def search_type_all(request) -> str:
+    return request.param
+
+
 @pytest.fixture()
 def benchmark(tmp_path: Path) -> Path:
     (tmp_path / "initial_program.py").write_text(INITIAL_PROGRAM + "\n")
@@ -208,6 +222,24 @@ def test_retries_are_off_by_default_and_failures_spend_a_generation(
 
     summary = json.loads((tmp_path / "out_noretry" / "relay_summary.json").read_text())
     assert summary["iterations_used"] == 6
+
+
+def test_every_method_reports_why_it_stopped(search_type_all, benchmark, tmp_path, monkeypatch):
+    """A run that ran out of money must not look like one that finished."""
+    monkeypatch.delenv("SKYDISCOVER_MAX_COST_USD", raising=False)
+    _, output_dir, _ = _run(search_type_all, benchmark, tmp_path)
+    summary = json.loads((output_dir / "relay_summary.json").read_text())
+
+    assert summary["stop_reason"] in {
+        "budget_exhausted",
+        "generation_cap",
+        "generations_ended_early",
+        "interrupted",
+    }
+    assert summary["requested_iterations"] == 12
+    # Nothing was interrupted and no budget was set, so these runs completed.
+    assert summary["stop_reason"] == "generation_cap"
+    assert summary["iterations_used"] == summary["requested_iterations"]
 
 
 def test_all_cheap_never_calls_the_strong_model(benchmark, tmp_path, monkeypatch):

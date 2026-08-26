@@ -775,7 +775,7 @@ khác nhau **chỉ ở lịch dùng model**. Tất cả đều chạy **song son
 | Model nhỏ (cheap) | `openrouter/qwen/qwen3-30b-a3b-instruct-2507` |
 | Iteration | **300** |
 | Ngân sách | **$2 / run** — chạm ngưỡng là **bắt buộc dừng** (dừng êm, giữ nguyên kết quả) |
-| Timeout mỗi eval | **60 s** |
+| Timeout mỗi eval | **150 s** |
 | Worker song song | 8 |
 | Retry | **tắt** (`--retries 1`) |
 
@@ -831,6 +831,13 @@ Vài lưu ý đọc bảng:
   prompt), nên coi các con số trên là khoảng ước lượng, không phải cam kết.
 - Muốn nhanh hơn: tăng `--workers`. 16 worker gần như chia đôi thời gian, đổi
   lại nguy cơ bị OpenRouter rate-limit khi chạy nhiều job cùng lúc.
+- Bảng trên đo trên `circle_packing`, nơi chấm một chương trình chỉ mất ~0.2 s
+  nên `--eval-timeout` không ảnh hưởng gì. Các benchmark chấm nặng
+  (`circle_packing_rect` chạy differential evolution, `prism`, `txn_scheduling`)
+  thì thời gian chấm cộng thẳng vào trễ mỗi generation. Trần 150 s nghĩa là một
+  chương trình treo giữ slot worker tối đa 150 s trước khi bị cắt — rộng rãi cho
+  chương trình chậm nhưng hợp lệ, mà vẫn không để một vòng lặp vô hạn nuốt cả
+  run.
 
 #### 6c.2 Chạy một job
 
@@ -868,7 +875,7 @@ for m in relayevolve all_cheap all_strong fixed_switch random bandit; do
   for s in 1 2; do
     ./scripts/server/run_relay.sh --method "$m" --tmux \
         --benchmark-dir "$BM" \
-        --iterations 300 --dollars 2 --eval-timeout 60 --workers 8 --seed "$s" \
+        --iterations 300 --dollars 2 --eval-timeout 150 --workers 8 --seed "$s" \
         --session "relay_${m}_cp_seed${s}"
     sleep 2
   done
@@ -892,7 +899,7 @@ for bm in benchmarks/math/circle_packing \
     for s in 1 2; do
       ./scripts/server/run_relay.sh --method "$m" --tmux \
           --benchmark-dir "$bm" \
-          --iterations 300 --dollars 2 --eval-timeout 60 --workers 8 --seed "$s" \
+          --iterations 300 --dollars 2 --eval-timeout 150 --workers 8 --seed "$s" \
           --session "relay_${m}_${tag}_seed${s}"
       sleep 2
     done
@@ -932,6 +939,48 @@ Với `relayevolve`, log còn có một dòng cho mỗi block:
 Relay block 7: DEEPEN traj=2 (+5 gens) | gain=0.0182 rel=0.0231 | bank F=0.7914 | pool=41 | best=2.4188 | $0.1732
 🔀 Relay handoff at generation 63: 8 seed(s), best=2.4188, spent $0.2043 (relay_gain_saturated)
 ```
+
+#### 6c.5a Làm sao biết một run đã xong?
+
+Mọi method — kể cả khi dừng vì **hết tiền** chứ không phải chạy hết generation —
+đều kết thúc bằng đúng một khối như thế này:
+
+```
+========================================================
+ [OK] RUN FINISHED — random on circle_packing (seed 1)
+--------------------------------------------------------
+ stopped because : generation budget spent
+ best score      : 0.850185   (test-mode)
+ generations     : 4 of 4
+ llm calls       : cheap=2  strong=2
+ cost            : $0.0128 of $0.30
+ tokens          : in=6,930  out=8,060
+ wall clock      : 1m 02s
+ results in      : /tmp/relay_banner/random
+========================================================
+```
+
+Dòng `stopped because` luôn có, và nói rõ **vì sao** run kết thúc:
+
+| Giá trị | Nghĩa |
+|---|---|
+| `generation budget spent` | Chạy hết `--iterations`. Bình thường. |
+| `dollar budget reached ($2.0143 of $2.00)` | **Hết tiền** — dừng sớm, số generation nhỏ hơn trần |
+| `interrupted (signal or shutdown request)` | Bị `Ctrl-C` / `tmux kill-session` / hết `--timeout` |
+| `stopped before the generation cap` | Vòng lặp kết thúc sớm vì lý do khác |
+
+Vài điểm hay gây nhầm:
+
+- **Đừng đọc số generation mà bỏ qua `stopped because`.** Một run `all_strong`
+  dừng ở 198/300 vì hết $2 trông y hệt một run đã hội tụ nếu chỉ nhìn điểm số.
+- Dòng `handoff` **chỉ hiện với method thực sự có bàn giao** (`relayevolve`,
+  `fixed_switch`). Trước đây baseline in ra `handoff at generation None |
+  reason: None`, đọc như bị lỗi — giờ không in nữa.
+- Benchmark có thể tự in log của nó (`Optimization failed: DE failed`,
+  `Results saved to /tmp/...`) trong lúc chấm điểm lần cuối. Đó là output của
+  evaluator, **không phải** lỗi của run. Khối `=====` mới là dấu kết thúc.
+- Chạy qua `run_relay.sh` thì sau khối trên còn một footer nữa của script với
+  `exit status : 0` và đường dẫn kết quả — đó là dòng cuối cùng thật sự.
 
 #### 6c.5b Quên tên session rồi thì xem kết quả kiểu gì?
 
@@ -1030,7 +1079,7 @@ bạn `kill-session` hoặc server reboot thì tên mới mất — lúc đó d�
 | `--benchmark-dir DIR` | `benchmarks/math/circle_packing` | Thư mục benchmark |
 | `--iterations N` | `300` | Trần số generation |
 | `--dollars N` | `2` | Trần chi phí USD (0 = tắt) |
-| `--eval-timeout N` | `60` | Timeout mỗi lần chấm, giây |
+| `--eval-timeout N` | `150` | Timeout mỗi lần chấm, giây |
 | `--retries N` | `1` | Số lần gọi model mỗi generation. `1` = không retry |
 | `--workers N` | `8` | Số generation chạy song song |
 | `--seed N` | `1` | Seed; gắn vào tên run và output dir |
@@ -1085,7 +1134,7 @@ done
 ```bash
 python scripts/run_relay.py --method relayevolve \
     --benchmark-dir benchmarks/math/circle_packing \
-    --iterations 10 --dollars 0.3 --workers 4 --eval-timeout 60 --seed 1
+    --iterations 10 --dollars 0.3 --workers 4 --eval-timeout 150 --seed 1
 ```
 
 Test offline (không gọi API, không tốn tiền), stub LLM nhưng chạy thật controller,

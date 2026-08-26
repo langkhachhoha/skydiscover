@@ -16,7 +16,7 @@
 #   cheap model  : openrouter/qwen/qwen3-30b-a3b-instruct-2507
 #   iterations   : 300
 #   dollars      : 2       (hard stop — the run ends gracefully once reached)
-#   eval timeout : 60s
+#   eval timeout : 150s
 #   workers      : 8       (generations in flight at once)
 #
 # See docs/SERVER_GUIDE.md §6c for a step-by-step walkthrough.
@@ -35,7 +35,7 @@ STRONG_MODEL="openrouter/moonshotai/kimi-k2"
 ITERATIONS="300"
 DOLLARS="2"
 WORKERS="8"
-EVAL_TIMEOUT="60"
+EVAL_TIMEOUT="150"
 RETRIES="1"
 SEED="1"
 TIMEOUT_IN=""
@@ -75,7 +75,7 @@ Models
 
 Execution
   --workers N               Generations in flight at once.     (default: 8)
-  --eval-timeout N          Per-candidate evaluation timeout, seconds. (default: 60)
+  --eval-timeout N          Per-candidate evaluation timeout, seconds. (default: 150)
   --retries N               LLM attempts per generation. 1 (default) = no retry: an
                             invalid program spends its generation and the search moves
                             on, so one generation is always one model call.
@@ -424,17 +424,30 @@ try:
 except Exception:
     sys.exit(0)
 tiers = s.get("llm_calls_by_tier") or {}
+totals = s.get("totals") or {}
+reasons = {
+    "budget_exhausted": "dollar budget reached",
+    "generation_cap": "generation budget spent",
+    "generations_ended_early": "stopped before the generation cap",
+    "interrupted": "interrupted (signal or shutdown request)",
+}
+reason = s.get("stop_reason") or "unknown"
+asked, used = s.get("requested_iterations"), s.get("iterations_used")
 print(" relay summary:")
 print(f"   method          : {s.get('method')}")
+print(f"   stopped because : {reasons.get(reason, reason)}")
 print(f"   best score      : {s.get('best_score')}")
-print(f"   generations     : {s.get('iterations_used')}")
+print(f"   generations     : {used}" + (f" of {asked}" if asked else ""))
 print(f"   llm calls       : cheap={tiers.get('cheap', 0)}  strong={tiers.get('strong', 0)}")
+print(f"   cost            : ${totals.get('total_cost_usd', 0):.4f}")
+# Only the methods that actually hand over have a handoff to report.
 if s.get("handoff_iteration") is not None:
-    print(f"   handoff at gen  : {s['handoff_iteration']}  ({s.get('handoff_reason')})")
-if s.get("cheap_iterations") is not None:
-    print(f"   cheap/strong gen: {s.get('cheap_iterations')} / {s.get('strong_iterations')}")
-if s.get("seeds"):
-    print(f"   handoff seeds   : {len(s['seeds'])}")
+    detail = s.get("handoff_reason") or s.get("switch_reason") or ""
+    print(f"   handoff at gen  : {s['handoff_iteration']}" + (f"  ({detail})" if detail else ""))
+    if s.get("cheap_iterations") is not None:
+        print(f"   cheap/strong gen: {s.get('cheap_iterations')} / {s.get('strong_iterations')}")
+    if s.get("seeds"):
+        print(f"   handoff seeds   : {len(s['seeds'])}")
 PY
     fi
     echo " spend budget: \$$DOLLARS"
