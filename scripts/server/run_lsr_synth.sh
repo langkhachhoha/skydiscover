@@ -53,6 +53,7 @@ DOLLARS=""                   # USD cap per problem
 SECONDS_CAP=""               # SpecEvo-only wall cap per problem, seconds
 WORKERS="4"
 EVAL_PROCESSES="4"
+RELAY_ARGS=()
 PE_INTERVAL="10"
 N_DIVERSE_SEEDS="5"
 N_VARIANTS_PER_SEED="20"
@@ -68,7 +69,7 @@ DRY_RUN=0
 FRESH=0
 STATUS_ONLY=0
 
-VALID_METHODS="specevo openevolve_native gepa_native adaevolve evox"
+VALID_METHODS="specevo relayevolve openevolve_native gepa_native adaevolve evox"
 VALID_DOMAINS="chem_react bio_pop_growth phys_osc matsci"
 
 usage() {
@@ -77,7 +78,8 @@ Usage:
   run_lsr_synth.sh --method METHOD --domain DOMAIN [options]
 
 Required
-  --method NAME        specevo | openevolve_native | gepa_native | adaevolve | evox
+  --method NAME        specevo | relayevolve | openevolve_native | gepa_native
+                       | adaevolve | evox
                        ("blade" is accepted as an alias for specevo)
   --domain NAME        chem_react | bio_pop_growth | phys_osc | matsci
 
@@ -118,9 +120,19 @@ Budget (applied per problem)
 
 Models
   --model ID           Baseline model. (default: qwen3-30b-a3b-instruct-2507)
-  --mutation-model ID  SpecEvo Speculator / small model. (default: same qwen3-30b)
-  --paradigm-model ID  SpecEvo Navigator / frontier model. (default: same qwen3-30b)
+  --mutation-model ID  Small model: SpecEvo Speculator / RelayEvolve cheap tier.
+                       (default: qwen3-30b-a3b-instruct-2507)
+  --paradigm-model ID  Frontier model: SpecEvo Navigator / RelayEvolve strong tier.
+                       (default: qwen3-30b-a3b-instruct-2507 — same as the small
+                       model, i.e. a single-model run, as SpecEvo runs it here)
+  --cheap-model ID     Alias for --mutation-model (RelayEvolve wording).
+  --strong-model ID    Alias for --paradigm-model (RelayEvolve wording).
   --embedding-model ID SpecEvo description embedder. (default: openai/text-embedding-3-small)
+
+RelayEvolve knobs (ignored by the other methods)
+  --workers N          Generations in flight at once. (default: 4)
+  --relay-arg 'FLAG V' Any other scripts/run_relay.py flag, repeatable, e.g.
+                       --relay-arg '--block-size 5' --relay-arg '--bank-size 8'.
 
 SpecEvo shape (ignored by baselines)
   --workers N          Concurrent LLM workers. (default: 4)
@@ -186,8 +198,9 @@ while [[ $# -gt 0 ]]; do
         --problem-timeout)     PROBLEM_TIMEOUT="$2"; shift 2 ;;
         --eval-timeout)        EVAL_TIMEOUT="$2"; shift 2 ;;
         --model)               MODEL="$2"; shift 2 ;;
-        --mutation-model)      MUTATION_MODEL="$2"; shift 2 ;;
-        --paradigm-model)      PARADIGM_MODEL="$2"; shift 2 ;;
+        --mutation-model|--cheap-model)   MUTATION_MODEL="$2"; shift 2 ;;
+        --paradigm-model|--strong-model)  PARADIGM_MODEL="$2"; shift 2 ;;
+        --relay-arg)           RELAY_ARGS+=($2); shift 2 ;;
         --embedding-model)     EMBEDDING_MODEL="$2"; shift 2 ;;
         --workers)             WORKERS="$2"; shift 2 ;;
         --eval-processes)      EVAL_PROCESSES="$2"; shift 2 ;;
@@ -286,6 +299,7 @@ if [[ "$USE_TMUX" == "1" && "${LSR_INSIDE_TMUX:-0}" != "1" ]]; then
            --pe-interval "$PE_INTERVAL" --n-diverse-seeds "$N_DIVERSE_SEEDS"
            --n-variants-per-seed "$N_VARIANTS_PER_SEED" --ablation "$ABLATION"
            --seed "$SEED" --output-dir "$OUTPUT_DIR" --conda-env "$CONDA_ENV")
+    for ra in ${RELAY_ARGS[@]+"${RELAY_ARGS[@]}"}; do INNER+=(--relay-arg "$ra"); done
     [[ "$USE_CONDA"    == "0" ]] && INNER+=(--no-conda)
     [[ "$INSTALL_DEPS" == "0" ]] && INNER+=(--no-install-deps)
     [[ "$FRESH"        == "1" ]] && INNER+=(--fresh)
@@ -400,6 +414,10 @@ N_TOTAL="$(wc -w <<<"$PROBLEMS" | tr -d ' ')"
         echo " models        : speculator=$MUTATION_MODEL"
         echo "                 navigator  =$PARADIGM_MODEL"
         echo "                 embedding  =$EMBEDDING_MODEL"
+    elif [[ "$METHOD" == "relayevolve" ]]; then
+        echo " models        : cheap =$MUTATION_MODEL"
+        echo "                 strong=$PARADIGM_MODEL"
+        echo " workers       : $WORKERS"
     else
         echo " model         : $MODEL"
     fi
@@ -546,7 +564,7 @@ reap_orphan() {
     kill -0 "$pgid" 2>/dev/null || return 0
     cmd="$(ps -o command= -p "$pgid" 2>/dev/null || true)"
     case "$cmd" in
-        *skydiscover-run*|*run_blade.py*) ;;
+        *skydiscover-run*|*run_blade.py*|*run_relay.py*) ;;
         *) return 0 ;;
     esac
     echo ">>> a previous search (pgid $pgid) is still running — terminating it before resuming" \
@@ -660,6 +678,55 @@ for PID_NAME in $PROBLEMS; do
             no_crossover)       CMD+=(--no-crossover) ;;
             no_paradigm|full)   ;;   # no_paradigm is handled via PE_INTERVAL_EFFECTIVE
         esac
+    elif [[ "$METHOD" == "relayevolve" ]]; then
+        # RelayEvolve runs on the same generated benchmark directory as the
+        # OpenEvolve-family baselines and through the same Runner, so its output
+        # layout (run/checkpoints, run/best) is what lsr_resume_plan.py and
+        # lsr_finalize.py already read — resume works exactly as it does for them.
+        BDIR="$BDIR_ROOT/$PID_NAME"
+        [[ -d "$BDIR" ]] || die "missing $BDIR (ensure_problem_dirs should have created it)"
+        for f in initial_program.py config.yaml evaluator.py; do
+            [[ -f "$BDIR/$f" ]] || die "missing $BDIR/$f"
+        done
+        prune_checkpoints "$PDIR"
+        LSR_CKPT=""; LSR_COMPLETED=0; LSR_REMAINING="$ITERATIONS"
+        PLAN="$("$PY" "$REPO_ROOT/scripts/lsr_resume_plan.py" \
+                    --run-dir "$PDIR" --iterations "$ITERATIONS" 2>/dev/null || true)"
+        if [[ -n "$PLAN" ]]; then
+            eval "$PLAN"
+        fi
+        ITER_THIS="$LSR_REMAINING"
+        if [[ -n "$LSR_CKPT" ]]; then
+            RESUME_ARGS=(--checkpoint "$LSR_CKPT")
+            if [[ "$ITER_THIS" -le 0 ]]; then
+                echo ">>> already ran $LSR_COMPLETED/$ITERATIONS iterations — finalising without more search" \
+                    | tee -a "$LOG_FILE"
+                ITER_THIS=0
+            else
+                echo ">>> resuming from $(basename "$LSR_CKPT")" \
+                     "($LSR_COMPLETED/$ITERATIONS done, $ITER_THIS to go)" | tee -a "$LOG_FILE"
+            fi
+        fi
+        export SKYDISCOVER_COST_LOG="$PDIR/cost_log.jsonl"
+        # The real per-hypothesis cap is LSR_EVAL_TIMEOUT (enforced inside the
+        # evaluator); this outer one only has to be comfortably larger, and is
+        # kept at the generated config's 600s so relay and the baselines grade
+        # a hypothesis identically.
+        RELAY_EVAL_TIMEOUT=600
+        (( EVAL_TIMEOUT + 60 > RELAY_EVAL_TIMEOUT )) && RELAY_EVAL_TIMEOUT=$((EVAL_TIMEOUT + 60))
+        CMD=("$PY" "$REPO_ROOT/scripts/run_relay.py"
+             --method relayevolve
+             --benchmark-dir "$BDIR"
+             --cheap-model "$MUTATION_MODEL"
+             --strong-model "$PARADIGM_MODEL"
+             --iterations "$ITER_THIS"
+             --dollars "$DOLLARS"
+             --workers "$WORKERS"
+             --eval-timeout "$RELAY_EVAL_TIMEOUT"
+             --seed "$SEED"
+             --output "$PDIR/run"
+             ${RELAY_ARGS[@]+"${RELAY_ARGS[@]}"}
+             ${RESUME_ARGS[@]+"${RESUME_ARGS[@]}"})
     else
         BDIR="$BDIR_ROOT/$PID_NAME"
         [[ -d "$BDIR" ]] || die "missing $BDIR (ensure_problem_dirs should have created it)"

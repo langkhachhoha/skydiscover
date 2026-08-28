@@ -505,9 +505,24 @@ done
 ./scripts/server/run_lsr_synth.sh --method openevolve_native --domain matsci --tmux
 ```
 
-Method: `specevo` (alias `blade`), `openevolve_native`, `gepa_native`,
-`adaevolve`, `evox`. Domain: `chem_react`, `bio_pop_growth`, `phys_osc`,
-`matsci`.
+Method: `specevo` (alias `blade`), `relayevolve`, `openevolve_native`,
+`gepa_native`, `adaevolve`, `evox`. Domain: `chem_react`, `bio_pop_growth`,
+`phys_osc`, `matsci`.
+
+**RelayEvolve trên LSR-Synth** — cả 4 domain chạy **tuần tự trong MỘT session**
+(nhẹ máy: chỉ 4 luồng song song tại một thời điểm, thay vì 4 domain x 4 luồng):
+
+```bash
+cd ~/skydiscover
+tmux new-session -d -s lsr_relay -c "$PWD"
+tmux send-keys -t lsr_relay 'for d in chem_react bio_pop_growth phys_osc matsci; do ./scripts/server/run_lsr_synth.sh --method relayevolve --domain "$d" --iterations 100 --workers 4 --seed 1; done' C-m
+```
+
+RelayEvolve dùng hai tier model: `--cheap-model` (= `--mutation-model`, small) và
+`--strong-model` (= `--paradigm-model`, frontier). Mặc định **cả hai đều là
+qwen3-30b-a3b-instruct-2507**, đúng như cách SpecEvo chạy ở đây — muốn hai tier
+khác nhau thì truyền `--strong-model openrouter/moonshotai/kimi-k2`. Các knob
+khác của `scripts/run_relay.py` truyền qua `--relay-arg '--block-size 5'`.
 
 **Full benchmark** — toàn bộ bài của domain thay vì 10 bài đầu. Repo chỉ commit
 thư mục cho 10 bài đầu, phần còn lại script tự sinh khi bắt đầu chạy:
