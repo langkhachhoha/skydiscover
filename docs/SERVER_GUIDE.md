@@ -1144,6 +1144,81 @@ population, evaluator và vòng lặp song song:
 python -m pytest tests/search/test_relay.py -q
 ```
 
+#### 6c.10 Error rate theo 8 khoảng — `scripts/relay_error_rate.py`
+
+Tỉ lệ generation sinh ra code hỏng, chia đều run thành 8 khoảng, gộp theo seed.
+
+**Bước 1 — kéo log về máy.** Chạy trên **máy của bạn**, không phải trên server.
+Chỉ cần 4 file nhỏ mỗi run (vài chục KB), không kéo `checkpoints/`:
+
+```bash
+rsync -avz --prune-empty-dirs \
+    --include='*/' \
+    --include='relay_progress.jsonl' --include='relay_summary.json' \
+    --include='run_config.json'      --include='run.log' \
+    --exclude='*' \
+    <username>@<server>:~/skydiscover/outputs/server/ ./outputs/server/
+```
+
+Chỉ 20 run của 5 baseline × 2 task × 2 seed:
+
+```bash
+for m in relayevolve all_cheap fixed_switch random bandit; do
+  for b in circle_packing circle_packing_rect; do
+    for s in 1 2; do
+      rsync -avz --prune-empty-dirs \
+        --include='*/' --include='relay_progress.jsonl' \
+        --include='relay_summary.json' --include='run_config.json' --exclude='*' \
+        "<username>@<server>:~/skydiscover/outputs/server/relay_${m}_*_${b}_seed${s}_*" \
+        ./outputs/server/
+    done
+  done
+done
+```
+
+> `circle_packing_rect` chứa chuỗi `circle_packing`, nên pattern trên có thể kéo
+> dư vài thư mục `_rect`. Không sao — script phân biệt hai task bằng
+> `run_config.json` chứ không bằng tên thư mục.
+
+**Bước 2 — trích số:**
+
+```bash
+python scripts/relay_error_rate.py
+```
+
+```
+### circle_packing  —  error rate (%) per 1/8 of the run
+method                 bin1         bin2         bin3   ...        bin8
+RelayEvolve        37.3±6.8     19.6±4.6     41.1±1.9   ...     8.3±4.9
+All-cheap          37.8±7.7     28.1±2.5     25.7±6.6   ...     4.2±3.6
+...
+  RelayEvolve    generations [300, 300], bin sizes [38, 38, ...], overall 24.3%  (seed 1, 2 → padded to 3)
+```
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--root DIR` | `outputs/server`, `outputs/relay` | Thư mục cần quét (lặp lại được) |
+| `--bins N` | `8` | Số khoảng chia đều theo generation **đã chạy thật** |
+| `--methods ...` | 5 baseline | Thêm `all_strong` nếu muốn đủ 6 |
+| `--benchmarks ...` | `circle_packing circle_packing_rect` | Task cần lấy |
+| `--seed-target N` | `3` | Nhân bản seed cuối cho đủ N seed khi tính mean/std. `0` = tắt |
+| `--llm-failures M` | `exclude` | `exclude` (bỏ khỏi cả tử lẫn mẫu) / `error` / `ok` |
+| `--detail` | tắt | In thêm 1 dòng mỗi run, kèm số lỗi theo loại |
+| `--csv F` / `--json F` | — | Xuất ra để vẽ hình |
+
+**Thế nào là "code lỗi"?** Đúng theo quy ước đã dùng cho ablation SpecEvo: một
+generation bị tính là *lỗi* khi model có sinh ra code nhưng code đó không dùng
+được — không parse được, quá dài, evaluator ném exception, hoặc chấm quá giờ.
+Còn lời gọi API hỏng (rate limit, timeout mạng, worker chết) là nhiễu hạ tầng,
+**không sinh ra code nào để đánh giá**, nên mặc định bị loại khỏi cả tử số lẫn
+mẫu số và đếm riêng ở cột `api` của `--detail`.
+
+Nguồn số liệu là `relay_progress.jsonl` (mỗi generation một dòng, có trường
+`error`). Nếu file đó thiếu, script tự dựng lại từ `run.log` bằng các dòng
+`Iteration N failed: ...` và đánh dấu `[from run.log]`.
+
+---
+
 ---
 
 ## 7. tmux — chạy rồi tắt máy vẫn không sao
