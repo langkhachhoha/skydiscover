@@ -1149,36 +1149,42 @@ python -m pytest tests/search/test_relay.py -q
 Tỉ lệ generation sinh ra code hỏng, chia đều run thành 8 khoảng, gộp theo seed.
 
 **Bước 1 — kéo log về máy.** Chạy trên **máy của bạn**, không phải trên server.
-Chỉ cần 4 file nhỏ mỗi run (vài chục KB), không kéo `checkpoints/`:
+Glob `relay_*_circle_packing*_seed*_*` khớp đúng 2 task cần lấy
+(`circle_packing` và `circle_packing_rect`), và 4 file `--include` giữ mỗi run
+chỉ vài chục KB — `checkpoints/` bị bỏ hẳn:
 
 ```bash
+mkdir -p ./outputs/server
 rsync -avz --prune-empty-dirs \
     --include='*/' \
     --include='relay_progress.jsonl' --include='relay_summary.json' \
     --include='run_config.json'      --include='run.log' \
     --exclude='*' \
-    <username>@<server>:~/skydiscover/outputs/server/ ./outputs/server/
+    '<username>@<server>:~/skydiscover/outputs/server/relay_*_circle_packing*_seed*_*' \
+    ./outputs/server/
 ```
 
-Chỉ 20 run của 5 baseline × 2 task × 2 seed:
+Đúng 20 thư mục (5 method × 2 task × 2 seed). Dấu nháy đơn quanh đường dẫn
+remote là bắt buộc: glob phải để **shell trên server** khai triển, không phải
+shell trên máy bạn.
+
+Muốn chắc trước khi kéo thật thì thêm `--dry-run` vào `rsync`, hoặc đếm trước
+trên server:
 
 ```bash
-for m in relayevolve all_cheap fixed_switch random bandit; do
-  for b in circle_packing circle_packing_rect; do
-    for s in 1 2; do
-      rsync -avz --prune-empty-dirs \
-        --include='*/' --include='relay_progress.jsonl' \
-        --include='relay_summary.json' --include='run_config.json' --exclude='*' \
-        "<username>@<server>:~/skydiscover/outputs/server/relay_${m}_*_${b}_seed${s}_*" \
-        ./outputs/server/
-    done
-  done
-done
+ls -d ~/skydiscover/outputs/server/relay_*_circle_packing*_seed*_* | wc -l
 ```
 
-> `circle_packing_rect` chứa chuỗi `circle_packing`, nên pattern trên có thể kéo
-> dư vài thư mục `_rect`. Không sao — script phân biệt hai task bằng
-> `run_config.json` chứ không bằng tên thư mục.
+Chỉ một task, hoặc chỉ một seed:
+
+```bash
+# chỉ circle_packing (KHÔNG lấy _rect) — `_seed` chặn ngay sau tên task
+'...:~/skydiscover/outputs/server/relay_*_circle_packing_seed*_*'
+# chỉ circle_packing_rect
+'...:~/skydiscover/outputs/server/relay_*_circle_packing_rect_seed*_*'
+# chỉ seed 1
+'...:~/skydiscover/outputs/server/relay_*_circle_packing*_seed1_*'
+```
 
 **Bước 2 — trích số:**
 
