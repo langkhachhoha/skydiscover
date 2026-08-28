@@ -438,8 +438,18 @@ def main() -> int:
         help=f"Directory to walk (repeatable). Default: {' '.join(DEFAULT_ROOTS)}",
     )
     ap.add_argument("--bins", type=int, default=8, help="Equal chunks per run (default 8)")
-    ap.add_argument("--methods", nargs="+", default=DEFAULT_METHODS)
-    ap.add_argument("--benchmarks", nargs="+", default=DEFAULT_BENCHMARKS)
+    ap.add_argument(
+        "--methods",
+        nargs="+",
+        default=DEFAULT_METHODS,
+        help=f"Default: {' '.join(DEFAULT_METHODS)}. Pass 'all' for every method present.",
+    )
+    ap.add_argument(
+        "--benchmarks",
+        nargs="+",
+        default=DEFAULT_BENCHMARKS,
+        help=f"Default: {' '.join(DEFAULT_BENCHMARKS)}. Pass 'all' for every task present.",
+    )
     ap.add_argument(
         "--seed-target",
         type=int,
@@ -485,6 +495,13 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+
+    # "all" means "whatever was actually run", so a pull of every task does not
+    # have to be spelled out on the command line.
+    if args.methods == ["all"]:
+        args.methods = sorted({r["method"] for r in runs})
+    if args.benchmarks == ["all"]:
+        args.benchmarks = sorted({r["benchmark"] for r in runs})
 
     wanted = [r for r in runs if r["method"] in args.methods and r["benchmark"] in args.benchmarks]
     if not wanted:

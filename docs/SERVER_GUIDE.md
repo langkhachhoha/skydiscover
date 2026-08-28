@@ -1186,6 +1186,45 @@ Chỉ một task, hoặc chỉ một seed:
 '...:~/skydiscover/outputs/server/relay_*_circle_packing*_seed1_*'
 ```
 
+**Kéo TOÀN BỘ task, 5 baseline** (bỏ `all_strong`). Không có glob POSIX nào
+khớp đúng 5 method mà loại được `all_strong`, nên lặp 5 lần — chạy trên **máy
+của bạn**:
+
+```bash
+mkdir -p ./outputs/server
+for m in relayevolve all_cheap fixed_switch random bandit; do
+  rsync -avz --prune-empty-dirs \
+      --include='*/' \
+      --include='relay_progress.jsonl' --include='relay_summary.json' \
+      --include='run_config.json'      --include='run.log' \
+      --exclude='*' \
+      "<username>@<server>:~/skydiscover/outputs/server/relay_${m}_*" \
+      ./outputs/server/
+done
+```
+
+Xem trước có bao nhiêu run và nặng bao nhiêu, không tải gì:
+
+```bash
+ssh <username>@<server> \
+  "ls -d ~/skydiscover/outputs/server/relay_* | sed -E 's#.*/relay_##; s#_seed[0-9]+_[0-9-]+\$##' | sort | uniq -c"
+```
+
+Rồi đọc mọi task một lần:
+
+```bash
+python scripts/relay_error_rate.py --benchmarks all
+```
+
+`--benchmarks all` / `--methods all` = lấy đúng những gì có trong thư mục, khỏi
+phải gõ tên từng task.
+
+> Bỏ `--include='run.log'` thì mỗi run chỉ còn ~80 KB, nhưng **mất khả năng
+> tách timeout** (xem cuối mục này) — cột `t/o` sẽ hiện `?`. Ngược lại, nếu
+> chỉ lấy mỗi `run.log` thì script **không nhận ra run nào cả**: nó tìm run
+> bằng `relay_summary.json`. `run.log` cũng là file **nặng nhất** trong bốn
+> file, nên "chỉ lấy log" tốn băng thông hơn chứ không ít hơn.
+
 **Bước 2 — trích số:**
 
 ```bash
