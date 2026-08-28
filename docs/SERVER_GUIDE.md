@@ -515,8 +515,13 @@ Method: `specevo` (alias `blade`), `relayevolve`, `openevolve_native`,
 ```bash
 cd ~/skydiscover
 tmux new-session -d -s lsr_relay -c "$PWD"
-tmux send-keys -t lsr_relay 'for d in chem_react bio_pop_growth phys_osc matsci; do ./scripts/server/run_lsr_synth.sh --method relayevolve --domain "$d" --iterations 100 --workers 4 --seed 1; done' C-m
+tmux send-keys -t lsr_relay 'for d in chem_react bio_pop_growth phys_osc matsci; do ./scripts/server/run_lsr_synth.sh --method relayevolve --domain "$d" --iterations 100 --seed 1; done' C-m
 ```
+
+`--workers` mặc định là **8** cho `relayevolve` (SpecEvo giữ nguyên 4). Con số này
+chỉ có tác dụng đầy đủ ở **strong phase**: cheap phase dispatch mỗi lần một block
+(`block_size = 5`) rồi mới đo Relay-Gain, nên nó không bao giờ chạy quá 5 luồng
+dù `--workers` bằng bao nhiêu. Muốn nhẹ máy hơn thì `--workers 4`.
 
 RelayEvolve dùng hai tier model: `--cheap-model` (= `--mutation-model`, small) và
 `--strong-model` (= `--paradigm-model`, frontier). Mặc định **cả hai đều là

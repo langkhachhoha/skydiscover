@@ -51,7 +51,7 @@ EVAL_TIMEOUT="30"            # seconds per equation hypothesis (paper: T = 30s)
 PROBLEM_TIMEOUT="7200"       # wall-clock cap per problem; 0 disables
 DOLLARS=""                   # USD cap per problem
 SECONDS_CAP=""               # SpecEvo-only wall cap per problem, seconds
-WORKERS="4"
+WORKERS=""                   # resolved per method below: 8 for relayevolve, 4 otherwise
 EVAL_PROCESSES="4"
 RELAY_ARGS=()
 PE_INTERVAL="10"
@@ -134,7 +134,8 @@ RelayEvolve knobs (ignored by the other methods)
                        --relay-arg '--block-size 5' --relay-arg '--bank-size 8'.
 
 SpecEvo / RelayEvolve shape (ignored by the other baselines)
-  --workers N          Concurrent LLM workers, i.e. generations in flight. (default: 4)
+  --workers N          Concurrent LLM workers, i.e. generations in flight.
+                       (default: 8 for relayevolve, 4 for specevo)
   --eval-processes N   Concurrent evaluator processes. (default: 4)
   --pe-interval N      Navigator (paradigm-shift) cadence. (default: 10)
   --n-diverse-seeds N  Phase-1 diverse seeds. (default: 5)
@@ -226,6 +227,13 @@ done
 grep -qw -- "$METHOD" <<<"$VALID_METHODS" || die "invalid --method '$METHOD' (one of: $VALID_METHODS)"
 [[ -n "$DOMAIN" ]] || die "--domain is required (one of: $VALID_DOMAINS)"
 grep -qw -- "$DOMAIN" <<<"$VALID_DOMAINS" || die "invalid --domain '$DOMAIN' (one of: $VALID_DOMAINS)"
+# RelayEvolve only reaches full width in its strong phase — the cheap phase
+# dispatches one block (block_size = 5) at a time whatever this is set to — so it
+# is given a wider default than SpecEvo, whose published runs stay at 4.
+if [[ -z "$WORKERS" ]]; then
+    [[ "$METHOD" == "relayevolve" ]] && WORKERS=8 || WORKERS=4
+fi
+[[ "$WORKERS" =~ ^[0-9]+$ ]] || die "--workers must be a whole number (got '$WORKERS')"
 [[ "$ITERATIONS" =~ ^[0-9]+$ ]] || die "--iterations must be a whole number (got '$ITERATIONS')"
 case "$N_PROBLEMS" in
     all|full) N_PROBLEMS="all" ;;
