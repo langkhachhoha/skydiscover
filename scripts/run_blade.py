@@ -96,6 +96,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--workers", default="4", help="Concurrent LLM workers (default: 4).")
     p.add_argument("--eval-processes", default="4", help="Concurrent evaluator processes (default: 4).")
     p.add_argument("--eval-timeout", default="600", help="Per-candidate evaluation timeout in seconds.")
+    p.add_argument(
+        "--save-eval-code",
+        action="store_true",
+        help=(
+            "Write eval_code_log.jsonl (and eval_code_log.json at the end): the "
+            "source of every candidate the run produced, including the ones that "
+            "failed to parse, raised, scored invalid or timed out."
+        ),
+    )
 
     # BLADE knobs
     p.add_argument(
@@ -420,6 +429,9 @@ def main() -> int:
     if args.align_advisor_post_init:
         overrides["align_advisor_to_post_init"] = True
 
+    if args.save_eval_code:
+        overrides["save_eval_code"] = True
+
     if args.single_prompt_operators:
         overrides["single_prompt_operators"] = True
     if args.paradigm_force_mode is not None:
@@ -457,6 +469,7 @@ def main() -> int:
     print(f"[blade] checkpoint_pop    = {args.checkpoint_population}")
     print(f"[blade] meta_advice       = {not args.no_meta_advice} (interval {args.meta_advice_interval})")
     print(f"[blade] single_prompt_ops = {args.single_prompt_operators}")
+    print(f"[blade] save_eval_code    = {args.save_eval_code}")
     print(f"[blade] workers           = {workers}")
     print(f"[blade] output_dir        = {output_dir}")
 
@@ -570,6 +583,16 @@ def main() -> int:
     print(f"Paradigm trials   : {len(result.paradigm_trials)}")
     print(f"Runtime           : {result.runtime_seconds:.1f}s")
     print(f"Output dir        : {output_dir}")
+    if args.save_eval_code:
+        eval_log_json = output_dir / "eval_code_log.json"
+        if eval_log_json.exists():
+            try:
+                n = json.loads(eval_log_json.read_text()).get("n_records")
+            except Exception:  # pragma: no cover - never fail a run on a summary line
+                n = "?"
+            print(f"Eval code log     : {n} candidates -> {eval_log_json}")
+        else:
+            print(f"Eval code log     : {output_dir / 'eval_code_log.jsonl'} (json not written)")
 
     # Search trace: which Navigator mode fired when, and who produced each
     # new best. Written incrementally during the run by the orchestrator.

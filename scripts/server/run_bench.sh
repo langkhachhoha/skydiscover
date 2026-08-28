@@ -48,6 +48,7 @@ N_DIVERSE_SEEDS="5"
 N_VARIANTS_PER_SEED="20"
 ABLATION="full"
 ADVANCED_OPTIONS=""
+SAVE_EVAL_CODE=0
 
 # --- baseline.yml inputs ----------------------------------------------------
 BASELINE="evox"
@@ -114,6 +115,9 @@ blade options (defaults match blade.yml)
   --eval-timeout N            Per-candidate eval timeout, seconds. (default: 600)
   --n-diverse-seeds N         Phase-1 diverse seeds. (default: 5)
   --n-variants-per-seed N     Phase-2 variants per seed. (default: 20)
+  --save-eval-code            Keep the source of every candidate in eval_code_log.jsonl
+                              (+ eval_code_log.json at the end) — the ones that failed
+                              to parse, raised, scored invalid or timed out included.
   --ablation NAME             full | ast_only | emb_only | static_cells | no_meta_advice
                               | meta_errors_only | no_targeted_mutate | no_crossover
                               | no_paradigm   (default: full)
@@ -180,6 +184,7 @@ while [[ $# -gt 0 ]]; do
         --n-variants-per-seed)   N_VARIANTS_PER_SEED="$2"; shift 2 ;;
         --ablation)              ABLATION="$2"; shift 2 ;;
         --advanced-options)      ADVANCED_OPTIONS="$2"; shift 2 ;;
+        --save-eval-code)        SAVE_EVAL_CODE=1; shift ;;
         # baseline
         --baseline)              BASELINE="$2"; shift 2 ;;
         --benchmark-dir)         BENCHMARK_DIR="$2"; shift 2 ;;
@@ -298,6 +303,7 @@ if [[ "$USE_TMUX" == "1" && "${RUN_BENCH_INSIDE_TMUX:-0}" != "1" ]]; then
                 --pe-interval "$PE_INTERVAL" --eval-timeout "$EVAL_TIMEOUT"
                 --n-diverse-seeds "$N_DIVERSE_SEEDS" --n-variants-per-seed "$N_VARIANTS_PER_SEED"
                 --ablation "$ABLATION" --advanced-options "$ADVANCED_OPTIONS")
+        [[ "$SAVE_EVAL_CODE" == "1" ]] && INNER+=(--save-eval-code)
     else
         INNER+=(--baseline "$BASELINE" --benchmark-dir "$BENCHMARK_DIR"
                 --iterations "$ITERATIONS" --model "$MODEL")
@@ -406,6 +412,7 @@ fi
         echo " models      : mutation=$MUTATION_MODEL"
         echo "               paradigm=$PARADIGM_MODEL"
         echo " budget      : evals='${EVALUATIONS}' dollars='${DOLLARS}' seconds='${SECONDS_CAP}'"
+        [[ "$SAVE_EVAL_CODE" == "1" ]] && echo " eval code   : saving every candidate to eval_code_log.json"
     else
         echo " baseline    : $BASELINE"
         echo " model       : $MODEL"
@@ -533,6 +540,8 @@ for k, v in opts.items():
     [[ -n "${ADV_PARADIGM_FORCE_MODE:-}" ]]               && EXTRA_OPTS+=(--paradigm-force-mode "$ADV_PARADIGM_FORCE_MODE")
     # A6 axis.
     [[ "${ADV_SINGLE_PROMPT_OPERATORS:-}" == "true" ]]    && EXTRA_OPTS+=(--single-prompt-operators)
+    # Keep every candidate's source, failures included.
+    [[ "$SAVE_EVAL_CODE" == "1" ]]                        && EXTRA_OPTS+=(--save-eval-code)
 
     # Paper-facing ablation toggles (identical mapping to blade.yml).
     PE_INTERVAL_EFFECTIVE="$PE_INTERVAL"

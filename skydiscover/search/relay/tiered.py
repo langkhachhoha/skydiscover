@@ -38,6 +38,7 @@ from skydiscover.search.default_discovery_controller import (
     DiscoveryControllerInput,
 )
 from skydiscover.search.utils.discovery_utils import SerializableResult
+from skydiscover.search.utils.eval_log import EvalCodeLog
 from skydiscover.utils.metrics import get_score
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,22 @@ class TieredController(DiscoveryController):
             os.path.join(self.output_dir, "relay_summary.json") if self.output_dir else None
         )
 
+        # Optional: keep the source code of every generation, valid or not.
+        # relay_progress.jsonl says what each generation scored; this says what
+        # it actually wrote, including the ones that never scored at all.
+        self.eval_log: Optional[EvalCodeLog] = None
+        if self.output_dir and bool(getattr(opts, "save_eval_code", False)):
+            self.eval_log = EvalCodeLog(
+                os.path.join(self.output_dir, "eval_code_log.jsonl"),
+                meta={
+                    "method": self.method_name,
+                    "cheap_model": self.cheap_model_name,
+                    "strong_model": self.strong_model_name,
+                    "output_dir": self.output_dir,
+                },
+            )
+            logger.info("Saving every generation's code to %s", self.eval_log.path)
+
         if self.cheap_model_name == self.strong_model_name:
             logger.warning(
                 "Cheap and strong tiers resolve to the same model (%s) — pass "
@@ -132,7 +149,44 @@ class TieredController(DiscoveryController):
             meta["model_tier"] = tier
             meta["relay_phase"] = self.phase
             result.child_program_dict["metadata"] = meta
+        self._log_eval_code(iteration, tier, result)
         return result
+
+    def _log_eval_code(
+        self, iteration: int, tier: str, result: Optional[SerializableResult]
+    ) -> None:
+        """Record this generation's code — however far it got."""
+        if self.eval_log is None:
+            return
+        child = (result.child_program_dict if result is not None else None) or {}
+        metrics = child.get("metrics") or {}
+        if result is None:
+            status = "no_result"
+        elif not result.error:
+            status = "ok"
+        elif child:
+            status = "evaluation_failed"
+        else:
+            status = "no_program"
+        self.eval_log.record(
+            iteration=iteration,
+            method=self.method_name,
+            tier=tier,
+            model=self.strong_model_name if tier == STRONG else self.cheap_model_name,
+            phase=self.phase,
+            status=status,
+            score=get_score(metrics) if metrics else None,
+            metrics=metrics,
+            error=result.error if result is not None else "iteration returned nothing",
+            program_id=child.get("id"),
+            parent_id=result.parent_id if result is not None else None,
+            language=child.get("language"),
+            attempts_used=result.attempts_used if result is not None else None,
+            eval_time_s=round(result.eval_time, 3) if result is not None else None,
+            llm_time_s=round(result.llm_generation_time, 3) if result is not None else None,
+            code=child.get("solution"),
+            llm_response=result.llm_response if result is not None else None,
+        )
 
     # ------------------------------------------------------------------
     # Parallel block execution
@@ -315,6 +369,10 @@ class TieredController(DiscoveryController):
                 json.dump(summary, fh, indent=2, default=str)
         except OSError:
             logger.debug("Could not write %s", self._summary_path, exc_info=True)
+
+        # The run is over either way — fold the code log into its single JSON.
+        if self.eval_log is not None:
+            self.eval_log.finalize(summary)
 
     # ------------------------------------------------------------------
 

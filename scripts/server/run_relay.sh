@@ -39,6 +39,7 @@ EVAL_TIMEOUT="150"
 RETRIES="1"
 SEED="1"
 TIMEOUT_IN=""
+SAVE_EVAL_CODE=0
 EXTRA_ARGS=()
 
 CONDA_ENV="${CONDA_ENV:-minhhieu}"
@@ -96,6 +97,12 @@ RelayEvolve knobs (passed straight through to scripts/run_relay.py)
   --p-strong F              Random baseline P(strong) (0.5)
   --advanced-options JSON   Any other search.database override, e.g. '{"ucb_c":0.8}'
 
+Instrumentation
+  --save-eval-code          Keep the source of every generation in
+                            eval_code_log.jsonl (+ eval_code_log.json at the end),
+                            including the ones that failed to parse, crashed or
+                            timed out.
+
 Server
   --tmux                    Run detached inside a tmux session.
   --session NAME            tmux session name.               (default: the run id)
@@ -132,6 +139,7 @@ while [[ $# -gt 0 ]]; do
         --relay-control|--switch-fraction|--p-strong|--embedding-backend|\
         --embedding-model|--advanced-options)
                                 EXTRA_ARGS+=("$1" "$2"); shift 2 ;;
+        --save-eval-code)       EXTRA_ARGS+=("$1"); SAVE_EVAL_CODE=1; shift ;;
         --tmux)                 USE_TMUX=1; shift ;;
         --session)              SESSION="$2"; shift 2 ;;
         --output-dir)           OUTPUT_DIR="$2"; shift 2 ;;
@@ -451,6 +459,14 @@ if s.get("handoff_iteration") is not None:
 PY
     fi
     echo " spend budget: \$$DOLLARS"
+    if [[ "$SAVE_EVAL_CODE" == "1" ]]; then
+        EVAL_LOG="$OUTPUT_DIR/eval_code_log.jsonl"
+        if [[ -f "$EVAL_LOG" ]]; then
+            echo " eval code   : $(wc -l < "$EVAL_LOG" | tr -d ' ') generations in $OUTPUT_DIR/eval_code_log.json"
+        else
+            echo " eval code   : requested but $EVAL_LOG was never written"
+        fi
+    fi
     echo " finished at : $(date '+%Y-%m-%d %H:%M:%S %Z')"
     if [[ "$TIMED_OUT" == "1" ]]; then
         echo " exit status : $STATUS  (TIMED OUT after ${TIMEOUT_SECS}s — partial results kept)"

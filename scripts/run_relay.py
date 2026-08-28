@@ -153,6 +153,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--embedding-backend", choices=["hash", "api"], default=None)
     p.add_argument("--embedding-model", default=None)
     p.add_argument(
+        "--save-eval-code",
+        action="store_true",
+        help=(
+            "Write every generation's source code to eval_code_log.jsonl and, at "
+            "the end, eval_code_log.json — failed, unparseable and timed-out ones "
+            "included."
+        ),
+    )
+    p.add_argument(
         "--advanced-options",
         default=None,
         help="JSON of extra search.database overrides, e.g. '{\"ucb_c\":0.8}'.",
@@ -215,6 +224,8 @@ def _apply_overrides(db_config: Any, args: argparse.Namespace) -> Dict[str, Any]
     put("p_strong", args.p_strong)
     put("embedding_backend", args.embedding_backend)
     put("embedding_model", args.embedding_model)
+    if args.save_eval_code:
+        put("save_eval_code", True)
 
     if args.curation == "quality":
         put("relay_lambda", 1.0)
@@ -333,6 +344,7 @@ async def _main_async() -> int:
         "seed": args.seed,
         "curation": args.curation,
         "relay_control": args.relay_control,
+        "save_eval_code": bool(args.save_eval_code),
         "overrides": applied,
         "started_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
     }

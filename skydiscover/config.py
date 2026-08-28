@@ -537,6 +537,11 @@ class RelayDatabaseConfig(OpenEvolveNativeDatabaseConfig):
     switch_fraction: float = 0.5     # Fixed-switch handover point
     p_strong: float = 0.5            # Random: P(strong) per generation
 
+    # --- instrumentation -------------------------------------------------
+    # Write every generation's source code to eval_code_log.jsonl / .json,
+    # including the ones that failed to parse, crashed or timed out.
+    save_eval_code: bool = False
+
     # --- ablation switches (Figure 4) -----------------------------------
     random_allocation: bool = False  # replace Grow/Deepen with uniform choice
     disable_relay_stop: bool = False  # drop the Relay-Gain stopping rule

@@ -1090,6 +1090,41 @@ bạn `kill-session` hoặc server reboot thì tên mới mất — lúc đó d�
 | `checkpoints/checkpoint_N/` | Toàn bộ quần thể tại generation N |
 | `run.log` | Log đầy đủ + footer tóm tắt |
 | `run_config.json` | Tham số đã dùng cho run này (để tra ngược khi quên) |
+| `eval_code_log.jsonl` / `.json` | Chỉ có khi `--save-eval-code`: **code của từng generation** kèm `status` (`ok` / `evaluation_failed` / `no_program`), score, metrics, lỗi, tier, model. JSONL ghi flush từng dòng nên run bị kill vẫn còn đủ; file `.json` gộp lại được ghi lúc kết thúc |
+
+#### 6c.6a Lưu code của mọi lần đánh giá — `--save-eval-code`
+
+`relay_progress.jsonl` nói mỗi generation **được bao nhiêu điểm**, `checkpoints/`
+giữ những chương trình **được archive nhận**. Cả hai đều không giữ những
+generation hỏng — mà đó thường là thứ cần xem nhất. `--save-eval-code` ghi lại
+tất cả, một record cho mỗi generation:
+
+```bash
+./scripts/server/run_relay.sh --method relayevolve --tmux --save-eval-code \
+    --benchmark-dir benchmarks/math/circle_packing_rect --iterations 400
+```
+
+```bash
+# 400 record, đọc bằng jq
+jq '.n_records, .records[0].status' outputs/server/<run-id>/eval_code_log.json
+
+# Lấy riêng code của những generation lỗi
+jq -r '.records[] | select(.status != "ok") | .code' \
+    outputs/server/<run-id>/eval_code_log.json | head -50
+```
+
+Run bị `tmux kill-session` hoặc `--timeout` cắt trước khi kịp ghi file `.json`
+thì `.jsonl` vẫn đủ — convert bằng tay:
+
+```bash
+python scripts/eval_log_to_json.py outputs/server/<run-id>
+python scripts/eval_log_to_json.py outputs/server --all     # mọi run một lượt
+```
+
+Cờ này cũng có ở chế độ SpecEvo: `./scripts/server/run_bench.sh blade
+--save-eval-code ...` ghi cùng một cặp file vào output dir của run (ở đó
+`status` là `ok` / `eval_failed` / `no_code`, và record `no_code` giữ nguyên
+response thô của model để trả lời được "vì sao không có code").
 
 #### 6c.7 Bảng tham số `run_relay.sh`
 
@@ -1119,6 +1154,7 @@ bạn `kill-session` hoặc server reboot thì tên mới mất — lúc đó d�
 | `--switch-fraction F` | `0.5` | Điểm chuyển của `fixed_switch` |
 | `--p-strong F` | `0.5` | `random`: xác suất chọn model mạnh |
 | `--advanced-options JSON` | — | Override bất kỳ field nào của `search.database` |
+| `--save-eval-code` | tắt | Lưu **code của mọi generation** vào `eval_code_log.jsonl` (+ `eval_code_log.json` khi kết thúc), kể cả cái parse lỗi / chạy lỗi / timeout |
 | `--tmux` | tắt | Chạy nền trong tmux |
 | `--session NAME` | = run id | Tên tmux session |
 | `--output-dir DIR` | `outputs/server/<run-id>` | Nơi ghi kết quả |
@@ -1592,6 +1628,7 @@ Sau đó vẽ hình bằng các script sẵn có trên máy bạn (xem `scripts/
 | `--n-diverse-seeds N` | `5` |
 | `--n-variants-per-seed N` | `20` |
 | `--ablation NAME` | `full` |
+| `--save-eval-code` | tắt (xem §6c.6a) |
 | `--advanced-options JSON` | rỗng |
 
 **Các giá trị `--ablation` hợp lệ:** `full`, `ast_only`, `emb_only`,

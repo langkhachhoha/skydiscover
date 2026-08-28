@@ -75,6 +75,7 @@ from .prompts import (
     build_targeted_mutate_prompt,
     error_signature,
 )
+from .evallog import EvalCodeLog
 from .snaplog import SnapLog
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,12 @@ class BladeConfig:
     evaluation — the advisor polls on a 2 s timer, so it fires within a
     few evaluations of each boundary rather than on it."""
 
+    save_eval_code: bool = False
+    """Write ``eval_code_log.jsonl`` (+ ``eval_code_log.json`` at the end):
+    the source of every candidate the run produced, including the ones that
+    failed to parse, raised, scored invalid or timed out. Off by default, so
+    an existing driver behaves exactly as before."""
+
     # Output
     output_dir: str | Path = "runs/blade"
 
@@ -523,6 +530,25 @@ class BladeOrchestrator:
             },
         )
 
+        # Every candidate's code, valid or not. Opt-in (``--save-eval-code``).
+        self.eval_log: EvalCodeLog | None = None
+        if config.save_eval_code:
+            self.eval_log = EvalCodeLog(
+                self.output_dir / "eval_code_log.jsonl",
+                run={
+                    "method": "blade-lite",
+                    "mutation_model": config.mutation_model,
+                    "paradigm_model": config.paradigm_model,
+                    "budget_evals": config.budget_evals,
+                    "budget_dollars": config.budget_dollars,
+                    "budget_seconds": config.budget_seconds,
+                    "n_workers": config.n_workers,
+                    "eval_timeout": config.eval_timeout,
+                    "seed": config.seed,
+                },
+            )
+            logger.info("[BLADE] saving every candidate's code to %s", self.eval_log.path)
+
         self._eval_processes: ResilientProcessPool | None = None
         self._semaphore = asyncio.Semaphore(config.n_workers)
 
@@ -607,7 +633,28 @@ class BladeOrchestrator:
     # Evaluate + admit
     # ------------------------------------------------------------------
 
-    async def _evaluate_code(self, code: str) -> tuple[float, dict, str | None]:
+    async def _evaluate_code(
+        self, code: str, source: str = "unknown"
+    ) -> tuple[float, dict, str | None]:
+        outcome = await self._evaluate_code_inner(code)
+        # Log here rather than at the call sites: this is the one point every
+        # candidate that reaches the evaluator passes through, so the log
+        # cannot drift out of sync with the search.
+        if self.eval_log is not None:
+            score, metrics, err = outcome
+            self.eval_log.record(
+                source=source,
+                code=code,
+                score=score,
+                metrics=metrics,
+                error=err,
+                model=self._model_label(source),
+                eval_count=self.monitor.eval_count,
+                cost_usd=round(self.cost.cost, 6),
+            )
+        return outcome
+
+    async def _evaluate_code_inner(self, code: str) -> tuple[float, dict, str | None]:
         assert self._eval_processes is not None
         self._eval_in_flight += 1
         try:
@@ -646,11 +693,23 @@ class BladeOrchestrator:
         )
         return model_id.rsplit("/", 1)[-1]
 
-    def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None, metrics: dict | None = None) -> None:
+    def _record_reject(self, *, source: str, score: float = float("-inf"), error_msg: str | None = None, metrics: dict | None = None, evaluated: bool = False, llm_response: str | None = None) -> None:
         self.monitor.record_eval(score=score, accepted=False)
         if error_msg:
             self._record_error_knowledge(error_msg)
         self._log_eval(source=source, score=score, accepted=False, is_new_best=False, error_msg=error_msg, metrics=metrics)
+        # ``evaluated=True`` means _evaluate_code already logged this candidate
+        # with its code; the rest never produced a program to log.
+        if self.eval_log is not None and not evaluated:
+            self.eval_log.record(
+                source=source,
+                code=None,
+                error=error_msg,
+                model=self._model_label(source),
+                eval_count=self.monitor.eval_count,
+                llm_response=llm_response,
+                cost_usd=round(self.cost.cost, 6),
+            )
         self._ablation_after_eval(error_msg)
 
     def _record_error_knowledge(self, error_msg: str) -> None:
@@ -1095,11 +1154,11 @@ class BladeOrchestrator:
                 raw = await self._call(self.mutation_lm, prompt, temperature=self.config.llm_temperature)
                 parsed = self.parser.parse(raw)
                 if not parsed.has_code:
-                    self._record_reject(source=op, error_msg="parse_miss (no code in output)")
+                    self._record_reject(source=op, error_msg="parse_miss (no code in output)", llm_response=raw)
                     return
-                score, scores_dict, err = await self._evaluate_code(parsed.code)
+                score, scores_dict, err = await self._evaluate_code(parsed.code, source=op)
                 if err is not None:
-                    self._record_reject(source=op, score=score, error_msg=err)
+                    self._record_reject(source=op, score=score, error_msg=err, evaluated=True)
                     return
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
                 await self._admit(
@@ -1399,7 +1458,7 @@ class BladeOrchestrator:
             )
             self.paradigm_trials.append(trial)
             self.recent_trials.append(trial.render())
-            self._record_reject(source=source_label, error_msg="parse_miss (no code in output)")
+            self._record_reject(source=source_label, error_msg="parse_miss (no code in output)", llm_response=raw)
             self.snap.navigator_result(
                 snap_event, outcome="parse_miss",
                 error="parse_miss (no code in output)",
@@ -1408,7 +1467,7 @@ class BladeOrchestrator:
             )
             return
 
-        score, scores, err = await self._evaluate_code(parsed.code)
+        score, scores, err = await self._evaluate_code(parsed.code, source=source_label)
         description = await self._summarize_if_needed(parsed.code, parsed.description)
         accepted = False
         seed_is_new_best = False
@@ -1428,7 +1487,7 @@ class BladeOrchestrator:
                 navigator_mode=mode,
             )
         else:
-            self._record_reject(source=source_label, score=score, error_msg=err)
+            self._record_reject(source=source_label, score=score, error_msg=err, evaluated=True)
 
         delta = None
         if accepted and prev_best != float("-inf"):
@@ -1511,11 +1570,11 @@ class BladeOrchestrator:
                 return {"outcome": "llm_error"}
             parsed_v = self.parser.parse(raw_v)
             if not parsed_v.has_code:
-                self._record_reject(source="paradigm_variant", error_msg="parse_miss (no code in output)")
+                self._record_reject(source="paradigm_variant", error_msg="parse_miss (no code in output)", llm_response=raw_v)
                 return {"outcome": "parse_miss"}
-            v_score, v_scores, v_err = await self._evaluate_code(parsed_v.code)
+            v_score, v_scores, v_err = await self._evaluate_code(parsed_v.code, source="paradigm_variant")
             if v_err is not None:
-                self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err)
+                self._record_reject(source="paradigm_variant", score=v_score, error_msg=v_err, evaluated=True)
                 return {"outcome": "eval_error"}
             v_description = await self._summarize_if_needed(parsed_v.code, parsed_v.description)
             v_accepted, _v_reason, v_new_best = await self._admit(
@@ -1553,7 +1612,7 @@ class BladeOrchestrator:
         diverse_seeds: list[tuple[str, float, str]] = []
 
         if cfg.seed_program:
-            score, scores, err = await self._evaluate_code(cfg.seed_program)
+            score, scores, err = await self._evaluate_code(cfg.seed_program, source="init_seed")
             if err is None:
                 description = await self._summarize_if_needed(cfg.seed_program, "")
                 await self._admit(
@@ -1563,7 +1622,7 @@ class BladeOrchestrator:
                 diverse_seeds.append((cfg.seed_program, score, description))
                 logger.info("[BLADE init] seed_program admitted (score=%.4f)", score)
             else:
-                self._record_reject(source="init", score=score, error_msg=err)
+                self._record_reject(source="init", score=score, error_msg=err, evaluated=True)
 
         n_seeds = cfg.n_diverse_seeds + (0 if cfg.seed_program else 1)
         max_retries = 3
@@ -1595,11 +1654,11 @@ class BladeOrchestrator:
                     continue
                 parsed = self.parser.parse(raw)
                 if not parsed.has_code:
-                    self._record_reject(source="init", error_msg="parse_miss (no code in output)")
+                    self._record_reject(source="init", error_msg="parse_miss (no code in output)", llm_response=raw)
                     continue
-                score, scores, err = await self._evaluate_code(parsed.code)
+                score, scores, err = await self._evaluate_code(parsed.code, source="init")
                 if err is not None:
-                    self._record_reject(source="init", score=score, error_msg=err)
+                    self._record_reject(source="init", score=score, error_msg=err, evaluated=True)
                     continue
                 description = await self._summarize_if_needed(parsed.code, parsed.description)
                 await self._admit(
@@ -1650,11 +1709,11 @@ class BladeOrchestrator:
                 return
             parsed = self.parser.parse(raw)
             if not parsed.has_code:
-                self._record_reject(source="init", error_msg="parse_miss (no code in output)")
+                self._record_reject(source="init", error_msg="parse_miss (no code in output)", llm_response=raw)
                 return
-            score, scores, err = await self._evaluate_code(parsed.code)
+            score, scores, err = await self._evaluate_code(parsed.code, source="init")
             if err is not None:
-                self._record_reject(source="init", score=score, error_msg=err)
+                self._record_reject(source="init", score=score, error_msg=err, evaluated=True)
                 return
             description = await self._summarize_if_needed(parsed.code, parsed.description)
             await self._admit(
@@ -1792,6 +1851,7 @@ class BladeOrchestrator:
         )
         self._save_snapshot(result)
         self._save_snap_trace(result)
+        self._save_eval_code_log(result)
         self._report_error_rate()
         return result
 
@@ -2152,6 +2212,23 @@ class BladeOrchestrator:
         (self.output_dir / "snapshot.json").write_text(json.dumps(snap, indent=2))
         if result.best_program:
             (self.output_dir / "best.py").write_text(result.best_program)
+
+    def _save_eval_code_log(self, result: BladeResult) -> None:
+        """Fold ``eval_code_log.jsonl`` into its single-JSON view.
+
+        The JSONL is already complete on disk — each candidate flushed as it
+        was evaluated — so a run killed before this point still has every
+        record; ``scripts/eval_log_to_json.py`` converts one of those.
+        """
+        if self.eval_log is None:
+            return
+        self.eval_log.finalize({
+            "best_score": result.best_score if result.best_score != float("-inf") else None,
+            "total_evaluations": result.total_evaluations,
+            "total_cost": result.total_cost,
+            "runtime_seconds": result.runtime_seconds,
+            "output_dir": str(self.output_dir),
+        })
 
     def _save_snap_trace(self, result: BladeResult) -> None:
         """Close out ``snap.json`` with run totals and log the headline split.

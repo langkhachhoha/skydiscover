@@ -106,10 +106,17 @@ class _StubPool:
         return LLMResponse(text=f"```python\ndef solve():\n    return {value:.6f}\n```")
 
 
-def _run(search_type: str, benchmark: Path, tmp_path: Path, workers: int = 4):
+def _run(
+    search_type: str,
+    benchmark: Path,
+    tmp_path: Path,
+    workers: int = 4,
+    save_eval_code: bool = False,
+):
     from skydiscover import Runner
 
     config = _make_config(search_type, workers=workers)
+    config.search.database.save_eval_code = save_eval_code
     output_dir = tmp_path / f"out_{search_type}"
     runner = Runner(
         initial_program_path=str(benchmark / "initial_program.py"),
@@ -173,6 +180,34 @@ def test_methods_complete_and_report(search_type, benchmark, tmp_path, monkeypat
     ]
     assert progress, "no progress records written"
     assert all(record["tier"] in ("cheap", "strong") for record in progress)
+
+
+def test_save_eval_code_keeps_every_generation(benchmark, tmp_path, monkeypatch):
+    """--save-eval-code writes one record per generation, code included."""
+    monkeypatch.delenv("SKYDISCOVER_MAX_COST_USD", raising=False)
+    _, output_dir, _ = _run("relayevolve", benchmark, tmp_path, save_eval_code=True)
+
+    records = [
+        json.loads(line)
+        for line in (output_dir / "eval_code_log.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    summary = json.loads((output_dir / "relay_summary.json").read_text())
+    assert len(records) >= summary["iterations_used"]
+    assert all(record["tier"] in ("cheap", "strong") for record in records)
+    assert all(record["status"] in ("ok", "evaluation_failed", "no_program") for record in records)
+    # The point of the log: the source is there, not just the score.
+    assert any(record["status"] == "ok" and "def solve" in (record["code"] or "") for record in records)
+
+    folded = json.loads((output_dir / "eval_code_log.json").read_text())
+    assert folded["n_records"] == len(records)
+    assert folded["summary"]["iterations_used"] == summary["iterations_used"]
+
+
+def test_eval_code_log_is_off_by_default(benchmark, tmp_path, monkeypatch):
+    monkeypatch.delenv("SKYDISCOVER_MAX_COST_USD", raising=False)
+    _, output_dir, _ = _run("relay_all_cheap", benchmark, tmp_path)
+    assert not (output_dir / "eval_code_log.jsonl").exists()
 
 
 def test_retries_are_off_by_default_and_failures_spend_a_generation(
