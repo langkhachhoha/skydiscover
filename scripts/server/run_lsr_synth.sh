@@ -130,12 +130,11 @@ Models
   --embedding-model ID SpecEvo description embedder. (default: openai/text-embedding-3-small)
 
 RelayEvolve knobs (ignored by the other methods)
-  --workers N          Generations in flight at once. (default: 4)
   --relay-arg 'FLAG V' Any other scripts/run_relay.py flag, repeatable, e.g.
                        --relay-arg '--block-size 5' --relay-arg '--bank-size 8'.
 
-SpecEvo shape (ignored by baselines)
-  --workers N          Concurrent LLM workers. (default: 4)
+SpecEvo / RelayEvolve shape (ignored by the other baselines)
+  --workers N          Concurrent LLM workers, i.e. generations in flight. (default: 4)
   --eval-processes N   Concurrent evaluator processes. (default: 4)
   --pe-interval N      Navigator (paradigm-shift) cadence. (default: 10)
   --n-diverse-seeds N  Phase-1 diverse seeds. (default: 5)
