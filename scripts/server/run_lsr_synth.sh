@@ -67,6 +67,7 @@ OUTPUT_DIR=""
 INSTALL_DEPS=1
 DRY_RUN=0
 FRESH=0
+RETRY_FAILED=0
 STATUS_ONLY=0
 
 VALID_METHODS="specevo relayevolve openevolve_native gepa_native adaevolve evox"
@@ -150,6 +151,14 @@ Run control
                        (default: outputs/lsr_synth/<method>/<domain>/seed<N>)
   --fresh              Delete any existing results for this (method, domain, seed)
                        and start over. Without it, an existing run is RESUMED.
+  --retry-failed       Re-run only the problems this run recorded as failed
+                       (status other than "ok", or marked finished with no result
+                       line). A failed problem is *finished*, so a plain re-run
+                       skips it and resuming its checkpoint would only replay the
+                       same dead end; this moves each one aside to
+                       failed_attempts/ and searches it again from scratch.
+                       Problems that were merely interrupted need no flag — they
+                       are never marked finished, so re-running resumes them.
   --status             Print progress for this run and exit. No API calls.
   --tmux               Run detached in tmux (survives SSH disconnect).
   --session NAME       tmux session name. (default: derived from the run)
@@ -211,6 +220,7 @@ while [[ $# -gt 0 ]]; do
         --seed)                SEED="$2"; shift 2 ;;
         --output-dir)          OUTPUT_DIR="$2"; shift 2 ;;
         --fresh)               FRESH=1; shift ;;
+        --retry-failed)        RETRY_FAILED=1; shift ;;
         --status)              STATUS_ONLY=1; shift ;;
         --tmux)                USE_TMUX=1; shift ;;
         --session)             SESSION="$2"; shift 2 ;;
@@ -310,6 +320,7 @@ if [[ "$USE_TMUX" == "1" && "${LSR_INSIDE_TMUX:-0}" != "1" ]]; then
     [[ "$USE_CONDA"    == "0" ]] && INNER+=(--no-conda)
     [[ "$INSTALL_DEPS" == "0" ]] && INNER+=(--no-install-deps)
     [[ "$FRESH"        == "1" ]] && INNER+=(--fresh)
+    [[ "$RETRY_FAILED" == "1" ]] && INNER+=(--retry-failed)
     [[ "$DRY_RUN"      == "1" ]] && INNER+=(--dry-run)
 
     QUOTED="$(printf '%q ' "${INNER[@]}")"
@@ -401,6 +412,66 @@ PYEOF
 )" || die "could not list problems — has the dataset been prepared? (python benchmarks/llm_srbench/prepare_data.py)"
 fi
 [[ -n "${PROBLEMS// /}" ]] || die "no problems selected"
+
+# ===========================================================================
+# --retry-failed: narrow the selection to the problems that finished badly
+#
+# results.jsonl is append-only and lsr_summarize.py reads the LAST record per
+# problem, so a retry supersedes the failed line rather than double-counting.
+# The old attempt is moved to failed_attempts/, never deleted: it is the only
+# record of what went wrong, and re-running must not start from its checkpoint.
+# ===========================================================================
+if [[ "$RETRY_FAILED" == "1" ]]; then
+    FAILED="$(LSR_RESULTS="$RESULTS" LSR_OUTPUT_DIR="$OUTPUT_DIR" LSR_CANDIDATES="$PROBLEMS" \
+              "$PY" - <<'PYEOF'
+import json, os
+from pathlib import Path
+
+results = Path(os.environ["LSR_RESULTS"])
+problems_root = Path(os.environ["LSR_OUTPUT_DIR"]) / "problems"
+latest = {}
+if results.exists():
+    for line in results.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("problem"):
+            latest[rec["problem"]] = rec
+
+out = []
+for pid in os.environ["LSR_CANDIDATES"].split():
+    # Only a problem the runner marked finished can be a failure; anything else
+    # is untouched or interrupted, and a plain re-run already handles it.
+    if not (problems_root / pid / ".done").exists():
+        continue
+    rec = latest.get(pid)
+    if rec is None or rec.get("status") != "ok":
+        out.append(pid)
+print(" ".join(out))
+PYEOF
+)" || die "could not read $RESULTS"
+    if [[ -z "${FAILED// /}" ]]; then
+        echo ">>> --retry-failed: no failed problems in $OUTPUT_DIR — nothing to do"
+        exit 0
+    fi
+    echo ">>> --retry-failed: retrying $(wc -w <<<"$FAILED" | tr -d ' ') problem(s): $FAILED"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo ">>> (dry run: previous attempts left where they are)"
+    else
+        ARCHIVE_ROOT="$OUTPUT_DIR/failed_attempts/$(date +%Y%m%d-%H%M%S)"
+        mkdir -p "$ARCHIVE_ROOT"
+        for pid in $FAILED; do
+            [[ -d "$OUTPUT_DIR/problems/$pid" ]] && mv "$OUTPUT_DIR/problems/$pid" "$ARCHIVE_ROOT/$pid"
+        done
+        echo ">>> previous attempts archived under $ARCHIVE_ROOT"
+    fi
+    PROBLEMS="$FAILED"
+fi
+
 N_TOTAL="$(wc -w <<<"$PROBLEMS" | tr -d ' ')"
 
 # ===========================================================================

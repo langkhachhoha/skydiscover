@@ -518,6 +518,26 @@ tmux new-session -d -s lsr_relay -c "$PWD"
 tmux send-keys -t lsr_relay 'for d in chem_react bio_pop_growth phys_osc matsci; do ./scripts/server/run_lsr_synth.sh --method relayevolve --domain "$d" --iterations 100 --seed 1; done' C-m
 ```
 
+**Chạy lại những bài bị fail.** Hai kiểu "fail" khác nhau:
+
+| tình huống | dấu hiệu | cách chạy lại |
+|---|---|---|
+| job bị ngắt giữa chừng (đứt SSH, hết key, reboot) | problem **không** có `.done`, `--status` hiện `pending` | chạy lại **đúng lệnh cũ** — tự resume từ checkpoint |
+| bài chạy hết budget nhưng không ra phương trình | `--status` hiện `(no_program)` / `(invalid_program)` | cần `--retry-failed` |
+
+Bài fail đã được đánh dấu **xong**, nên lệnh cũ sẽ bỏ qua nó, và resume checkpoint
+của nó cũng chỉ lặp lại đúng ngõ cụt đó. `--retry-failed` chọn riêng những bài đó,
+chuyển lần chạy cũ vào `failed_attempts/<timestamp>/` (không xoá) rồi search lại
+từ đầu:
+
+```bash
+./scripts/server/run_lsr_synth.sh --method relayevolve --domain phys_osc \
+    --full --iterations 100 --workers 4 --seed 1 --retry-failed --tmux
+```
+
+Không có bài nào fail thì nó in `nothing to do` và thoát, không tốn gì. Dòng kết quả
+mới ghi đè dòng cũ khi tổng hợp (`lsr_summarize.py` lấy bản ghi cuối cùng của mỗi bài).
+
 `--workers` mặc định là **8** cho `relayevolve` (SpecEvo giữ nguyên 4). Con số này
 chỉ có tác dụng đầy đủ ở **strong phase**: cheap phase dispatch mỗi lần một block
 (`block_size = 5`) rồi mới đo Relay-Gain, nên nó không bao giờ chạy quá 5 luồng
