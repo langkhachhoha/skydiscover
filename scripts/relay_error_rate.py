@@ -12,11 +12,22 @@ What counts as an error
 The convention is the one already used by the SpecEvo ablation
 (``levi/levi/blade/orchestrator.py``): a generation is an *error* when the
 model produced a candidate that turned out to be unusable -- it did not parse,
-it was over-long, the evaluator raised, or the evaluation timed out.  Pure
-infrastructure noise (the API call itself failed, a worker crashed) produced no
-candidate to judge, so by default it is dropped from *both* sides of the ratio
-and reported separately as ``api``.  ``--llm-failures error`` counts it as an
-error instead, ``--llm-failures ok`` counts it as a success.
+it was over-long, or the evaluator rejected it.  Pure infrastructure noise (the
+API call itself failed, a worker crashed) produced no candidate to judge, so by
+default it is dropped from *both* sides of the ratio and reported separately as
+``api``.  ``--llm-failures error`` counts it as an error instead,
+``--llm-failures ok`` counts it as a success.
+
+**Evaluator timeouts are tracked separately**, because they say as much about
+the eval-timeout setting and the CPU contention between workers as they do
+about the code.  They reach ``relay_progress.jsonl`` as an ordinary
+``Evaluation failed (validity=0)``, indistinguishable from a genuine invalid
+solution, so they are recovered from ``run.log`` (``Program <id> timed out
+after ...``) and attributed to the generation whose failure they precede.
+``--timeouts error`` (the default) keeps them in the numerator,
+``--timeouts exclude`` drops them from both sides, ``--timeouts ok`` counts
+them as successes.  A run pulled without its ``run.log`` cannot make the
+distinction; the report says so.
 
 Seeds
 -----
@@ -77,6 +88,7 @@ FORMAT_FAILURE_MARKERS = (
 )
 
 LOG_FAILURE_RE = re.compile(r"Iteration (\d+) failed: (.*)")
+LOG_TIMEOUT_RE = re.compile(r"Program ([0-9a-fA-F-]{36}) timed out after")
 
 
 # ----------------------------------------------------------------------
@@ -91,11 +103,13 @@ def _load_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
-def classify(error: Optional[str]) -> str:
-    """``ok`` | ``api`` | ``format`` | ``eval`` | ``other`` for one generation."""
+def classify(error: Optional[str], timed_out: bool = False) -> str:
+    """``ok`` | ``api`` | ``timeout`` | ``format`` | ``eval`` | ``other``."""
     if not error:
         return "ok"
     msg = str(error).strip()
+    if timed_out:
+        return "timeout"
     if msg.startswith(API_FAILURE_PREFIXES):
         return "api"
     if any(marker.lower() in msg.lower() for marker in FORMAT_FAILURE_MARKERS):
@@ -103,6 +117,35 @@ def classify(error: Optional[str]) -> str:
     if "Evaluator failed" in msg or "evaluation" in msg.lower() or "timeout" in msg.lower():
         return "eval"
     return "other"
+
+
+def timed_out_iterations(run_dir: Path) -> Optional[set]:
+    """Which generations died on the evaluator clock, read out of ``run.log``.
+
+    The evaluator logs ``Program <id> timed out after Ns`` and then the
+    generation fails with a bare ``Evaluation failed (validity=0)`` -- the same
+    message a genuinely invalid solution produces, so the progress log alone
+    cannot tell the two apart.  The timeout line is emitted by the same task
+    that is about to log ``Iteration N failed``, so a timeout is attributed to
+    the next failed generation after it.  Returns ``None`` when there is no
+    ``run.log`` to read, which is different from "no timeouts happened".
+    """
+    log = run_dir / "run.log"
+    if not log.is_file():
+        return None
+    pending = False
+    timed_out: set = set()
+    with log.open(errors="replace") as fh:
+        for line in fh:
+            if LOG_TIMEOUT_RE.search(line):
+                pending = True
+                continue
+            match = LOG_FAILURE_RE.search(line)
+            if match:
+                if pending:
+                    timed_out.add(int(match.group(1)))
+                pending = False
+    return timed_out
 
 
 def read_progress(run_dir: Path) -> List[Dict[str, Any]]:
@@ -123,6 +166,9 @@ def read_progress(run_dir: Path) -> List[Dict[str, Any]]:
                 continue
             rows[int(iteration)] = record
     if rows:
+        timed_out = timed_out_iterations(run_dir)
+        for iteration, record in rows.items():
+            record["timed_out"] = None if timed_out is None else iteration in timed_out
         return [rows[i] for i in sorted(rows)]
 
     # Fallback: the run predates the jsonl, or it was lost. `run.log` carries
@@ -147,8 +193,15 @@ def _progress_from_log(run_dir: Path) -> List[Dict[str, Any]]:
         if not failures:
             return []
         total = max(failures) + 1
+    timed_out = timed_out_iterations(run_dir) or set()
     return [
-        {"iteration": i, "error": failures.get(i), "from_log": True} for i in range(int(total))
+        {
+            "iteration": i,
+            "error": failures.get(i),
+            "timed_out": i in timed_out,
+            "from_log": True,
+        }
+        for i in range(int(total))
     ]
 
 
@@ -199,29 +252,26 @@ def bin_spans(n: int, bins: int) -> List[Tuple[int, int]]:
 
 
 def run_series(
-    records: Sequence[Dict[str, Any]], bins: int, llm_failures: str
+    records: Sequence[Dict[str, Any]],
+    bins: int,
+    llm_failures: str,
+    timeouts: str = "error",
 ) -> Dict[str, Any]:
     """Per-bin error rates (fractions in [0, 1]) for a single run."""
-    kinds = [classify(r.get("error")) for r in records]
+    kinds = [classify(r.get("error"), bool(r.get("timed_out"))) for r in records]
     counts: Dict[str, int] = {}
     for kind in kinds:
         counts[kind] = counts.get(kind, 0) + 1
+
+    policy = {"api": llm_failures, "timeout": timeouts}
 
     rates: List[Optional[float]] = []
     sizes: List[int] = []
     errors: List[int] = []
     scored: List[int] = []
     for start, end in bin_spans(len(records), bins):
-        chunk = kinds[start:end]
-        if llm_failures == "exclude":
-            judged = [k for k in chunk if k != "api"]
-        else:
-            judged = list(chunk)
-        n_err = sum(
-            1
-            for k in judged
-            if k not in ("ok",) and not (k == "api" and llm_failures == "ok")
-        )
+        judged = [k for k in kinds[start:end] if policy.get(k) != "exclude"]
+        n_err = sum(1 for k in judged if k != "ok" and policy.get(k) != "ok")
         rates.append(n_err / len(judged) if judged else None)
         sizes.append(end - start)
         errors.append(n_err)
@@ -234,6 +284,7 @@ def run_series(
         "n": len(records),
         "counts": counts,
         "from_log": bool(records and records[0].get("from_log")),
+        "timeouts_known": records[0].get("timed_out") is not None if records else False,
     }
 
 
@@ -295,12 +346,12 @@ def print_table(
         )
 
 
-def print_detail(runs: List[Dict[str, Any]], bins: int, llm_failures: str) -> None:
+def print_detail(runs: List[Dict[str, Any]]) -> None:
     print()
-    print("### per-run detail")
+    print("### per-run detail  (counts are raw, before the include/exclude policy)")
     header = (
         f"{'method':<14} {'benchmark':<22} {'seed':>4} {'gens':>5} {'err%':>6}  "
-        f"{'api':>4} {'format':>6} {'eval':>5} {'other':>5}  bins (%)"
+        f"{'api':>4} {'t/o':>5} {'format':>6} {'eval':>5} {'other':>5}  bins (%)"
     )
     print(header)
     print("-" * len(header))
@@ -311,13 +362,40 @@ def print_detail(runs: List[Dict[str, Any]], bins: int, llm_failures: str) -> No
         total_scored = sum(series["scored"])
         overall = total_err / total_scored if total_scored else None
         bins_txt = " ".join(_pct(r) for r in series["rates"])
-        flag = " [from run.log]" if series["from_log"] else ""
+        flags = " [from run.log]" if series["from_log"] else ""
+        timeouts = f"{counts.get('timeout', 0):>5}" if series["timeouts_known"] else f"{'?':>5}"
         print(
             f"{run['method']:<14} {run['benchmark']:<22} {str(run['seed']):>4} "
             f"{series['n']:>5} {_pct(overall):>6}  "
-            f"{counts.get('api', 0):>4} {counts.get('format', 0):>6} "
-            f"{counts.get('eval', 0):>5} {counts.get('other', 0):>5}  {bins_txt}{flag}"
+            f"{counts.get('api', 0):>4} {timeouts} {counts.get('format', 0):>6} "
+            f"{counts.get('eval', 0):>5} {counts.get('other', 0):>5}  {bins_txt}{flags}"
         )
+
+
+def write_txt(
+    path: Path, table: List[Dict[str, Any]], benchmarks: Sequence[str], bins: int
+) -> None:
+    """Just the per-task bin tables. Nothing else goes in this file."""
+    lines: List[str] = []
+    for benchmark in benchmarks:
+        rows = [r for r in table if r["benchmark"] == benchmark]
+        if not rows:
+            continue
+        if lines:
+            lines.append("")
+        lines.append(benchmark)
+        lines.append(
+            f"{'':<14}" + "".join(f"{'bin' + str(i + 1):>13}" for i in range(bins))
+        )
+        for row in rows:
+            label = METHOD_LABEL.get(row["method"], row["method"])
+            cells = "".join(
+                f"{'-':>13}" if m is None else f"{_pct(m) + '±' + _pct(s):>13}"
+                for m, s in zip(row["mean"], row["std"])
+            )
+            lines.append(f"{label:<14}{cells}")
+    path.write_text("\n".join(lines) + "\n")
+    print(f"\nWrote {path}")
 
 
 def write_csv(path: Path, table: List[Dict[str, Any]], bins: int) -> None:
@@ -375,6 +453,19 @@ def main() -> int:
         default="exclude",
         help="How to treat failed API calls (default: exclude from both sides)",
     )
+    ap.add_argument(
+        "--timeouts",
+        choices=["error", "exclude", "ok"],
+        default="error",
+        help="How to treat generations killed by the evaluator timeout "
+        "(default: count them as errors)",
+    )
+    ap.add_argument(
+        "--txt",
+        type=Path,
+        default=None,
+        help="Write just the per-task bin tables to this file, nothing else",
+    )
     ap.add_argument("--detail", action="store_true", help="Also print one line per run")
     ap.add_argument("--csv", type=Path, default=None)
     ap.add_argument("--json", type=Path, default=None)
@@ -421,7 +512,7 @@ def main() -> int:
             print(f"  ! no per-generation log in {run['dir']} — skipped", file=sys.stderr)
             continue
         run = dict(run)
-        run["series"] = run_series(records, args.bins, args.llm_failures)
+        run["series"] = run_series(records, args.bins, args.llm_failures, args.timeouts)
         loaded.append(run)
 
     table: List[Dict[str, Any]] = []
@@ -462,8 +553,28 @@ def main() -> int:
         "error": "failed API calls counted as errors",
         "ok": "failed API calls counted as successes",
     }[args.llm_failures]
-    print(f"Error rate over {args.bins} equal chunks of each run — {mode}.")
+    timeout_mode = {
+        "error": "evaluator timeouts counted as errors",
+        "exclude": "evaluator timeouts excluded from both sides of the ratio",
+        "ok": "evaluator timeouts counted as successes",
+    }[args.timeouts]
+    n_timeout = sum(r["series"]["counts"].get("timeout", 0) for r in loaded)
+    n_gen = sum(r["series"]["n"] for r in loaded)
+    unknown = [r for r in loaded if not r["series"]["timeouts_known"]]
+
+    print(f"Error rate over {args.bins} equal chunks of each run — {mode}, {timeout_mode}.")
     print(f"Roots: {', '.join(str(r) for r in roots)}")
+    print(
+        f"Evaluator timeouts: {n_timeout} of {n_gen} generations "
+        f"({100.0 * n_timeout / n_gen:.1f}%)."
+        if n_gen
+        else "No generations read."
+    )
+    if unknown:
+        print(
+            f"Warning: {len(unknown)} run(s) have no run.log, so their timeouts cannot be "
+            "separated from genuine invalid solutions and are counted as ordinary errors."
+        )
     if duplicates:
         print(
             f"Note: {duplicates} duplicate run(s) for the same "
@@ -478,9 +589,12 @@ def main() -> int:
             print(f"\n### {benchmark}  —  no runs found")
 
     if args.detail:
-        print_detail(sorted(loaded, key=lambda r: (r["benchmark"], r["method"], r["seed"] or 0)),
-                     args.bins, args.llm_failures)
+        print_detail(
+            sorted(loaded, key=lambda r: (r["benchmark"], r["method"], r["seed"] or 0))
+        )
 
+    if args.txt:
+        write_txt(args.txt, table, args.benchmarks, args.bins)
     if args.csv:
         write_csv(args.csv, table, args.bins)
     if args.json:

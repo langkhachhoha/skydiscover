@@ -1207,9 +1207,11 @@ All-cheap          37.8±7.7     28.1±2.5     25.7±6.6   ...     4.2±3.6
 | `--bins N` | `8` | Số khoảng chia đều theo generation **đã chạy thật** |
 | `--methods ...` | 5 baseline | Thêm `all_strong` nếu muốn đủ 6 |
 | `--benchmarks ...` | `circle_packing circle_packing_rect` | Task cần lấy |
-| `--seed-target N` | `3` | Nhân bản seed cuối cho đủ N seed khi tính mean/std. `0` = tắt |
-| `--llm-failures M` | `exclude` | `exclude` (bỏ khỏi cả tử lẫn mẫu) / `error` / `ok` |
+| `--seed-target N` | `3` | Nhân bản seed cuối cho đủ N seed khi tính mean/std (2 seed → `1, 2, 2`). `0` = tắt |
+| `--llm-failures M` | `exclude` | Lời gọi API hỏng: `exclude` (bỏ khỏi cả tử lẫn mẫu) / `error` / `ok` |
+| `--timeouts M` | `error` | Generation bị evaluator giết vì quá giờ: `error` / `exclude` / `ok` |
 | `--detail` | tắt | In thêm 1 dòng mỗi run, kèm số lỗi theo loại |
+| `--txt F` | — | Ghi **chỉ** 2 bảng 8 bin ra file, không kèm gì khác |
 | `--csv F` / `--json F` | — | Xuất ra để vẽ hình |
 
 **Thế nào là "code lỗi"?** Đúng theo quy ước đã dùng cho ablation SpecEvo: một
@@ -1219,9 +1221,19 @@ Còn lời gọi API hỏng (rate limit, timeout mạng, worker chết) là nhi�
 **không sinh ra code nào để đánh giá**, nên mặc định bị loại khỏi cả tử số lẫn
 mẫu số và đếm riêng ở cột `api` của `--detail`.
 
+**Timeout được tách riêng.** Generation bị evaluator giết vì quá `--eval-timeout`
+ghi vào log đúng chuỗi `Evaluation failed (validity=0)` — không phân biệt được
+với một lời giải sai thật sự. Script khôi phục lại từ `run.log` (dòng
+`Program <id> timed out after ...`, gán cho generation lỗi ngay sau đó) và đếm
+ở cột `t/o`. Mặc định vẫn tính là lỗi; `--timeouts exclude` bỏ hẳn. Con số này
+đáng nhìn trước khi tin bảng: nó nói về `--eval-timeout` và mức tranh chấp CPU
+giữa các worker nhiều hơn là về chất lượng code.
+
 Nguồn số liệu là `relay_progress.jsonl` (mỗi generation một dòng, có trường
 `error`). Nếu file đó thiếu, script tự dựng lại từ `run.log` bằng các dòng
-`Iteration N failed: ...` và đánh dấu `[from run.log]`.
+`Iteration N failed: ...` và đánh dấu `[from run.log]`. Run nào kéo về mà
+**thiếu `run.log`** thì không tách được timeout — script sẽ cảnh báo và cột
+`t/o` hiện `?`.
 
 ---
 
