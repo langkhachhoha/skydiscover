@@ -1276,6 +1276,41 @@ Nguồn số liệu là `relay_progress.jsonl` (mỗi generation một dòng, c�
 
 ---
 
+#### 6c.11 Bảng Avg / Best cho paper — `scripts/relay_final_scores.py`
+
+```bash
+python scripts/relay_final_scores.py --txt relay_final_scores.txt --csv relay_final_scores.csv
+python scripts/relay_final_scores.py --latex          # in luôn dòng LaTeX
+```
+
+Đọc `run.log`, bắt mọi dòng `🌟 New best solution found`, ghép với dòng
+`Metrics:` sinh ra nó, lấy cái **cuối cùng** làm điểm của run. Giá trị báo cáo
+là **metric thô** của task (`sum_radii`, `radii_sum`, `min_area_normalized`,
+`min_max_ratio`) — đúng quy ước của `scripts/plots/plot_budget10.py`. Task
+nhiều metric phụ (signal_processing) không có metric thô đơn nhất nên dùng
+`combined_score`.
+
+`--seed-target 3` (mặc định) mô phỏng 3 run độc lập là **seed 1, seed 2,
+seed 2**: `Avg` = mean ± std của 3 giá trị đó, `Best` = max. `0` = dùng đúng
+số seed có thật.
+
+Kiểm chứng: điểm parse ra được đối chiếu với `best_score` trong
+`relay_summary.json` của từng run; dòng cuối output in ra bao nhiêu run khớp.
+`--detail` in từng run kèm cột `check`.
+
+| Cờ | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--root DIR` | `outputs/server` | Thư mục cần quét (lặp lại được) |
+| `--methods ...` | 5 baseline | Thứ tự dòng. `all` = mọi method có mặt |
+| `--tasks ...` | 7 task của bảng | Thứ tự cột |
+| `--seed-target N` | `3` | seed 1, seed 2, seed 2. `0` = tắt |
+| `--digits N` | `3` | Số chữ số thập phân (bảng trong paper dùng 3) |
+| `--latex` | tắt | In dòng LaTeX của bảng |
+| `--detail` | tắt | Một dòng mỗi run + đối chiếu `relay_summary.json` |
+| `--txt F` / `--csv F` | — | Bảng dạng text / CSV đầy đủ độ chính xác |
+
+---
+
 ---
 
 ## 7. tmux — chạy rồi tắt máy vẫn không sao
