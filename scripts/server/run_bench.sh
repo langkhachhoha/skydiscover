@@ -626,7 +626,8 @@ fi
 # has no `timeout` binary, which would otherwise leave this path untested.
 # ===========================================================================
 TIMEOUT_MARK="$OUTPUT_DIR/.timed_out"
-rm -f "$TIMEOUT_MARK"
+RUN_PID_FILE="$OUTPUT_DIR/.run.pid"
+rm -f "$TIMEOUT_MARK" "$RUN_PID_FILE"
 WATCHDOG_PID=""
 
 # All PIDs descending from $1, deepest first, so children die before parents.
@@ -644,6 +645,18 @@ _descendants() {
 # is skipped so the footer below still gets written.
 _signal_run() {
     local sig="$1" p d cmdline
+    # Preferred: the PID the run actually got, recorded just before exec.
+    # Matching on RUN_ID alone silently finds nothing whenever --output-dir is
+    # given explicitly, because then the run id appears nowhere on the child's
+    # command line — the watchdog would fire and kill no one.
+    if [[ -s "$RUN_PID_FILE" ]]; then
+        p="$(cat "$RUN_PID_FILE" 2>/dev/null || true)"
+        if [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null; then
+            for d in $(_descendants "$p"); do kill "-$sig" "$d" 2>/dev/null || true; done
+            kill "-$sig" "$p" 2>/dev/null || true
+            return
+        fi
+    fi
     for p in $(pgrep -f -- "$RUN_ID" 2>/dev/null); do
         cmdline="$(ps -o command= -p "$p" 2>/dev/null || true)"
         case "$cmdline" in
@@ -676,7 +689,10 @@ if [[ -n "$TIMEOUT_SECS" ]]; then
 fi
 
 set +e
-( cd "$WORKDIR" && "${CMD[@]}" ) 2>&1 | tee -a "$LOG_FILE"
+# `sh -c` writes its own $$ and then execs the run, so the file holds the
+# PID of the run itself. ($BASHPID would be simpler but is bash 4+, and
+# this script still has to work under the bash 3.2 on macOS.)
+( cd "$WORKDIR" && exec sh -c 'echo $$ > "$1"; shift; exec "$@"' _ "$RUN_PID_FILE" "${CMD[@]}" ) 2>&1 | tee -a "$LOG_FILE"
 STATUS="${PIPESTATUS[0]}"
 set -e
 
