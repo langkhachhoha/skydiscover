@@ -58,18 +58,42 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EVALUATOR = REPO_ROOT / "benchmarks/math/circle_packing_rect/evaluator/evaluator.py"
 
 
+def can_evaluate(python: str) -> bool:
+    """True if *python* can import what the evaluator needs."""
+    try:
+        return subprocess.run(
+            [python, "-c", "import numpy, scipy"],
+            capture_output=True,
+            timeout=60,
+        ).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def default_python() -> str:
     """The interpreter to evaluate candidates with.
 
-    The evaluator needs numpy and scipy, which the bare system python often
-    lacks; prefer the project venv, then an active one, then ourselves.
+    The evaluator needs numpy and scipy, which a bare system python often
+    lacks.  The environment the user activated wins -- conda names it
+    CONDA_PREFIX and virtualenv names it VIRTUAL_ENV -- and a project venv is
+    only a fallback for when none of those can do the job.  Each candidate is
+    probed rather than assumed, so an env that merely exists but is missing
+    scipy does not silently fail 1443 times.
     """
-    for candidate in (REPO_ROOT / ".venv/bin/python", REPO_ROOT / "venv/bin/python"):
-        if candidate.is_file():
-            return str(candidate)
-    active = os.environ.get("VIRTUAL_ENV")
-    if active and (Path(active) / "bin/python").is_file():
-        return str(Path(active) / "bin/python")
+    candidates = [sys.executable]
+    for var in ("CONDA_PREFIX", "VIRTUAL_ENV"):
+        prefix = os.environ.get(var)
+        if prefix:
+            candidates.append(str(Path(prefix) / "bin/python"))
+    candidates += [str(REPO_ROOT / ".venv/bin/python"), str(REPO_ROOT / "venv/bin/python")]
+
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen or not Path(candidate).is_file():
+            continue
+        seen.add(candidate)
+        if can_evaluate(candidate):
+            return candidate
     return sys.executable
 
 # The message the controller substitutes when the evaluator came back with no
@@ -377,7 +401,7 @@ def main() -> int:
                    help=f"evaluator to run (default: {DEFAULT_EVALUATOR})")
     p.add_argument("--python", default=None,
                    help="interpreter used to run each candidate; it needs numpy and "
-                        "scipy (default: the project .venv, else $VIRTUAL_ENV, else this one)")
+                        "scipy (default: the active environment, else a project venv)")
     p.add_argument("--only", action="append", default=None,
                    help="only logs whose path contains this substring; repeatable "
                         "(e.g. --only relayevolve --only seed1)")
@@ -401,13 +425,13 @@ def main() -> int:
         print(f"error: no eval_code_log.jsonl found under {root}", file=sys.stderr)
         return 2
 
-    probe = subprocess.run(
-        [args.python, "-c", "import numpy, scipy"], capture_output=True, text=True
-    )
-    if probe.returncode != 0:
+    if not can_evaluate(args.python):
+        probe = subprocess.run(
+            [args.python, "-c", "import numpy, scipy"], capture_output=True, text=True
+        )
         print(f"error: {args.python} cannot import numpy/scipy -- every candidate "
               f"would fail identically.\n{probe.stderr.strip()}\n"
-              f"Pass a working interpreter with --python.", file=sys.stderr)
+              f"Activate the right environment, or pass one with --python.", file=sys.stderr)
         return 2
 
     print(f"python    : {args.python}")
