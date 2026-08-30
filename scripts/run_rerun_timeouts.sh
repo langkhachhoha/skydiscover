@@ -3,8 +3,8 @@
 # Launch scripts/rerun_timeout_evals.py in a detached tmux session, so a run
 # that takes hours survives the SSH connection dropping.
 #
-#   ./scripts/run_rerun_timeouts.sh                  # relay_cpr400, 8 jobs, 60s
-#   JOBS=16 ./scripts/run_rerun_timeouts.sh
+#   ./scripts/run_rerun_timeouts.sh                  # relay_cpr400, 4 jobs, 150s
+#   JOBS=8 ./scripts/run_rerun_timeouts.sh
 #   ./scripts/run_rerun_timeouts.sh relay_cpr400
 #
 # The interpreter is resolved *here*, in the shell you activated your
@@ -19,8 +19,8 @@ cd "$REPO_ROOT"
 
 ROOT="${1:-relay_cpr400}"
 SESSION="${SESSION:-rerun_timeouts}"
-JOBS="${JOBS:-8}"
-TIMEOUT="${TIMEOUT:-60}"
+JOBS="${JOBS:-4}"
+TIMEOUT="${TIMEOUT:-150}"
 PYTHON="${PYTHON:-$(command -v python3 || command -v python || true)}"
 LOG_DIR="${LOG_DIR:-$REPO_ROOT/logs/rerun_timeouts}"
 LOG="$LOG_DIR/$(date +%Y%m%d_%H%M%S).log"

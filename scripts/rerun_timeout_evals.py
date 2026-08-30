@@ -12,7 +12,7 @@ rectangle carries the real message instead, and is left alone here.
 
 This script picks out *only* the timeout records, evaluates each one again
 with the real ``circle_packing_rect`` evaluator under a shorter limit
-(default 60s), and writes the outcome back over the same record, in the shape
+(default 150s), and writes the outcome back over the same record, in the shape
 the original writer would have produced:
 
 ``ok``
@@ -35,7 +35,7 @@ each other and to a serial run.
 
 Usage::
 
-    python scripts/rerun_timeout_evals.py relay_cpr400 --jobs 8
+    python scripts/rerun_timeout_evals.py relay_cpr400 --jobs 4
     python scripts/rerun_timeout_evals.py relay_cpr400 --limit 5 --dry-run
 """
 
@@ -382,8 +382,8 @@ def main() -> int:
     p.add_argument("root", nargs="?", default="relay_cpr400",
                    help="directory holding <method>/<seed>/eval_code_log.jsonl, "
                         "or one such file (default: relay_cpr400)")
-    p.add_argument("--timeout", type=float, default=60.0,
-                   help="seconds allowed per candidate (default: 60)")
+    p.add_argument("--timeout", type=float, default=150.0,
+                   help="seconds allowed per candidate (default: 150)")
     p.add_argument("--jobs", "-j", type=int, default=4,
                    help="candidates evaluated in parallel (default: 4)")
     p.add_argument("--limit", type=int, default=None,
