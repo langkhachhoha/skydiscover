@@ -626,7 +626,10 @@ fi
 # has no `timeout` binary, which would otherwise leave this path untested.
 # ===========================================================================
 TIMEOUT_MARK="$OUTPUT_DIR/.timed_out"
-RUN_PID_FILE="$OUTPUT_DIR/.run.pid"
+# Absolute: the run writes this file after `cd "$WORKDIR"` (levi/ for blade),
+# so a relative --output-dir would send it somewhere that does not exist and
+# leave the watchdog with no PID to kill.
+RUN_PID_FILE="$(cd "$OUTPUT_DIR" && pwd)/.run.pid"
 rm -f "$TIMEOUT_MARK" "$RUN_PID_FILE"
 WATCHDOG_PID=""
 
