@@ -365,7 +365,11 @@ def main() -> int:
     workers = int(args.workers)
     eval_processes = int(args.eval_processes)
     eval_timeout = float(args.eval_timeout)
-    pe_interval = _opt_int(args.pe_interval) or 50
+    # 0 is meaningful (the w/o-Navigator ablation: the orchestrator skips the
+    # PE monitor when pe_cron_interval <= 0), so only a blank value defaults.
+    pe_interval = _opt_int(args.pe_interval)
+    if pe_interval is None:
+        pe_interval = 50
 
     if args.output_dir:
         out_arg = Path(args.output_dir)
