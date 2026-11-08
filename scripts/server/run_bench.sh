@@ -126,6 +126,9 @@ blade options (defaults match blade.yml)
                               combine freely): "meta_advice_disabled":true (A4),
                               "single_prompt_operators":true (A6), and
                               "paradigm_force_mode":"reframe"|"synthesis"|"surgical" (A8).
+                              Role models: "navigator_model", "navigator_reasoning_effort",
+                              "advisor_model" (+ "meta_advice_max_tokens"), and
+                              "init_concurrency" to cap the bootstrap's parallel calls.
 
 baseline options (defaults match baseline.yml)
   --baseline NAME             openevolve_native | gepa_native | adaevolve | evox (default: evox)
@@ -542,6 +545,12 @@ for k, v in opts.items():
     [[ "${ADV_SINGLE_PROMPT_OPERATORS:-}" == "true" ]]    && EXTRA_OPTS+=(--single-prompt-operators)
     # Keep every candidate's source, failures included.
     [[ "$SAVE_EVAL_CODE" == "1" ]]                        && EXTRA_OPTS+=(--save-eval-code)
+    # Role-specific models (unset = the role keeps its default model).
+    [[ -n "${ADV_NAVIGATOR_MODEL:-}" ]]                   && EXTRA_OPTS+=(--navigator-model "$ADV_NAVIGATOR_MODEL")
+    [[ -n "${ADV_NAVIGATOR_REASONING_EFFORT:-}" ]]        && EXTRA_OPTS+=(--navigator-reasoning-effort "$ADV_NAVIGATOR_REASONING_EFFORT")
+    [[ -n "${ADV_ADVISOR_MODEL:-}" ]]                     && EXTRA_OPTS+=(--advisor-model "$ADV_ADVISOR_MODEL")
+    [[ -n "${ADV_META_ADVICE_MAX_TOKENS:-}" ]]            && EXTRA_OPTS+=(--meta-advice-max-tokens "$ADV_META_ADVICE_MAX_TOKENS")
+    [[ -n "${ADV_INIT_CONCURRENCY:-}" ]]                  && EXTRA_OPTS+=(--init-concurrency "$ADV_INIT_CONCURRENCY")
 
     # Paper-facing ablation toggles (identical mapping to blade.yml).
     PE_INTERVAL_EFFECTIVE="$PE_INTERVAL"

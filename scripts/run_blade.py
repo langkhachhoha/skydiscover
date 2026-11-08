@@ -85,6 +85,31 @@ def _parse_args() -> argparse.Namespace:
         default="openrouter/openai/text-embedding-3-small",
         help="OpenRouter id of the description-embedding model.",
     )
+    p.add_argument(
+        "--navigator-model", default=None,
+        help="Model for the Navigator's paradigm-shift calls only (default: "
+        "--paradigm-model). The bootstrap's diverse seeds stay on --paradigm-model.",
+    )
+    p.add_argument(
+        "--navigator-reasoning-effort", default=None,
+        help="reasoning_effort sent with every Navigator call, e.g. low / medium / high "
+        "(default: none sent = the provider's default).",
+    )
+    p.add_argument(
+        "--advisor-model", default=None,
+        help="Model the meta-advisor writes with (default: --mutation-model). A "
+        "reasoning model also needs a larger --meta-advice-max-tokens.",
+    )
+    p.add_argument(
+        "--meta-advice-max-tokens", type=int, default=None, metavar="N",
+        help="Token cap on the advisor's reply (default 400). Reasoning models "
+        "spend their hidden reasoning out of this too.",
+    )
+    p.add_argument(
+        "--init-concurrency", type=int, default=None, metavar="N",
+        help="Most bootstrap variants in flight at once (default: all at once). "
+        "Set it to --workers for a strictly N-at-a-time run.",
+    )
 
     # Budget
     p.add_argument("--evals", default="", help="Max evaluations (default: unset).")
@@ -436,6 +461,17 @@ def main() -> int:
     if args.save_eval_code:
         overrides["save_eval_code"] = True
 
+    if args.navigator_model:
+        overrides["navigator_model"] = args.navigator_model
+    if args.navigator_reasoning_effort:
+        overrides["navigator_reasoning_effort"] = args.navigator_reasoning_effort
+    if args.advisor_model:
+        overrides["advisor_model"] = args.advisor_model
+    if args.meta_advice_max_tokens is not None:
+        overrides["meta_advice_max_tokens"] = args.meta_advice_max_tokens
+    if args.init_concurrency is not None:
+        overrides["init_concurrency"] = args.init_concurrency
+
     if args.single_prompt_operators:
         overrides["single_prompt_operators"] = True
     if args.paradigm_force_mode is not None:
@@ -457,6 +493,9 @@ def main() -> int:
     print(f"[blade] example_dir       = {example_dir}")
     print(f"[blade] mutation_model    = {args.mutation_model}")
     print(f"[blade] paradigm_model    = {args.paradigm_model}")
+    print(f"[blade] navigator_model   = {args.navigator_model or args.paradigm_model}"
+          f" (reasoning_effort={args.navigator_reasoning_effort or 'provider default'})")
+    print(f"[blade] advisor_model     = {args.advisor_model or args.mutation_model}")
     print(f"[blade] embedding_model   = {args.embedding_model}")
     print(f"[blade] budget evals      = {evals}")
     print(f"[blade] budget dollars    = {dollars}")
@@ -508,6 +547,12 @@ def main() -> int:
         "example_dir": str(example_dir),
         "mutation_model": args.mutation_model,
         "paradigm_model": args.paradigm_model,
+        "navigator_model": args.navigator_model or args.paradigm_model,
+        "navigator_reasoning_effort": args.navigator_reasoning_effort,
+        "advisor_model": args.advisor_model or args.mutation_model,
+        "meta_advice_interval": None if args.no_meta_advice else args.meta_advice_interval,
+        "pe_interval": pe_interval,
+        "workers": workers,
         "embedding_model": args.embedding_model,
         "best_score": result.best_score,
         "best_metrics": result.best_metrics,
@@ -520,6 +565,13 @@ def main() -> int:
         "total_prompt_tokens": result.total_prompt_tokens,
         "total_completion_tokens": result.total_completion_tokens,
         "total_tokens": result.total_prompt_tokens + result.total_completion_tokens,
+        "total_reasoning_tokens": result.total_reasoning_tokens,
+        "total_llm_latency_seconds": round(result.total_llm_latency_seconds, 3),
+        "mean_llm_latency_seconds": (
+            round(result.total_llm_latency_seconds / result.total_llm_calls, 3)
+            if result.total_llm_calls else None
+        ),
+        "usage_by_role": result.usage_by_role,
         "init_usage": result.init_usage,
         "archive_size": result.archive_size,
         "runtime_seconds": result.runtime_seconds,
@@ -574,7 +626,13 @@ def main() -> int:
     print(f"LLM calls         : {result.total_llm_calls}")
     print(f"Input tokens      : {result.total_prompt_tokens}")
     print(f"Output tokens     : {result.total_completion_tokens}")
+    print(f"  of which reasoning: {result.total_reasoning_tokens}")
     print(f"Total tokens      : {result.total_prompt_tokens + result.total_completion_tokens}")
+    if result.total_llm_calls:
+        print(f"Mean LLM latency  : {result.total_llm_latency_seconds / result.total_llm_calls:.1f}s per call")
+    for role, u in (result.usage_by_role or {}).items():
+        print(f"  {role:<18}: {u['llm_calls']:>5} calls  in {u['prompt_tokens']:>9}  out {u['completion_tokens']:>8}"
+              f"  (reasoning {u['reasoning_tokens']:>7})  {u['mean_latency_s']:>6.1f}s/call  ${u['cost_usd']:.4f}")
     _init = result.init_usage or {}
     if _init:
         print(

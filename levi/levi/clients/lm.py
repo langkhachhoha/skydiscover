@@ -131,6 +131,26 @@ def _extract_tokens(response: Any) -> tuple[int, int]:
     return _first("prompt_tokens", "input_tokens"), _first("completion_tokens", "output_tokens")
 
 
+def _extract_reasoning_tokens(response: Any) -> int:
+    """Hidden-reasoning tokens of one response (a subset of completion tokens).
+
+    Chat Completions report them under ``completion_tokens_details``, the
+    Responses API under ``output_tokens_details``. Missing means 0.
+    """
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0
+    for field in ("completion_tokens_details", "output_tokens_details"):
+        details = usage.get(field) if isinstance(usage, dict) else getattr(usage, field, None)
+        if details is None:
+            continue
+        raw = details.get("reasoning_tokens") if isinstance(details, dict) else getattr(details, "reasoning_tokens", None)
+        value = _coerce_non_negative_float(raw)
+        if value:
+            return int(value)
+    return 0
+
+
 def _extract_cost(client: "LM", response: Any) -> float:
     explicit_cost = _cost_from_explicit_pricing(client, response)
     if explicit_cost is not None:
@@ -212,6 +232,7 @@ class LM(BaseClient):
             cost=cost,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            reasoning_tokens=_extract_reasoning_tokens(response),
         )
 
 

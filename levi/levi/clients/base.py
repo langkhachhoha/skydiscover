@@ -15,12 +15,15 @@ class ClientResult:
     ``usage`` block (input and output tokens for this call). They default
     to 0 for backends that report no usage — CLI-driven clients, or a
     provider that omits the field — so a caller can always sum them.
+    ``reasoning_tokens`` is the hidden-reasoning share of
+    ``completion_tokens`` (already included in it, not on top of it).
     """
 
     text: str
     cost: float = 0.0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    reasoning_tokens: int = 0
 
 
 class BaseClient(ABC):

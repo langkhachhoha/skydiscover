@@ -392,6 +392,12 @@ jobs:
           [ -n "$ADV_PARADIGM_FORCE_MODE" ] && EXTRA_OPTS="$EXTRA_OPTS --paradigm-force-mode $ADV_PARADIGM_FORCE_MODE"
           # A6 axis.
           [ "$ADV_SINGLE_PROMPT_OPERATORS" = "true" ] && EXTRA_OPTS="$EXTRA_OPTS --single-prompt-operators"
+          # Role-specific models (unset = the role keeps its default model).
+          [ -n "$ADV_NAVIGATOR_MODEL" ] && EXTRA_OPTS="$EXTRA_OPTS --navigator-model $ADV_NAVIGATOR_MODEL"
+          [ -n "$ADV_NAVIGATOR_REASONING_EFFORT" ] && EXTRA_OPTS="$EXTRA_OPTS --navigator-reasoning-effort $ADV_NAVIGATOR_REASONING_EFFORT"
+          [ -n "$ADV_ADVISOR_MODEL" ] && EXTRA_OPTS="$EXTRA_OPTS --advisor-model $ADV_ADVISOR_MODEL"
+          [ -n "$ADV_META_ADVICE_MAX_TOKENS" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-max-tokens $ADV_META_ADVICE_MAX_TOKENS"
+          [ -n "$ADV_INIT_CONCURRENCY" ] && EXTRA_OPTS="$EXTRA_OPTS --init-concurrency $ADV_INIT_CONCURRENCY"
 
           # Paper-facing ablation toggles. ``pe_interval`` is set to the
           # workflow input by default but the ``no_paradigm`` ablation

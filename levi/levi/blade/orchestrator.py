@@ -129,6 +129,25 @@ class BladeConfig:
     llm_max_tokens: int | None = None
     paradigm_max_tokens: int | None = None
 
+    # Role-specific models. All default to None = the behaviour before these
+    # existed, so a config that does not set them runs exactly as it did.
+    navigator_model: str | None = None
+    """Model behind the Navigator's paradigm-shift calls. ``None`` uses
+    ``paradigm_model``. ``paradigm_model`` also writes the bootstrap's
+    diverse seeds, so setting this swaps the Navigator alone and leaves the
+    initial population as it was."""
+    navigator_reasoning_effort: str | None = None
+    """``reasoning_effort`` sent with every Navigator call (``"low"``,
+    ``"medium"``, ...). ``None`` sends nothing: the provider's default."""
+    advisor_model: str | None = None
+    """Model the meta-advisor writes its note with. ``None`` uses
+    ``mutation_model``. A reasoning model spends its hidden reasoning out of
+    ``meta_advice_max_tokens`` too, so raise that alongside it."""
+    init_concurrency: int | None = None
+    """Most phase-2 bootstrap variants in flight at once. ``None`` launches
+    all ``n_diverse_seeds * n_variants_per_seed`` together, as before; a
+    strictly sequential run sets it to ``n_workers``."""
+
     # Loop schedule
     pe_cron_interval: int = 50
     """Frontier paradigm-shift fires every N completed evaluations."""
@@ -413,6 +432,14 @@ class BladeResult:
     """Input tokens over every LLM call of the run, provider-reported."""
     total_completion_tokens: int = 0
     """Output tokens over every LLM call of the run, provider-reported."""
+    total_reasoning_tokens: int = 0
+    """Hidden-reasoning tokens, a subset of ``total_completion_tokens``."""
+    total_llm_latency_seconds: float = 0.0
+    """Summed wall time of every successful LLM call (calls overlap when
+    n_workers > 1, so this can exceed ``runtime_seconds``)."""
+    usage_by_role: dict = field(default_factory=dict)
+    """Per-role split of calls/tokens/cost/latency: mutate, init_seed,
+    init_variant, navigator, navigator_variant, advisor, analyzer, summarize."""
     init_usage: dict = field(default_factory=dict)
     """Token/cost/call totals for the initialization phase alone — phase 1
     (diverse seeds) plus phase 2 (variants per seed), measured the moment
@@ -431,12 +458,37 @@ class _CallLog:
     calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    reasoning_tokens: int = 0
+    latency_s: float = 0.0
+    by_role: dict[str, dict[str, float | int]] = field(default_factory=dict)
 
-    def record(self, cost: float, prompt_tokens: int = 0, completion_tokens: int = 0) -> None:
-        self.cost += float(cost or 0.0)
+    def record(
+        self,
+        cost: float,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        latency_s: float = 0.0,
+        role: str | None = None,
+    ) -> None:
+        delta = {
+            "llm_calls": 1,
+            "cost_usd": float(cost or 0.0),
+            "prompt_tokens": int(prompt_tokens or 0),
+            "completion_tokens": int(completion_tokens or 0),
+            "reasoning_tokens": int(reasoning_tokens or 0),
+            "latency_s": float(latency_s or 0.0),
+        }
+        self.cost += delta["cost_usd"]
         self.calls += 1
-        self.prompt_tokens += int(prompt_tokens or 0)
-        self.completion_tokens += int(completion_tokens or 0)
+        self.prompt_tokens += delta["prompt_tokens"]
+        self.completion_tokens += delta["completion_tokens"]
+        self.reasoning_tokens += delta["reasoning_tokens"]
+        self.latency_s += delta["latency_s"]
+        if role:
+            bucket = self.by_role.setdefault(role, dict.fromkeys(delta, 0))
+            for k, v in delta.items():
+                bucket[k] += v
 
     def snapshot(self) -> dict[str, float | int]:
         """Running totals as a plain dict, for summaries and phase splits."""
@@ -446,7 +498,21 @@ class _CallLog:
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.prompt_tokens + self.completion_tokens,
+            "reasoning_tokens": self.reasoning_tokens,
+            "latency_s": round(self.latency_s, 3),
         }
+
+    def roles_snapshot(self) -> dict[str, dict[str, float | int]]:
+        out = {}
+        for role, b in sorted(self.by_role.items()):
+            n = int(b["llm_calls"]) or 1
+            out[role] = {
+                **b,
+                "cost_usd": round(float(b["cost_usd"]), 6),
+                "latency_s": round(float(b["latency_s"]), 3),
+                "mean_latency_s": round(float(b["latency_s"]) / n, 3),
+            }
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -469,6 +535,20 @@ class BladeOrchestrator:
 
         self.mutation_lm: BaseClient = LM(config.mutation_model)
         self.paradigm_lm: BaseClient = LM(config.paradigm_model)
+        # The Navigator and the Advisor use their default role's client
+        # (resolved at call time, so swapping ``paradigm_lm`` /
+        # ``mutation_lm`` on an instance still reaches them) unless given
+        # their own model / effort. An unset config sends identical requests.
+        nav_model = config.navigator_model or config.paradigm_model
+        self._navigator_lm: BaseClient | None = None
+        if nav_model != config.paradigm_model or config.navigator_reasoning_effort:
+            nav_defaults: dict[str, Any] = {}
+            if config.navigator_reasoning_effort:
+                nav_defaults["reasoning_effort"] = config.navigator_reasoning_effort
+            self._navigator_lm = LM(nav_model, **nav_defaults)
+        self._advisor_lm: BaseClient | None = None
+        if config.advisor_model and config.advisor_model != config.mutation_model:
+            self._advisor_lm = LM(config.advisor_model)
 
         self.cost = _CallLog()
         # Frozen copy of ``self.cost`` taken when the init phase ends, so the
@@ -508,6 +588,12 @@ class BladeOrchestrator:
         self.output_dir = Path(config.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+        # One line per successful LLM call: role, model, tokens (reasoning
+        # included), latency, cost. Always on; truncated so a re-run into the
+        # same directory does not mix two runs' calls.
+        self.llm_call_log_path = self.output_dir / "llm_calls.jsonl"
+        self.llm_call_log_path.write_text("")
+
         # Live search trace (``snap.json``) — always on, no flag. Records
         # every Navigator call (with its routed mode) and every new best,
         # code included, flushed after each event.
@@ -517,6 +603,9 @@ class BladeOrchestrator:
                 "method": "blade-lite",
                 "mutation_model": config.mutation_model,
                 "paradigm_model": config.paradigm_model,
+                "navigator_model": nav_model,
+                "navigator_reasoning_effort": config.navigator_reasoning_effort,
+                "advisor_model": config.advisor_model or config.mutation_model,
                 "embedding_model": config.embedding_model,
                 "pe_cron_interval": config.pe_cron_interval,
                 "n_workers": config.n_workers,
@@ -539,6 +628,8 @@ class BladeOrchestrator:
                     "method": "blade-lite",
                     "mutation_model": config.mutation_model,
                     "paradigm_model": config.paradigm_model,
+                    "navigator_model": nav_model,
+                    "advisor_model": config.advisor_model or config.mutation_model,
                     "budget_evals": config.budget_evals,
                     "budget_dollars": config.budget_dollars,
                     "budget_seconds": config.budget_seconds,
@@ -562,6 +653,24 @@ class BladeOrchestrator:
         self._llm_failure_total: int = 0
         self._window_mark: dict[str, Any] = {}
         self._error_rate_windows: list[dict] = []
+
+    @property
+    def navigator_lm(self) -> BaseClient:
+        """Client for the Navigator's paradigm-shift calls."""
+        return self._navigator_lm or self.paradigm_lm
+
+    @navigator_lm.setter
+    def navigator_lm(self, client: BaseClient) -> None:
+        self._navigator_lm = client
+
+    @property
+    def advisor_lm(self) -> BaseClient:
+        """Client the meta-advisor writes with."""
+        return self._advisor_lm or self.mutation_lm
+
+    @advisor_lm.setter
+    def advisor_lm(self, client: BaseClient) -> None:
+        self._advisor_lm = client
 
     # ------------------------------------------------------------------
     # Budget
@@ -592,12 +701,14 @@ class BladeOrchestrator:
         *,
         temperature: float,
         max_tokens: int | None | object = _DEFAULT_MAX_TOKENS,
+        role: str = "other",
     ) -> str:
         if max_tokens is self._DEFAULT_MAX_TOKENS:
             effective_max_tokens: int | None = self.config.llm_max_tokens
         else:
             effective_max_tokens = max_tokens  # type: ignore[assignment]
         self._client_in_flight += 1
+        t0 = time.monotonic()
         try:
             call_coro = client.acompletion(
                 prompt, temperature=temperature, max_tokens=effective_max_tokens,
@@ -609,19 +720,46 @@ class BladeOrchestrator:
                 result = await call_coro
         finally:
             self._client_in_flight -= 1
+        latency = time.monotonic() - t0
+        prompt_tokens = getattr(result, "prompt_tokens", 0)
+        completion_tokens = getattr(result, "completion_tokens", 0)
+        reasoning_tokens = getattr(result, "reasoning_tokens", 0)
         self.cost.record(
-            result.cost,
-            getattr(result, "prompt_tokens", 0),
-            getattr(result, "completion_tokens", 0),
+            result.cost, prompt_tokens, completion_tokens,
+            reasoning_tokens=reasoning_tokens, latency_s=latency, role=role,
+        )
+        self._log_llm_call(
+            role=role, model=client.model, latency=latency, cost=result.cost,
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
         )
         return result.text or ""
+
+    def _log_llm_call(self, *, role: str, model: str, latency: float, cost: float,
+                      prompt_tokens: int, completion_tokens: int, reasoning_tokens: int) -> None:
+        rec = {
+            "t": round(time.time() - self.start_time, 3) if self.start_time else None,
+            "role": role,
+            "model": model,
+            "prompt_tokens": int(prompt_tokens or 0),
+            "completion_tokens": int(completion_tokens or 0),
+            "reasoning_tokens": int(reasoning_tokens or 0),
+            "latency_s": round(latency, 3),
+            "cost_usd": round(float(cost or 0.0), 6),
+            "eval_count": self.monitor.eval_count,
+        }
+        try:
+            with self.llm_call_log_path.open("a") as fh:
+                fh.write(json.dumps(rec) + "\n")
+        except OSError:  # pragma: no cover — accounting must never break a search
+            logger.debug("[BLADE] could not append to %s", self.llm_call_log_path, exc_info=True)
 
     async def _summarize_if_needed(self, code: str, description: str) -> str:
         if description and len(description) >= self.config.parser_config.min_description_chars:
             return description
 
         async def _runner(prompt: str) -> str:
-            return await self._call(self.mutation_lm, prompt, temperature=0.3)
+            return await self._call(self.mutation_lm, prompt, temperature=0.3, role="summarize")
 
         try:
             return (await fallback_summarize(code, completion_fn=_runner)).strip()
@@ -689,7 +827,7 @@ class BladeOrchestrator:
         if source.startswith("paradigm_variant"):
             is_paradigm = False
         model_id = (
-            self.config.paradigm_model if is_paradigm else self.config.mutation_model
+            self.navigator_lm.model if is_paradigm else self.config.mutation_model
         )
         return model_id.rsplit("/", 1)[-1]
 
@@ -1151,7 +1289,10 @@ class BladeOrchestrator:
                         )
                     parent_score = parent.score
 
-                raw = await self._call(self.mutation_lm, prompt, temperature=self.config.llm_temperature)
+                raw = await self._call(
+                    self.mutation_lm, prompt, temperature=self.config.llm_temperature,
+                    role="crossover" if op.startswith("crossover") else "mutate",
+                )
                 parsed = self.parser.parse(raw)
                 if not parsed.has_code:
                     self._record_reject(source=op, error_msg="parse_miss (no code in output)", llm_response=raw)
@@ -1198,6 +1339,7 @@ class BladeOrchestrator:
                 self.mutation_lm, prompt,
                 temperature=self.config.analyzer_temperature,
                 max_tokens=self.config.analyzer_max_tokens,
+                role="analyzer",
             )
         except Exception:
             logger.exception("[BLADE analyzer] LLM call failed; skipping this parent")
@@ -1436,9 +1578,10 @@ class BladeOrchestrator:
         # ---- frontier paradigm seed ----
         try:
             raw = await self._call(
-                self.paradigm_lm, prompt,
+                self.navigator_lm, prompt,
                 temperature=cfg.paradigm_temperature,
                 max_tokens=cfg.paradigm_max_tokens,
+                role="navigator",
             )
         except Exception as e:
             logger.exception("[BLADE PE] frontier call failed; counting as reject")
@@ -1563,7 +1706,7 @@ class BladeOrchestrator:
                 base_code=base_code, base_score=base_score,
             )
             try:
-                raw_v = await self._call(self.mutation_lm, v_prompt, temperature=v_temp)
+                raw_v = await self._call(self.mutation_lm, v_prompt, temperature=v_temp, role="navigator_variant")
             except Exception as e:
                 logger.exception("[BLADE PE] variant LLM call failed; counting as reject")
                 self._record_reject(source="paradigm_variant", error_msg=f"LLM error: {e}")
@@ -1647,6 +1790,7 @@ class BladeOrchestrator:
                         self.paradigm_lm, prompt,
                         temperature=cfg.init_diversity_temperature,
                         max_tokens=cfg.paradigm_max_tokens,
+                        role="init_seed",
                     )
                 except Exception as e:
                     logger.exception("[BLADE init] %s frontier call failed", tag)
@@ -1698,11 +1842,25 @@ class BladeOrchestrator:
                     )
                 )
 
+        init_gate = (
+            asyncio.Semaphore(cfg.init_concurrency)
+            if cfg.init_concurrency and cfg.init_concurrency > 0 else None
+        )
+
         async def _one_variant(prompt: str) -> None:
+            if init_gate is None:
+                await _one_variant_inner(prompt)
+                return
+            async with init_gate:
+                await _one_variant_inner(prompt)
+
+        async def _one_variant_inner(prompt: str) -> None:
             if self._budget_exhausted():
                 return
             try:
-                raw = await self._call(self.mutation_lm, prompt, temperature=cfg.init_variant_temperature)
+                raw = await self._call(
+                    self.mutation_lm, prompt, temperature=cfg.init_variant_temperature, role="init_variant",
+                )
             except Exception as e:
                 logger.exception("[BLADE init] variant LLM call failed; counting as reject")
                 self._record_reject(source="init", error_msg=f"LLM error: {e}")
@@ -1739,6 +1897,11 @@ class BladeOrchestrator:
         logger.info(
             "[BLADE] models: mutation=%s | paradigm=%s | embedding=%s",
             cfg.mutation_model, cfg.paradigm_model, cfg.embedding_model,
+        )
+        logger.info(
+            "[BLADE] roles: navigator=%s (reasoning_effort=%s) | advisor=%s",
+            self.navigator_lm.model, cfg.navigator_reasoning_effort or "provider default",
+            self.advisor_lm.model,
         )
         logger.info(
             "[BLADE] archive: n_cells=%d use_ast=%s use_embedding=%s adaptive_recluster=%s",
@@ -1847,6 +2010,9 @@ class BladeOrchestrator:
             total_llm_calls=self.cost.calls,
             total_prompt_tokens=self.cost.prompt_tokens,
             total_completion_tokens=self.cost.completion_tokens,
+            total_reasoning_tokens=self.cost.reasoning_tokens,
+            total_llm_latency_seconds=self.cost.latency_s,
+            usage_by_role=self.cost.roles_snapshot(),
             init_usage=dict(self.init_usage),
         )
         self._save_snapshot(result)
@@ -2083,9 +2249,10 @@ class BladeOrchestrator:
         self._advisor_attempts_by_cell.clear()
         try:
             raw = await self._call(
-                self.mutation_lm, prompt,
+                self.advisor_lm, prompt,
                 temperature=cfg.meta_advice_temperature,
                 max_tokens=cfg.meta_advice_max_tokens,
+                role="advisor",
             )
         except Exception:
             logger.exception("[BLADE advisor] LLM call failed; keeping previous advice")
@@ -2154,6 +2321,8 @@ class BladeOrchestrator:
             "total_llm_calls": result.total_llm_calls,
             "total_prompt_tokens": result.total_prompt_tokens,
             "total_completion_tokens": result.total_completion_tokens,
+            "total_reasoning_tokens": result.total_reasoning_tokens,
+            "usage_by_role": result.usage_by_role,
             "init_usage": result.init_usage,
             "archive_size": result.archive_size,
             "num_occupied_cells": self.archive.num_occupied_cells(),
@@ -2247,6 +2416,7 @@ class BladeOrchestrator:
             "total_llm_calls": result.total_llm_calls,
             "total_prompt_tokens": result.total_prompt_tokens,
             "total_completion_tokens": result.total_completion_tokens,
+            "total_reasoning_tokens": result.total_reasoning_tokens,
             "init_usage": result.init_usage,
             "runtime_seconds": result.runtime_seconds,
             "archive_size": result.archive_size,
