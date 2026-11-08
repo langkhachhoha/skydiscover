@@ -5,6 +5,7 @@ import base64
 import logging
 import os
 import tempfile
+import time
 import uuid as _uuid
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
@@ -235,6 +236,7 @@ class OpenAILLM(LLMInterface):
         loop = asyncio.get_running_loop()
         inject_openrouter_usage(params, self.api_base)
         try:
+            t0 = time.monotonic()
             response = await loop.run_in_executor(
                 None, lambda: self.client.chat.completions.create(**params)
             )
@@ -244,6 +246,7 @@ class OpenAILLM(LLMInterface):
                 api_base=self.api_base,
                 api_kind="chat.completions",
                 call_site="OpenAILLM._call_api",
+                latency_s=time.monotonic() - t0,
             )
             return response.choices[0].message.content
         except (openai.BadRequestError, openai.APIStatusError) as exc:
@@ -279,6 +282,7 @@ class OpenAILLM(LLMInterface):
 
         loop = asyncio.get_running_loop()
         inject_openrouter_usage(resp_params, self.api_base)
+        t0 = time.monotonic()
         response = await loop.run_in_executor(
             None, lambda: self.client.responses.create(**resp_params)
         )
@@ -288,6 +292,7 @@ class OpenAILLM(LLMInterface):
             api_base=self.api_base,
             api_kind="responses",
             call_site="OpenAILLM._call_api_via_responses",
+            latency_s=time.monotonic() - t0,
         )
         text, _ = self._extract_responses_output(response)
         return text or ""

@@ -3,6 +3,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 import uuid
 from typing import Optional
@@ -163,6 +164,7 @@ class Runner:
             self._setup_monitor_summary(monitor_server)
             self._push_existing_to_monitor()
             self._install_signal_handlers()
+            self._start_time_budget()
 
             discovery_start = start_iteration + 1 if should_add_initial else start_iteration
             self.database.log_status()
@@ -373,6 +375,37 @@ class Runner:
 
         signal.signal(signal.SIGINT, on_signal)
         signal.signal(signal.SIGTERM, on_signal)
+
+    def _start_time_budget(self) -> None:
+        """Stop discovery gracefully once ``SKYDISCOVER_MAX_SECONDS`` have passed.
+
+        The wall-clock counterpart of the spend budget: it only asks the
+        controller to stop, so the current iteration finishes and the best
+        program is saved as on any normal ending. Blank, unparseable or
+        non-positive values mean no budget.
+        """
+        raw = (os.environ.get("SKYDISCOVER_MAX_SECONDS") or "").strip()
+        try:
+            seconds = float(raw) if raw else 0.0
+        except ValueError:
+            seconds = 0.0
+        if seconds <= 0:
+            return
+
+        def expire() -> None:
+            controller = self.discovery_controller
+            if controller is None:
+                return
+            logger.warning(
+                f"Time budget of {seconds:.0f}s reached — stopping discovery after the current iteration."
+            )
+            controller.early_stopping_triggered = True
+            controller.request_shutdown()
+
+        timer = threading.Timer(seconds, expire)
+        timer.daemon = True
+        timer.start()
+        logger.info(f"Time budget: {seconds:.0f}s (graceful stop)")
 
     # ------------------------------------------------------------------
     # Checkpointing and saving

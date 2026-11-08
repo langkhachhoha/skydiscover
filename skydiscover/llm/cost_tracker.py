@@ -43,6 +43,8 @@ _TOTAL_COST = 0.0
 _TOTAL_CALLS = 0
 _TOTAL_PROMPT_TOKENS = 0
 _TOTAL_COMPLETION_TOKENS = 0
+_TOTAL_REASONING_TOKENS = 0
+_TOTAL_LATENCY_S = 0.0
 
 # Fired once, when the running total first reaches the budget. Bound methods
 # are held weakly: this list lives for the whole process, and a controller
@@ -151,9 +153,18 @@ def _extract_usage_record(response: Any) -> Dict[str, Any]:
     cost_details = _get(usage, "cost_details")
     prompt_details = _get(usage, "prompt_tokens_details")
     cached = _get(prompt_details, "cached_tokens") if prompt_details is not None else None
+    # Hidden reasoning, a subset of completion tokens: Chat Completions puts it
+    # under completion_tokens_details, the Responses API under output_tokens_details.
+    reasoning = None
+    for details_field in ("completion_tokens_details", "output_tokens_details"):
+        details = _get(usage, details_field)
+        if details is not None and _get(details, "reasoning_tokens") is not None:
+            reasoning = _get(details, "reasoning_tokens")
+            break
     rec: Dict[str, Any] = {
         "prompt_tokens": prompt,
         "completion_tokens": completion,
+        "reasoning_tokens": reasoning,
         "total_tokens": total,
         "cost_usd": float(cost) if cost is not None else None,
         "cached_tokens": cached,
@@ -177,6 +188,7 @@ def record_call(
     api_base: Optional[str],
     api_kind: str,
     call_site: str,
+    latency_s: Optional[float] = None,
 ) -> None:
     """Append a record for one LLM response, and update the running budget.
 
@@ -197,10 +209,12 @@ def record_call(
         "api_kind": api_kind,  # "chat.completions" | "responses"
         "call_site": call_site,  # e.g. "OpenAILLM._call_api"
         "response_id": _get(response, "id"),
+        "latency_s": round(latency_s, 3) if latency_s is not None else None,
         **usage_rec,
     }
 
     global _TOTAL_COST, _TOTAL_CALLS, _TOTAL_PROMPT_TOKENS, _TOTAL_COMPLETION_TOKENS
+    global _TOTAL_REASONING_TOKENS, _TOTAL_LATENCY_S
     global _BUDGET_FIRED
     with _LOCK:
         if log_path is not None:
@@ -214,6 +228,10 @@ def record_call(
             _TOTAL_PROMPT_TOKENS += int(record["prompt_tokens"])
         if record.get("completion_tokens"):
             _TOTAL_COMPLETION_TOKENS += int(record["completion_tokens"])
+        if record.get("reasoning_tokens"):
+            _TOTAL_REASONING_TOKENS += int(record["reasoning_tokens"])
+        if latency_s is not None:
+            _TOTAL_LATENCY_S += float(latency_s)
 
         if log_path is not None:
             totals = {
@@ -221,6 +239,8 @@ def record_call(
                 "total_cost_usd": round(_TOTAL_COST, 6),
                 "total_prompt_tokens": _TOTAL_PROMPT_TOKENS,
                 "total_completion_tokens": _TOTAL_COMPLETION_TOKENS,
+                "total_reasoning_tokens": _TOTAL_REASONING_TOKENS,
+                "total_latency_s": round(_TOTAL_LATENCY_S, 3),
                 "updated_ts": time.time(),
             }
             if budget is not None:

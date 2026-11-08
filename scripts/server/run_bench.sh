@@ -140,6 +140,10 @@ baseline options (defaults match baseline.yml)
                               result written so far. Soft cap — in-flight calls still
                               finish, so the total can overshoot by ~one iteration.
                               (default: unset = no cap)
+  --seconds N                 Wall-clock budget; like --dollars, the run stops itself at
+                              the next iteration boundary and saves its best program.
+                              Pair it with a larger --timeout as the hard backstop.
+                              (default: unset = no cap)
 
 Examples
   ./scripts/server/run_bench.sh blade --tmux \
@@ -309,7 +313,7 @@ if [[ "$USE_TMUX" == "1" && "${RUN_BENCH_INSIDE_TMUX:-0}" != "1" ]]; then
         [[ "$SAVE_EVAL_CODE" == "1" ]] && INNER+=(--save-eval-code)
     else
         INNER+=(--baseline "$BASELINE" --benchmark-dir "$BENCHMARK_DIR"
-                --iterations "$ITERATIONS" --model "$MODEL")
+                --iterations "$ITERATIONS" --model "$MODEL" --seconds "$SECONDS_CAP")
     fi
     # --session is passed through purely so the pane can record it in the log
     # header: the run dir is named after the run id, but what a human remembers
@@ -420,7 +424,7 @@ fi
         echo " baseline    : $BASELINE"
         echo " model       : $MODEL"
         echo " iterations  : $ITERATIONS"
-        echo " budget      : dollars='${DOLLARS}'"
+        echo " budget      : dollars='${DOLLARS}' seconds='${SECONDS_CAP}'"
     fi
     echo " seed label  : $SEED"
     if [[ "${RUN_BENCH_INSIDE_TMUX:-0}" == "1" ]]; then
@@ -605,6 +609,8 @@ else
 
     # Per-LLM-call OpenRouter usage.cost, appended by skydiscover.llm.cost_tracker.
     export SKYDISCOVER_COST_LOG="$OUTPUT_DIR/cost_log.jsonl"
+    # Graceful wall-clock budget, read by skydiscover.runner.
+    export SKYDISCOVER_MAX_SECONDS="$SECONDS_CAP"
 
     CMD=(skydiscover-run "$BENCHMARK_DIR/initial_program.py" "$EVAL_FILE"
          --config "$BENCHMARK_DIR/config.yaml"
