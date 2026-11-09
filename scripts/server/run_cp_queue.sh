@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# run_cp_queue.sh — three experiment lanes on the circle-packing tasks, each a
-# tmux session working through its own queue one job at a time. The lanes run
-# side by side; inside a lane the jobs are strictly sequential.
+# run_cp_queue.sh — experiment lanes on the circle-packing tasks, each a tmux
+# session working through its own queue one job at a time. The lanes run side
+# by side; inside a lane the jobs are strictly sequential.
 #
-#   ./scripts/server/run_cp_queue.sh start   [t1 t2 t3]   # launch lanes (default: all), detached
-#   ./scripts/server/run_cp_queue.sh status  [t1 t2 t3]   # done / running (live numbers) / left
-#   ./scripts/server/run_cp_queue.sh compare [t1|t2|t3]   # tokens / reasoning / latency / score (default t3)
-#   ./scripts/server/run_cp_queue.sh stop    [t1 t2 t3]   # kill lanes and their runs
-#   DRY_RUN=1 ./scripts/server/run_cp_queue.sh start      # print all 19 commands, no API calls
+#   ./scripts/server/run_cp_queue.sh start   [t1 t3 t4 t5]   # launch lanes (default: t1 t3 t4 t5), detached
+#   ./scripts/server/run_cp_queue.sh status  [t1 t3 t4 t5]   # done / running (live numbers) / left
+#   ./scripts/server/run_cp_queue.sh compare [lane ...]      # tokens / reasoning / latency / score (default t3)
+#   ./scripts/server/run_cp_queue.sh stop    [lane ...]      # kill lanes and their runs
+#   DRY_RUN=1 ./scripts/server/run_cp_queue.sh start t4 t5   # print the commands, no API calls
+#   t2 is retired (replaced by t4 + t5) and only runs when named.
 #
 # Lane t1 — tmux cp_t1_nav — swap the Navigator's model. 1h30 per job, 6 jobs.
 #   nav_gpt5_low     Navigator = gpt-5, reasoning_effort=low
@@ -25,6 +26,8 @@
 #   $3 is the stop condition; T2_SECONDS (8h) only ends a run that cannot
 #   spend $3 in that time, and still ends it gracefully with a summary.
 #
+#   Retired 2026-11-08 after its first job, replaced by t4 + t5.
+#
 # Lane t3 — tmux cp_t3_base — circle_packing only, 3h per job, one LLM call
 # in flight at a time, 5 jobs in this order:
 #   evox, adaevolve, gepa_native, openevolve_native  (baselines, gpt-5, 100 iterations
@@ -32,6 +35,17 @@
 #   specevo          (qwen3-30b + gpt-5, --workers 1, 1 evaluator, bootstrap 1 at a time)
 #   Then `compare t3` prints the token / latency / score table and writes
 #   comparison.{md,csv,json} into the lane's directory.
+#
+# Lanes t4 — tmux cp_t4_circle — circle_packing      } side by side, the same
+#       t5 — tmux cp_t5_rect   — circle_packing_rect } 5 arms in this order,
+# 1h30 (T45_SECONDS) per job, no spend cap beyond a runaway guard (T45_DOLLARS):
+#   full                    full SpecEvo
+#   no_nav                  w/o Navigator                           (--ablation no_paradigm)
+#   no_nav_adv_freq         w/o Navigator, Advisor every $T45_ADVISOR_INTERVAL evals instead of 50
+#   no_nav_adv_gpt5         w/o Navigator, Advisor on gpt-5
+#   no_nav_adv_gpt5_spec10  w/o Navigator, Advisor on gpt-5, and every 10th main-loop
+#                           Speculator call (mutate / crossover) on gpt-5 instead of
+#                           qwen3-30b ($T45_SPEC_FRONTIER_FRACTION; the bootstrap stays as is)
 #
 # Tasks: circle_packing      (26 circles in the unit square)
 #        circle_packing_rect (21 circles in a rectangle of perimeter 4)
@@ -47,6 +61,8 @@
 #   T2_DOLLARS [3]     T2_SECONDS [28800]      T2_HARD_TIMEOUT [29700]   T2_ADVISOR_INTERVAL [10]
 #   T2_ADVISOR_MAX_TOKENS [16000]   (gpt-5's hidden reasoning counts against it)
 #   T3_SECONDS [10800] T3_HARD_TIMEOUT [11700] T3_DOLLARS [40]  T3_ITERATIONS [100]
+#   T45_SECONDS [5400] T45_HARD_TIMEOUT [6300] T45_DOLLARS [25]  (runaway guard; '' = none)
+#   T45_ADVISOR_INTERVAL [10]  T45_ADVISOR_MAX_TOKENS [16000]  T45_SPEC_FRONTIER_FRACTION [0.1]
 #   BASELINE_MODEL [gpt-5]
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -78,11 +94,19 @@ T3_SECONDS="${T3_SECONDS:-10800}"
 T3_HARD_TIMEOUT="${T3_HARD_TIMEOUT:-11700}"
 T3_DOLLARS="${T3_DOLLARS-40}"
 T3_ITERATIONS="${T3_ITERATIONS:-100}"
+T45_SECONDS="${T45_SECONDS:-5400}"
+T45_HARD_TIMEOUT="${T45_HARD_TIMEOUT:-6300}"
+T45_DOLLARS="${T45_DOLLARS-25}"
+T45_ADVISOR_INTERVAL="${T45_ADVISOR_INTERVAL:-10}"
+T45_ADVISOR_MAX_TOKENS="${T45_ADVISOR_MAX_TOKENS:-16000}"
+T45_SPEC_FRONTIER_FRACTION="${T45_SPEC_FRONTIER_FRACTION:-0.1}"
 
 # Every knob above, so a lane started inside tmux sees the same values.
 KNOBS=(GROUP WORKERS PE_INTERVAL EVAL_TIMEOUT THREADS_PER_EVAL MUTATION_MODEL PARADIGM_MODEL GPT5 QWEN
        BASELINE_MODEL T1_SECONDS T1_HARD_TIMEOUT T1_DOLLARS T2_DOLLARS T2_SECONDS T2_HARD_TIMEOUT
-       T2_ADVISOR_INTERVAL T2_ADVISOR_MAX_TOKENS T3_SECONDS T3_HARD_TIMEOUT T3_DOLLARS T3_ITERATIONS)
+       T2_ADVISOR_INTERVAL T2_ADVISOR_MAX_TOKENS T3_SECONDS T3_HARD_TIMEOUT T3_DOLLARS T3_ITERATIONS
+       T45_SECONDS T45_HARD_TIMEOUT T45_DOLLARS T45_ADVISOR_INTERVAL T45_ADVISOR_MAX_TOKENS
+       T45_SPEC_FRONTIER_FRACTION)
 
 DRY_RUN="${DRY_RUN:-0}"
 GROUP_DIR="outputs/server/$GROUP"
@@ -91,18 +115,23 @@ GROUP_DIR="outputs/server/$GROUP"
 [[ "$DRY_RUN" == 1 ]] && GROUP_DIR="outputs/server/${GROUP}_dryrun"
 VENV="$REPO_ROOT/.venv"
 
-LANES=(t1 t2 t3)
+LANES=(t1 t3 t4 t5)     # the default set; t2 is retired and runs only when named
 CP_TASKS=(circle_packing circle_packing_rect)
 T1_ARMS=(nav_gpt5_low nav_gpt5_medium nav_qwen3_30b)
 T2_ARMS=(full no_nav no_nav_adv_freq no_nav_adv_gpt5)
 T3_ARMS=(evox adaevolve gepa_native openevolve_native specevo)
+T45_ARMS=(full no_nav no_nav_adv_freq no_nav_adv_gpt5 no_nav_adv_gpt5_spec10)
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 ts()  { date '+%Y-%m-%d %H:%M:%S'; }
 
-lane_session() { case "$1" in t1) echo cp_t1_nav ;; t2) echo cp_t2_budget ;; t3) echo cp_t3_base ;; *) die "unknown lane '$1' (t1 | t2 | t3)" ;; esac; }
-lane_dir()     { case "$1" in t1) echo "$GROUP_DIR/t1_navigator" ;; t2) echo "$GROUP_DIR/t2_budget3usd" ;; t3) echo "$GROUP_DIR/t3_baselines" ;; esac; }
-lane_title()   { case "$1" in t1) echo "Navigator swap, ${T1_SECONDS}s each" ;; t2) echo "\$${T2_DOLLARS} per run" ;; t3) echo "baselines vs SpecEvo, ${T3_SECONDS}s each, 1 worker" ;; esac; }
+lane_session() { case "$1" in t1) echo cp_t1_nav ;; t2) echo cp_t2_budget ;; t3) echo cp_t3_base ;;
+                               t4) echo cp_t4_circle ;; t5) echo cp_t5_rect ;;
+                               *) die "unknown lane '$1' (t1 | t2 | t3 | t4 | t5)" ;; esac; }
+lane_dir()     { case "$1" in t1) echo "$GROUP_DIR/t1_navigator" ;; t2) echo "$GROUP_DIR/t2_budget3usd" ;; t3) echo "$GROUP_DIR/t3_baselines" ;;
+                               t4) echo "$GROUP_DIR/t4_circle_packing_90m" ;; t5) echo "$GROUP_DIR/t5_circle_packing_rect_90m" ;; esac; }
+lane_title()   { case "$1" in t1) echo "Navigator swap, ${T1_SECONDS}s each" ;; t2) echo "\$${T2_DOLLARS} per run" ;; t3) echo "baselines vs SpecEvo, ${T3_SECONDS}s each, 1 worker" ;;
+                               t4) echo "circle_packing, 5 arms, ${T45_SECONDS}s each" ;; t5) echo "circle_packing_rect, 5 arms, ${T45_SECONDS}s each" ;; esac; }
 
 lane_jobs() {   # lane -> "<lane> <task> <arm>" lines, in run order
     local lane="$1" arm task
@@ -110,6 +139,8 @@ lane_jobs() {   # lane -> "<lane> <task> <arm>" lines, in run order
         t1) for arm in "${T1_ARMS[@]}"; do for task in "${CP_TASKS[@]}"; do echo "t1 $task $arm"; done; done ;;
         t2) for arm in "${T2_ARMS[@]}"; do for task in "${CP_TASKS[@]}"; do echo "t2 $task $arm"; done; done ;;
         t3) for arm in "${T3_ARMS[@]}"; do echo "t3 circle_packing $arm"; done ;;
+        t4) for arm in "${T45_ARMS[@]}"; do echo "t4 circle_packing $arm"; done ;;
+        t5) for arm in "${T45_ARMS[@]}"; do echo "t5 circle_packing_rect $arm"; done ;;
     esac
 }
 
@@ -146,6 +177,7 @@ build_cmd() {   # lane task arm
         t1) seconds="$T1_SECONDS"; hard="$T1_HARD_TIMEOUT"; dollars="$T1_DOLLARS" ;;
         t2) seconds="$T2_SECONDS"; hard="$T2_HARD_TIMEOUT"; dollars="$T2_DOLLARS" ;;
         t3) seconds="$T3_SECONDS"; hard="$T3_HARD_TIMEOUT"; dollars="$T3_DOLLARS" ;;
+        t4|t5) seconds="$T45_SECONDS"; hard="$T45_HARD_TIMEOUT"; dollars="$T45_DOLLARS" ;;
     esac
     case "$lane:$arm" in
         t1:nav_gpt5_low)     adv="{\"navigator_model\":\"$GPT5\",\"navigator_reasoning_effort\":\"low\"}" ;;
@@ -157,6 +189,14 @@ build_cmd() {   # lane task arm
         t2:no_nav_adv_gpt5)  ablation=no_paradigm
                              adv="{\"advisor_model\":\"$GPT5\",\"meta_advice_max_tokens\":$T2_ADVISOR_MAX_TOKENS}" ;;
         t3:specevo)          workers=1; adv='{"eval_processes":1,"init_concurrency":1}' ;;
+        t[45]:full)          ;;
+        t[45]:no_nav)        ablation=no_paradigm ;;
+        t[45]:no_nav_adv_freq)  ablation=no_paradigm; adv="{\"meta_advice_interval\":$T45_ADVISOR_INTERVAL}" ;;
+        t[45]:no_nav_adv_gpt5)  ablation=no_paradigm
+                             adv="{\"advisor_model\":\"$GPT5\",\"meta_advice_max_tokens\":$T45_ADVISOR_MAX_TOKENS}" ;;
+        t[45]:no_nav_adv_gpt5_spec10)  ablation=no_paradigm
+                             adv="{\"advisor_model\":\"$GPT5\",\"meta_advice_max_tokens\":$T45_ADVISOR_MAX_TOKENS"
+                             adv+=",\"speculator_frontier_model\":\"$GPT5\",\"speculator_frontier_fraction\":$T45_SPEC_FRONTIER_FRACTION}" ;;
         *) die "unknown arm '$arm' in lane $lane" ;;
     esac
 
@@ -198,8 +238,8 @@ lane_main() {   # lane
     local lane="$1" l task arm
     # The tmux server may predate this venv, so pin the interpreter here.
     export VIRTUAL_ENV="$VENV" PATH="$VENV/bin:$PATH"
-    # Three lanes x up to 4 evaluator processes on 16 threads: cap the numeric
-    # libraries so candidates cannot oversubscribe the box.
+    # Several lanes x up to 4 evaluator processes on 16 threads: cap the
+    # numeric libraries so candidates cannot oversubscribe the box.
     export OMP_NUM_THREADS="$THREADS_PER_EVAL" OPENBLAS_NUM_THREADS="$THREADS_PER_EVAL" \
            MKL_NUM_THREADS="$THREADS_PER_EVAL" NUMEXPR_NUM_THREADS="$THREADS_PER_EVAL"
     mkdir -p "$(lane_dir "$lane")"
@@ -241,10 +281,13 @@ cmd_status() {
     done
 }
 
-cmd_compare() {
-    local lane="${1:-t3}"
-    lane_session "$lane" >/dev/null
-    report_jobs "$lane" | py "$REPO_ROOT/scripts/server/cp_report.py" compare --out "$REPO_ROOT/$(lane_dir "$lane")"
+cmd_compare() {   # one lane -> its own dir; several -> $GROUP_DIR/compare_<l1>_<l2>...
+    local lanes out l
+    lanes=("$@"); [[ ${#lanes[@]} -eq 0 ]] && lanes=(t3)
+    for l in "${lanes[@]}"; do lane_session "$l" >/dev/null; done
+    if [[ ${#lanes[@]} -eq 1 ]]; then out="$(lane_dir "${lanes[0]}")"
+    else out="$GROUP_DIR/compare_$(IFS=_; echo "${lanes[*]}")"; mkdir -p "$out"; fi
+    report_jobs "${lanes[@]}" | py "$REPO_ROOT/scripts/server/cp_report.py" compare --out "$REPO_ROOT/$out"
 }
 
 cmd_stop() {
@@ -316,8 +359,8 @@ echo; bash '$SELF' status $l; exec bash"
 
 watch      : tmux attach -t $(lane_session "${lanes[0]}")     (detach: Ctrl-b then d)
 progress   : $0 status            (live: watch -n 60 $0 status)
-t3 table   : $0 compare t3
-stop       : $0 stop [t1 t2 t3]
+tables     : $0 compare t3      $0 compare t4 t5
+stop       : $0 stop [lane ...]
 EOF
 }
 
@@ -327,6 +370,6 @@ case "${1:-status}" in
     compare|table) shift; cmd_compare "$@" ;;
     stop)    shift; cmd_stop "$@" ;;
     _lane)   lane_main "${2:?lane}" ;;
-    -h|--help) sed -n '2,52p' "$0" ;;
+    -h|--help) sed -n '2,/^# -\{20,\}$/p' "$0" ;;
     *) die "unknown command '$1' (start | status | compare | stop)" ;;
 esac
