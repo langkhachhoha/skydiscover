@@ -600,9 +600,14 @@ for k, v in opts.items():
     WORKDIR="$REPO_ROOT/levi"
 else
     # ---- resolve the evaluator, same as baseline.yml -----------------------
-    for f in initial_program.py config.yaml; do
-        [[ -f "$BENCHMARK_DIR/$f" ]] || die "expected $BENCHMARK_DIR/$f to exist"
+    [[ -f "$BENCHMARK_DIR/config.yaml" ]] || die "expected $BENCHMARK_DIR/config.yaml to exist"
+    # The seed program: Python for most benchmarks, C++ for e.g. Frontier-CS
+    # (skydiscover picks the language from the file's contents).
+    INITIAL_PROGRAM=""
+    for f in "$BENCHMARK_DIR"/initial_program.py "$BENCHMARK_DIR"/initial_program.cpp; do
+        [[ -f "$f" ]] && { INITIAL_PROGRAM="$f"; break; }
     done
+    [[ -n "$INITIAL_PROGRAM" ]] || die "expected $BENCHMARK_DIR/initial_program.py (or .cpp) to exist"
     if [[ -f "$BENCHMARK_DIR/evaluator.py" ]]; then
         EVAL_FILE="$BENCHMARK_DIR/evaluator.py"
     elif [[ -f "$BENCHMARK_DIR/evaluator/evaluator.py" ]]; then
@@ -617,7 +622,7 @@ else
     # Graceful wall-clock budget, read by skydiscover.runner.
     export SKYDISCOVER_MAX_SECONDS="$SECONDS_CAP"
 
-    CMD=(skydiscover-run "$BENCHMARK_DIR/initial_program.py" "$EVAL_FILE"
+    CMD=(skydiscover-run "$INITIAL_PROGRAM" "$EVAL_FILE"
          --config "$BENCHMARK_DIR/config.yaml"
          --search "$BASELINE"
          --model "$MODEL"
