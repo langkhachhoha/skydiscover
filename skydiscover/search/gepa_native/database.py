@@ -16,6 +16,7 @@ Configuration options (via GEPANativeDatabaseConfig):
 """
 
 import collections
+import itertools
 import json
 import logging
 import os
@@ -182,14 +183,28 @@ class GEPANativeDatabase(ProgramDatabase):
             items = items[-limit:]
         return items
 
-    def get_merge_candidates(self) -> Tuple[Program, Program]:
+    def get_merge_candidates(
+        self, exclude: Optional[Set[Tuple[str, str]]] = None
+    ) -> Tuple[Program, Program]:
         """Select two complementary programs for LLM-mediated merge.
 
-        Selection strategy:
+        Selection strategy, skipping at every step the pairs in ``exclude``
+        (sorted id tuples the caller has already tried):
         1. Prefer two programs that each lead on a different metric.
         2. Fallback: best program + random from top 5.
-        3. Last resort: best program returned twice (caller should guard).
+        3. Then any other untried pair of the elite pool, best-scoring first.
+        4. Last resort: best program returned twice (caller should guard).
+
+        Without ``exclude`` the leaders of non-fitness metrics (``validity``,
+        ``eval_time``, ...) are often the seed, so step 1 would hand back the
+        same (seed, best) pair forever and, once it was tried, every later
+        stagnation merge would be skipped.
         """
+        tried = exclude or set()
+
+        def untried(a: str, b: str) -> bool:
+            return tuple(sorted((a, b))) not in tried
+
         if len(self.elite_pool) < 2:
             best = self.get_best_program()
             return best, best
@@ -203,14 +218,30 @@ class GEPANativeDatabase(ProgramDatabase):
         unique_leaders = sorted(set(leaders.values()))
         if len(unique_leaders) >= 2:
             pids = self.rng.sample(unique_leaders, 2)
-            return self.programs[pids[0]], self.programs[pids[1]]
+            if untried(*pids):
+                return self.programs[pids[0]], self.programs[pids[1]]
+            pairs = [p for p in itertools.combinations(unique_leaders, 2) if untried(*p)]
+            if pairs:
+                a, b = self.rng.choice(pairs)
+                return self.programs[a], self.programs[b]
 
         # Fallback: best + random from top 5
         best = self.get_best_program()
         top5_ids = [pid for pid in self.elite_pool[:5] if pid != best.id]
         if top5_ids:
             other_id = self.rng.choice(top5_ids)
-            return best, self.programs[other_id]
+            if untried(best.id, other_id):
+                return best, self.programs[other_id]
+            others = [pid for pid in top5_ids if untried(best.id, pid)]
+            if others:
+                return best, self.programs[self.rng.choice(others)]
+
+        # Any untried pair, the elite pool being sorted best first
+        if tried:
+            pool = [pid for pid in self.elite_pool if pid in self.programs]
+            for a, b in itertools.combinations(pool, 2):
+                if untried(a, b):
+                    return self.programs[a], self.programs[b]
 
         return best, best
 

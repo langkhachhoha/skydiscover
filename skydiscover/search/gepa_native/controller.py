@@ -315,17 +315,18 @@ class GEPANativeController(DiscoveryController):
             logger.debug("Not enough programs for merge, skipping")
             return
 
-        prog_a, prog_b = self.database.get_merge_candidates()
+        prog_a, prog_b = self.database.get_merge_candidates(exclude=self._merge_pairs_tried)
 
-        # Skip self-merge (happens when pool has < 2 distinct programs)
+        # Skip self-merge (happens when pool has < 2 distinct programs, or
+        # every pair has been tried)
         if prog_a.id == prog_b.id:
-            logger.debug(f"Iteration {iteration}: Only one program available, skipping merge")
+            logger.info(f"Iteration {iteration}: No untried merge pair, skipping merge")
             return
 
-        # Deduplication: skip if this pair was already tried
+        # Deduplication: never pay for the same pair twice
         pair_key = tuple(sorted([prog_a.id, prog_b.id]))
         if pair_key in self._merge_pairs_tried:
-            logger.debug(f"Iteration {iteration}: Merge pair already tried, skipping")
+            logger.info(f"Iteration {iteration}: Merge pair already tried, skipping")
             return
         self._merge_pairs_tried.add(pair_key)
         self._merge_attempts_used += 1
