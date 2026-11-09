@@ -398,6 +398,8 @@ jobs:
           [ -n "$ADV_ADVISOR_MODEL" ] && EXTRA_OPTS="$EXTRA_OPTS --advisor-model $ADV_ADVISOR_MODEL"
           [ -n "$ADV_META_ADVICE_MAX_TOKENS" ] && EXTRA_OPTS="$EXTRA_OPTS --meta-advice-max-tokens $ADV_META_ADVICE_MAX_TOKENS"
           [ -n "$ADV_INIT_CONCURRENCY" ] && EXTRA_OPTS="$EXTRA_OPTS --init-concurrency $ADV_INIT_CONCURRENCY"
+          [ -n "$ADV_SPECULATOR_FRONTIER_MODEL" ] && EXTRA_OPTS="$EXTRA_OPTS --speculator-frontier-model $ADV_SPECULATOR_FRONTIER_MODEL"
+          [ -n "$ADV_SPECULATOR_FRONTIER_FRACTION" ] && EXTRA_OPTS="$EXTRA_OPTS --speculator-frontier-fraction $ADV_SPECULATOR_FRONTIER_FRACTION"
 
           # Paper-facing ablation toggles. ``pe_interval`` is set to the
           # workflow input by default but the ``no_paradigm`` ablation

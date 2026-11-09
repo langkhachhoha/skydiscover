@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import random
 import time
 from collections import deque
@@ -85,6 +86,11 @@ logger = logging.getLogger(__name__)
 # surfaces the few most-recurrent modes, so the table is merged by signature
 # and capped here — recurring modes survive, one-off errors cycle out.
 _ERROR_KNOWLEDGE_MAX = 24
+
+# Appended to the operator label of a main-loop candidate written by
+# ``speculator_frontier_model``, so the logs and snap.json's by-source
+# tallies keep those candidates apart from the mutation model's.
+SPECULATOR_FRONTIER_TAG = "@frontier"
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +153,18 @@ class BladeConfig:
     """Most phase-2 bootstrap variants in flight at once. ``None`` launches
     all ``n_diverse_seeds * n_variants_per_seed`` together, as before; a
     strictly sequential run sets it to ``n_workers``."""
+    speculator_frontier_model: str | None = None
+    """Model that writes a share of the Speculator's main-loop mutate /
+    crossover calls in place of ``mutation_model``; the share is
+    ``speculator_frontier_fraction``. Only those calls move: the bootstrap,
+    the analyzer, the summarizer, the Advisor and the Navigator's variant
+    fan-out stay where they were. Candidates it writes carry
+    ``SPECULATOR_FRONTIER_TAG`` on their source label."""
+    speculator_frontier_fraction: float = 0.0
+    """Share of main-loop Speculator calls, in [0, 1], that go to
+    ``speculator_frontier_model``. Spread evenly rather than drawn at random:
+    call ``k`` (0-based) is a frontier call when ``floor((k+1)*f) >
+    floor(k*f)``, so 0.1 is exactly every 10th call. 0 turns it off."""
 
     # Loop schedule
     pe_cron_interval: int = 50
@@ -549,6 +567,19 @@ class BladeOrchestrator:
         self._advisor_lm: BaseClient | None = None
         if config.advisor_model and config.advisor_model != config.mutation_model:
             self._advisor_lm = LM(config.advisor_model)
+        frac = float(config.speculator_frontier_fraction or 0.0)
+        if not 0.0 <= frac <= 1.0:
+            raise ValueError(f"speculator_frontier_fraction must be in [0, 1], got {frac}")
+        if frac > 0.0 and not config.speculator_frontier_model:
+            raise ValueError("speculator_frontier_fraction > 0 needs speculator_frontier_model")
+        self.speculator_frontier_lm: BaseClient | None = (
+            LM(config.speculator_frontier_model)
+            if config.speculator_frontier_model and frac > 0.0 else None
+        )
+        # Main-loop Speculator calls so far, and how many went to the
+        # frontier model; the bootstrap never touches these.
+        self.speculator_calls: int = 0
+        self.speculator_frontier_calls: int = 0
 
         self.cost = _CallLog()
         # Frozen copy of ``self.cost`` taken when the init phase ends, so the
@@ -606,6 +637,8 @@ class BladeOrchestrator:
                 "navigator_model": nav_model,
                 "navigator_reasoning_effort": config.navigator_reasoning_effort,
                 "advisor_model": config.advisor_model or config.mutation_model,
+                "speculator_frontier_model": config.speculator_frontier_model if frac > 0.0 else None,
+                "speculator_frontier_fraction": frac,
                 "embedding_model": config.embedding_model,
                 "pe_cron_interval": config.pe_cron_interval,
                 "n_workers": config.n_workers,
@@ -630,6 +663,8 @@ class BladeOrchestrator:
                     "paradigm_model": config.paradigm_model,
                     "navigator_model": nav_model,
                     "advisor_model": config.advisor_model or config.mutation_model,
+                    "speculator_frontier_model": config.speculator_frontier_model if frac > 0.0 else None,
+                    "speculator_frontier_fraction": frac,
                     "budget_evals": config.budget_evals,
                     "budget_dollars": config.budget_dollars,
                     "budget_seconds": config.budget_seconds,
@@ -817,6 +852,8 @@ class BladeOrchestrator:
         return score, result, None
 
     def _model_label(self, source: str) -> str:
+        if source.endswith(SPECULATOR_FRONTIER_TAG) and self.speculator_frontier_lm is not None:
+            return self.speculator_frontier_lm.model.rsplit("/", 1)[-1]
         # Anything that came out of the frontier paradigm call uses the
         # paradigm model. Currently those sources are: "paradigm" (the
         # canonical Program.source for an admitted paradigm seed) and
@@ -1217,6 +1254,19 @@ class BladeOrchestrator:
             return None
         return self.current_meta_advice
 
+    def _next_speculator_client(self) -> tuple[BaseClient, bool]:
+        """Client for the next main-loop Speculator call, and whether it is
+        the frontier model's turn (see ``speculator_frontier_fraction``)."""
+        k = self.speculator_calls
+        self.speculator_calls += 1
+        if self.speculator_frontier_lm is None:
+            return self.mutation_lm, False
+        f = self.config.speculator_frontier_fraction
+        if math.floor((k + 1) * f) > math.floor(k * f):
+            self.speculator_frontier_calls += 1
+            return self.speculator_frontier_lm, True
+        return self.mutation_lm, False
+
     async def _generate_one(self) -> None:
         async with self._semaphore:
             if self._budget_exhausted():
@@ -1289,8 +1339,11 @@ class BladeOrchestrator:
                         )
                     parent_score = parent.score
 
+                client, frontier_turn = self._next_speculator_client()
+                if frontier_turn:
+                    op += SPECULATOR_FRONTIER_TAG
                 raw = await self._call(
-                    self.mutation_lm, prompt, temperature=self.config.llm_temperature,
+                    client, prompt, temperature=self.config.llm_temperature,
                     role="crossover" if op.startswith("crossover") else "mutate",
                 )
                 parsed = self.parser.parse(raw)
@@ -1903,6 +1956,12 @@ class BladeOrchestrator:
             self.navigator_lm.model, cfg.navigator_reasoning_effort or "provider default",
             self.advisor_lm.model,
         )
+        if self.speculator_frontier_lm is not None:
+            logger.info(
+                "[BLADE] speculator: %.0f%% of main-loop mutate/crossover calls on %s, the rest on %s",
+                100 * cfg.speculator_frontier_fraction, self.speculator_frontier_lm.model,
+                cfg.mutation_model,
+            )
         logger.info(
             "[BLADE] archive: n_cells=%d use_ast=%s use_embedding=%s adaptive_recluster=%s",
             cfg.archive_config.n_cells,
@@ -2324,6 +2383,8 @@ class BladeOrchestrator:
             "total_reasoning_tokens": result.total_reasoning_tokens,
             "usage_by_role": result.usage_by_role,
             "init_usage": result.init_usage,
+            "speculator_calls": self.speculator_calls,
+            "speculator_frontier_calls": self.speculator_frontier_calls,
             "archive_size": result.archive_size,
             "num_occupied_cells": self.archive.num_occupied_cells(),
             "runtime_seconds": result.runtime_seconds,

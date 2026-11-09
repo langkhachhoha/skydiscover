@@ -127,8 +127,11 @@ blade options (defaults match blade.yml)
                               "single_prompt_operators":true (A6), and
                               "paradigm_force_mode":"reframe"|"synthesis"|"surgical" (A8).
                               Role models: "navigator_model", "navigator_reasoning_effort",
-                              "advisor_model" (+ "meta_advice_max_tokens"), and
-                              "init_concurrency" to cap the bootstrap's parallel calls.
+                              "advisor_model" (+ "meta_advice_max_tokens"),
+                              "speculator_frontier_model" + "speculator_frontier_fraction"
+                              (that share of main-loop mutate/crossover calls on another
+                              model, bootstrap excluded), and "init_concurrency" to cap
+                              the bootstrap's parallel calls.
 
 baseline options (defaults match baseline.yml)
   --baseline NAME             openevolve_native | gepa_native | adaevolve | evox (default: evox)
@@ -555,6 +558,8 @@ for k, v in opts.items():
     [[ -n "${ADV_ADVISOR_MODEL:-}" ]]                     && EXTRA_OPTS+=(--advisor-model "$ADV_ADVISOR_MODEL")
     [[ -n "${ADV_META_ADVICE_MAX_TOKENS:-}" ]]            && EXTRA_OPTS+=(--meta-advice-max-tokens "$ADV_META_ADVICE_MAX_TOKENS")
     [[ -n "${ADV_INIT_CONCURRENCY:-}" ]]                  && EXTRA_OPTS+=(--init-concurrency "$ADV_INIT_CONCURRENCY")
+    [[ -n "${ADV_SPECULATOR_FRONTIER_MODEL:-}" ]]         && EXTRA_OPTS+=(--speculator-frontier-model "$ADV_SPECULATOR_FRONTIER_MODEL")
+    [[ -n "${ADV_SPECULATOR_FRONTIER_FRACTION:-}" ]]      && EXTRA_OPTS+=(--speculator-frontier-fraction "$ADV_SPECULATOR_FRONTIER_FRACTION")
 
     # Paper-facing ablation toggles (identical mapping to blade.yml).
     PE_INTERVAL_EFFECTIVE="$PE_INTERVAL"

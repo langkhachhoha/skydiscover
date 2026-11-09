@@ -106,6 +106,16 @@ def _parse_args() -> argparse.Namespace:
         "spend their hidden reasoning out of this too.",
     )
     p.add_argument(
+        "--speculator-frontier-model", default=None,
+        help="Model that writes --speculator-frontier-fraction of the main loop's "
+        "mutate / crossover calls instead of --mutation-model (bootstrap excluded).",
+    )
+    p.add_argument(
+        "--speculator-frontier-fraction", type=float, default=None, metavar="F",
+        help="Share of main-loop Speculator calls, 0..1, sent to "
+        "--speculator-frontier-model, spread evenly (0.1 = every 10th call).",
+    )
+    p.add_argument(
         "--init-concurrency", type=int, default=None, metavar="N",
         help="Most bootstrap variants in flight at once (default: all at once). "
         "Set it to --workers for a strictly N-at-a-time run.",
@@ -471,6 +481,15 @@ def main() -> int:
         overrides["meta_advice_max_tokens"] = args.meta_advice_max_tokens
     if args.init_concurrency is not None:
         overrides["init_concurrency"] = args.init_concurrency
+    spec_frac = args.speculator_frontier_fraction or 0.0
+    if spec_frac > 0 and not args.speculator_frontier_model:
+        print("ERROR: --speculator-frontier-fraction needs --speculator-frontier-model", file=sys.stderr)
+        return 2
+    if args.speculator_frontier_model and spec_frac > 0:
+        overrides["speculator_frontier_model"] = args.speculator_frontier_model
+        overrides["speculator_frontier_fraction"] = spec_frac
+    else:
+        spec_frac = 0.0
 
     if args.single_prompt_operators:
         overrides["single_prompt_operators"] = True
@@ -496,6 +515,9 @@ def main() -> int:
     print(f"[blade] navigator_model   = {args.navigator_model or args.paradigm_model}"
           f" (reasoning_effort={args.navigator_reasoning_effort or 'provider default'})")
     print(f"[blade] advisor_model     = {args.advisor_model or args.mutation_model}")
+    if spec_frac > 0:
+        print(f"[blade] speculator        = {spec_frac:.0%} of main-loop calls on "
+              f"{args.speculator_frontier_model}, the rest on {args.mutation_model}")
     print(f"[blade] embedding_model   = {args.embedding_model}")
     print(f"[blade] budget evals      = {evals}")
     print(f"[blade] budget dollars    = {dollars}")
@@ -550,6 +572,8 @@ def main() -> int:
         "navigator_model": args.navigator_model or args.paradigm_model,
         "navigator_reasoning_effort": args.navigator_reasoning_effort,
         "advisor_model": args.advisor_model or args.mutation_model,
+        "speculator_frontier_model": args.speculator_frontier_model if spec_frac > 0 else None,
+        "speculator_frontier_fraction": spec_frac,
         "meta_advice_interval": None if args.no_meta_advice else args.meta_advice_interval,
         "pe_interval": pe_interval,
         "workers": workers,

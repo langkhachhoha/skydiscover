@@ -156,3 +156,45 @@ def test_call_log_snapshot_is_a_frozen_copy():
     snap = log.snapshot()
     log.record(0.01, 10, 2)
     assert snap["prompt_tokens"] == 10
+
+
+# ---------------------------------------------------------------------------
+# Speculator share on a frontier model
+# ---------------------------------------------------------------------------
+
+
+def test_speculator_stays_on_mutation_model_by_default(tmp_path):
+    orch = _orchestrator(tmp_path, speculator_frontier_model="openrouter/openai/gpt-5")
+    assert orch.speculator_frontier_lm is None  # fraction 0 = off
+    picks = [orch._next_speculator_client() for _ in range(50)]
+    assert all(c is orch.mutation_lm and not f for c, f in picks)
+    assert orch.speculator_calls == 50 and orch.speculator_frontier_calls == 0
+
+
+def test_speculator_frontier_fraction_is_exact_and_spread(tmp_path):
+    from levi.blade.orchestrator import SPECULATOR_FRONTIER_TAG
+
+    orch = _orchestrator(
+        tmp_path,
+        speculator_frontier_model="openrouter/openai/gpt-5",
+        speculator_frontier_fraction=0.1,
+    )
+    picks = [orch._next_speculator_client() for _ in range(1000)]
+    frontier_at = [k for k, (_, f) in enumerate(picks) if f]
+    assert len(frontier_at) == 100 == orch.speculator_frontier_calls
+    assert frontier_at[:3] == [9, 19, 29]
+    assert all(b - a == 10 for a, b in zip(frontier_at, frontier_at[1:]))
+    assert all(picks[k][0].model == "openrouter/openai/gpt-5" for k in frontier_at)
+    assert picks[0][0] is orch.mutation_lm
+    # Candidates it writes are labelled with its model, not the mutation model's.
+    assert orch._model_label("mutate_general" + SPECULATOR_FRONTIER_TAG) == "gpt-5"
+    assert orch._model_label("mutate_general") == "qwen3-30b-a3b-instruct-2507"
+
+
+def test_speculator_frontier_fraction_needs_a_model(tmp_path):
+    import pytest
+
+    with pytest.raises(ValueError):
+        _orchestrator(tmp_path, speculator_frontier_fraction=0.1)
+    with pytest.raises(ValueError):
+        _orchestrator(tmp_path, speculator_frontier_model="m", speculator_frontier_fraction=1.5)
