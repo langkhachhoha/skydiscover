@@ -40,7 +40,14 @@ STATUS_RE = re.compile(
     r"\[Status\] Cost: \$([\d.]+) \| Evals: (\d+) .*?Best: ([-\w.]+) \| Elapsed: (\d+)s"
 )
 ITER_RE = re.compile(r"Iteration (\d+): .*?completed in ([\d.]+)s \(llm: ([\d.]+)s, eval: ([\d.]+)s\)")
+# One line per evaluation the evaluator finished: scored (valid or not), timed out, or crashed;
+# group 1/2/3 = the program id when the log line carries one.
+EVALUATED_RE = re.compile(
+    r"\[evaluator\] (?:Evaluated program(?: (\S+))?(?: \[\w+\])? in |Program(?: (\S+))? timed out after"
+    r"|All attempts failed(?: (\S+?))?:)"
+)
 SUM_RADII_RE = re.compile(r"(?<![\w])sum_radii=([\d.]+)")
+COMBINED_RE = re.compile(r"(?<![\w])combined_score=(-?[\d.]+)")
 STARTED_RE = re.compile(r"^ started at\s*: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", re.M)
 FINISHED_RE = re.compile(r"^ finished at : (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", re.M)
 EXIT_RE = re.compile(r"^ exit status : (\d+)", re.M)
@@ -196,8 +203,9 @@ def collect_baseline(d: Path) -> dict:
     calls = _jsonl(d / "cost_log.jsonl")
     r: dict = {"kind": "baseline"}
 
+    task = d.name.split("__", 1)[0]
     info = _json(d / "run" / "best" / "best_program_info.json")
-    best = _baseline_score(info)
+    best = _baseline_score(info, task)
     if info:
         r["state"] = "DONE"
     else:
@@ -207,14 +215,15 @@ def collect_baseline(d: Path) -> dict:
             key=lambda p: int(p.parent.name.rsplit("_", 1)[-1]) if p.parent.name.rsplit("_", 1)[-1].isdigit() else -1,
         )
         if ckpts:
-            best = _baseline_score(_json(ckpts[-1]))
-        seen = [float(x) for x in SUM_RADII_RE.findall(log)]
+            best = _baseline_score(_json(ckpts[-1]), task)
+        seen = _baseline_scores_seen(log, task)
         if seen and (best is None or max(seen) > best):
             best = max(seen)  # newer than the last checkpoint
     r["best"] = best
 
     iters = ITER_RE.findall(log)
-    r["candidates"] = len(iters)
+    r["candidates"] = _baseline_candidates(log)
+    r["accepted_iterations"] = len(iters)
     if iters:
         r["mean_s_per_solution_call"] = statistics.fmean(float(i[2]) for i in iters)  # llm time per iteration
     r["wall_s"] = _wall_seconds(log, running)
@@ -236,13 +245,64 @@ def collect_baseline(d: Path) -> dict:
     return r
 
 
-def _baseline_score(info) -> float | None:
+def _baseline_candidates(log: str) -> int:
+    """Programs the LLM wrote that the evaluator finished with -- valid, invalid,
+    timed out or crashed -- as SpecEvo's and CORAL's eval counts do.
+
+    The 'Iteration N ... completed' lines alone undercount: GEPA's rejected
+    children and merges, and the retries after a failed evaluation, never
+    print one (GEPA on circle_packing: 6 such lines for 83 evaluated programs).
+    The seed's evaluation is the one logged before any LLM call (llm_calls=0);
+    a program evaluated again under the same id (the best one, re-scored at
+    the end of a run) counts once.
+    """
+    seen: set[str] = set()
+    n = seeds = 0
+    tagged = False
+    for line in log.splitlines():
+        m = EVALUATED_RE.search(line)
+        if not m:
+            continue
+        pid = next((g for g in m.groups() if g), None)
+        if pid is not None:
+            if pid in seen:
+                continue
+            seen.add(pid)
+        n += 1
+        if "llm_calls=" in line:
+            tagged = True
+            seeds += "llm_calls=0]" in line
+    if n and not tagged:
+        seeds = 1   # no cost suffix in this log: assume the first one was the seed
+    return n - seeds
+
+
+def _baseline_scores_seen(log: str, task: str) -> list[float]:
+    """Every score the evaluator has logged so far, in the task's own units --
+    the live best before the first checkpoint (every 10 iterations) exists.
+    Circle packing: sum_radii (its combined_score is a ratio to CP26_TARGET).
+    Any other task: combined_score of each finished evaluation (invalid ones
+    score 0, so the max is the best valid program)."""
+    if task == "circle_packing":
+        return [float(x) for x in SUM_RADII_RE.findall(log)]
+    return [
+        float(m.group(1))
+        for line in log.splitlines()
+        if "[evaluator] Evaluated program" in line and (m := COMBINED_RE.search(line))
+    ]
+
+
+def _baseline_score(info, task: str = "circle_packing") -> float | None:
+    """The task's own objective: sum of radii for circle packing (whose
+    combined_score is the ratio to CP26_TARGET), combined_score otherwise."""
     if not info:
         return None
     m = info.get("metrics") or {}
     v = _num(m.get("sum_radii"))
     if v is None and _num(m.get("combined_score")) is not None:
-        v = float(m["combined_score"]) * CP26_TARGET
+        v = float(m["combined_score"])
+        if task == "circle_packing":
+            v *= CP26_TARGET
     return v
 
 
@@ -309,7 +369,7 @@ def read_jobs() -> list[tuple[str, str, str, str, Path]]:
 
 
 def cmd_status(jobs) -> None:
-    hdr = f"{'lane':<4} {'task':<20} {'arm':<20} {'state':<8} {'best':>8} {'cost':>7} {'evals':>6} {'wall':>6}  stopped by"
+    hdr = f"{'lane':<4} {'task':<20} {'arm':<22} {'state':<8} {'best':>8} {'cost':>7} {'evals':>6} {'wall':>6}  stopped by"
     print(hdr)
     print("-" * len(hdr))
     last_lane = None
@@ -320,7 +380,7 @@ def cmd_status(jobs) -> None:
         r = collect(kind, d)
         live = r["state"] == "RUNNING"
         print(
-            f"{lane:<4} {task:<20} {arm:<20} {r['state']:<8} {_f(r.get('best')):>8} "
+            f"{lane:<4} {task:<20} {arm:<22} {r['state']:<8} {_f(r.get('best')):>8} "
             f"{_f(r.get('cost'), '${:.2f}'):>7} {_f(r.get('candidates'), '{}'):>6} {_dur(r.get('wall_s')):>6}  "
             f"{'(live)' if live else r.get('stopped_by', '')}"
         )
@@ -368,8 +428,15 @@ def cmd_compare(jobs, out_dir: Path | None) -> None:
             r["reasoning_share"] = (r.get("reasoning_tokens") or 0) / r["output_tokens"]
         results.append(r)
 
-    headers = [h for _, h, _ in COLUMNS]
-    rows = [[fmt(r.get(k)) if k not in ("label", "state") else str(r.get(k, "-")) for k, _, fmt in COLUMNS] for r in results]
+    # The sum_radii header and the /2.635 column only mean something for
+    # circle_packing; any other task shows its own objective under "best".
+    tasks = {j[1] for j in jobs}
+    cp_only = tasks == {"circle_packing"}
+    cols = COLUMNS if cp_only else [
+        (k, "best" if k == "best" else h, f) for k, h, f in COLUMNS if k != "ratio" or "circle_packing" in tasks
+    ]
+    headers = [h for _, h, _ in cols]
+    rows = [[fmt(r.get(k)) if k not in ("label", "state") else str(r.get(k, "-")) for k, _, fmt in cols] for r in results]
     main = _md_table(headers, rows)
 
     mrows = []
@@ -404,10 +471,21 @@ def cmd_compare(jobs, out_dir: Path | None) -> None:
         "- LLM s/solution: SpecEvo = mean latency of the calls that return a program "
         "(mutate, crossover, init, navigator); baselines = mean LLM time per iteration "
         "(all of that iteration's calls), from the 'Iteration N ... (llm: Xs ...)' lines.\n"
+        "- candidates: programs the LLM wrote that were evaluated (invalid, timed-out and, for GEPA, "
+        "rejected ones included; the seed excluded), the same count as SpecEvo's evals.\n"
         "- wall s/candidate: wall time / candidates evaluated, evaluation time included.\n"
-        "- best sum_radii: SpecEvo scores with levi/examples/circle_packing, baselines with "
-        "benchmarks/math/circle_packing; both are the sum of the 26 radii of a valid packing."
     )
+    best_notes = {
+        "circle_packing": "circle_packing: sum of the 26 radii of a valid packing (SpecEvo scored by "
+                          "levi/examples/circle_packing, baselines by benchmarks/math/circle_packing)",
+        "polyominoes": "polyominoes: Frontier-CS score 0..100, mean per-case ratio over 70 tests "
+                       "(benchmarks/coral_tasks/polyominoes/judge.py)",
+        "kernel_builder": "kernel_builder: 147734 / cycles, the speed-up over the naive kernel "
+                          "(cycles = 147734 / best; official best 1363 = 108.4)",
+    }
+    for t in sorted(tasks):
+        if t in best_notes:
+            notes += f"- {'best sum_radii' if cp_only else 'best'} for {best_notes[t]}.\n"
     text = f"{main}\n\nPer model\n\n{per_model}\n" if per_model else f"{main}\n"
     if per_role:
         text += f"\nSpecEvo calls by role\n\n{per_role}\n"
