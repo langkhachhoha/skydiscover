@@ -159,9 +159,12 @@ def score_fn(run_packing, _inputs=None) -> dict:
         centers = _to_array(centers_raw, (N_CIRCLES, 2), "centers")
         radii = _to_array(radii_raw, (N_CIRCLES,), "radii")
 
-        sum_radii = float(sum_radii_raw)
-        if not np.isfinite(sum_radii):
-            return {"error": "sum_radii is non-finite"}
+        # Score the circles themselves, never the program's own claim: a
+        # candidate returning valid circles with a wrong third value (e.g. an
+        # optimizer objective) used to score that value -- 1e21 in one run.
+        # The baselines' evaluator does the same (np.sum(radii)).
+        reported_sum = float(sum_radii_raw)
+        sum_radii = float(np.sum(radii))
 
         descriptors = compute_behavior_descriptors(centers, radii)
         valid, reason = evaluate_packing_output(centers, radii)
@@ -181,6 +184,8 @@ def score_fn(run_packing, _inputs=None) -> dict:
             "score": score,
             "valid": 1.0,
             "sum_radii": sum_radii,
+            "reported_sum_mismatch": float(min(abs(reported_sum - sum_radii), 1e30))
+            if np.isfinite(reported_sum) else 1e30,
             "execution_time": exec_time,
             **descriptors,
         }
