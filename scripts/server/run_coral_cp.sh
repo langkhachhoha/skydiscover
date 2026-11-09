@@ -27,6 +27,17 @@
 #   p2  tmux coral_kern kernel_builder       CORAL examples/kernel_builder, CORAL's grader (cycles,
 #                                            lower is better); best = 147734 / cycles  (gateway :PORT_BASE+4)
 #
+# and the multi-agent version of c1/c2 through scripts/server/run_coral_cp2.sh
+# (CORAL_SUITE=cp2: 2 agents sharing one run, 100 graded attempts in total or
+# 3 hours; outputs under GROUP=coral_exp_2ag):
+#   m1  tmux coral_cp_2ag   circle_packing       (gateway :PORT_BASE+5)
+#   m2  tmux coral_cpr_2ag  circle_packing_rect  (gateway :PORT_BASE+6)
+# and the multi-agent version of p1/p2 through scripts/server/run_coral_pk2.sh
+# (CORAL_SUITE=pk2: 2 agents sharing one run, 3 hours, no eval cap -- the
+# paper's matched wall-clock; outputs under GROUP=coral_exp_2ag):
+#   q1  tmux coral_poly_2ag  polyominoes         (gateway :PORT_BASE+7)
+#   q2  tmux coral_kern_2ag  kernel_builder      (gateway :PORT_BASE+8)
+#
 # What runs: CORAL's own tasks (CORAL_DIR/examples/math/<task>: task text, seed,
 # grader), with $CORAL_AGENTS OpenCode agent(s) on $CORAL_MODEL. Agent traffic
 # goes OpenCode -> CORAL gateway (LiteLLM, logs every request with its usage)
@@ -46,10 +57,10 @@
 # Restarting is safe: a finished job is skipped; one that died is moved aside.
 #
 # Knobs (environment variables, defaults in brackets):
-#   GROUP [coral_exp]   CORAL_SECONDS [10800]   CORAL_KILL_AFTER [600]
-#   CORAL_MAX_EVALS [100; pk: 0] (0 = no cap)   CORAL_EVAL_POLL [10]
-#   CORAL_MODEL [openrouter/openai/gpt-5]   CORAL_AGENTS [1]   PORT_BASE [4100]
-#   CORAL_DIR [/home/ubuntu/projects/CORAL]   CORAL_SUITE [cp] (cp: c1 c2 | pk: p1 p2)
+#   GROUP [coral_exp; cp2, pk2: coral_exp_2ag]   CORAL_SECONDS [10800]   CORAL_KILL_AFTER [600]
+#   CORAL_MAX_EVALS [100; pk, pk2: 0] (0 = no cap)   CORAL_EVAL_POLL [10]
+#   CORAL_MODEL [openrouter/openai/gpt-5]   CORAL_AGENTS [1; cp2, pk2: 2]   PORT_BASE [4100]
+#   CORAL_DIR [/home/ubuntu/projects/CORAL]   CORAL_SUITE [cp] (cp: c1 c2 | cp2: m1 m2 | pk: p1 p2 | pk2: q1 q2)
 #   FRONTIER_CS_DIR [/home/ubuntu/projects/Frontier-CS]   JUDGE_WORKERS [3]   (polyominoes)
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -61,19 +72,21 @@ TOOLS="$REPO_ROOT/scripts/server/coral_tools.py"
 
 CORAL_SUITE="${CORAL_SUITE:-cp}"
 case "$CORAL_SUITE" in
-    cp) LANES=(c1 c2); DEFAULT_MAX_EVALS=100 ;;
-    pk) LANES=(p1 p2); DEFAULT_MAX_EVALS=0 ;;
-    *)  echo "ERROR: CORAL_SUITE must be cp or pk, not '$CORAL_SUITE'" >&2; exit 1 ;;
+    cp)  LANES=(c1 c2); DEFAULT_MAX_EVALS=100; DEFAULT_AGENTS=1; DEFAULT_GROUP=coral_exp ;;
+    cp2) LANES=(m1 m2); DEFAULT_MAX_EVALS=100; DEFAULT_AGENTS=2; DEFAULT_GROUP=coral_exp_2ag ;;
+    pk)  LANES=(p1 p2); DEFAULT_MAX_EVALS=0;   DEFAULT_AGENTS=1; DEFAULT_GROUP=coral_exp ;;
+    pk2) LANES=(q1 q2); DEFAULT_MAX_EVALS=0;   DEFAULT_AGENTS=2; DEFAULT_GROUP=coral_exp_2ag ;;
+    *)   echo "ERROR: CORAL_SUITE must be cp, cp2, pk or pk2, not '$CORAL_SUITE'" >&2; exit 1 ;;
 esac
 ENTRY="$REPO_ROOT/scripts/server/run_coral_$CORAL_SUITE.sh"   # what the user types, for messages
 
-GROUP="${GROUP:-coral_exp}"
+GROUP="${GROUP:-$DEFAULT_GROUP}"
 CORAL_SECONDS="${CORAL_SECONDS:-10800}"
 CORAL_KILL_AFTER="${CORAL_KILL_AFTER:-600}"
 CORAL_MAX_EVALS="${CORAL_MAX_EVALS:-$DEFAULT_MAX_EVALS}"
 CORAL_EVAL_POLL="${CORAL_EVAL_POLL:-10}"
 CORAL_MODEL="${CORAL_MODEL:-openrouter/openai/gpt-5}"
-CORAL_AGENTS="${CORAL_AGENTS:-1}"
+CORAL_AGENTS="${CORAL_AGENTS:-$DEFAULT_AGENTS}"
 PORT_BASE="${PORT_BASE:-4100}"
 CORAL_DIR="${CORAL_DIR:-/home/ubuntu/projects/CORAL}"
 FRONTIER_CS_DIR="${FRONTIER_CS_DIR:-/home/ubuntu/projects/Frontier-CS}"
@@ -90,10 +103,12 @@ ts()  { date '+%Y-%m-%d %H:%M:%S'; }
 
 lane_session() {
     case " ${LANES[*]} " in *" $1 "*) ;; *) die "unknown lane '$1' for $(basename "$ENTRY") (${LANES[*]})" ;; esac
-    case "$1" in c1) echo coral_cp ;; c2) echo coral_cpr ;; p1) echo coral_poly ;; p2) echo coral_kern ;; esac
+    case "$1" in c1) echo coral_cp ;; c2) echo coral_cpr ;; p1) echo coral_poly ;; p2) echo coral_kern ;;
+                 m1) echo coral_cp_2ag ;; m2) echo coral_cpr_2ag ;; q1) echo coral_poly_2ag ;; q2) echo coral_kern_2ag ;; esac
 }
-lane_task() { case "$1" in c1) echo circle_packing ;; c2) echo circle_packing_rect ;; p1) echo polyominoes ;; p2) echo kernel_builder ;; esac; }
-lane_port() { case "$1" in c1) echo $((PORT_BASE + 1)) ;; c2) echo $((PORT_BASE + 2)) ;; p1) echo $((PORT_BASE + 3)) ;; p2) echo $((PORT_BASE + 4)) ;; esac; }
+lane_task() { case "$1" in c1|m1) echo circle_packing ;; c2|m2) echo circle_packing_rect ;; p1|q1) echo polyominoes ;; p2|q2) echo kernel_builder ;; esac; }
+lane_port() { case "$1" in c1) echo $((PORT_BASE + 1)) ;; c2) echo $((PORT_BASE + 2)) ;; p1) echo $((PORT_BASE + 3)) ;; p2) echo $((PORT_BASE + 4)) ;;
+                           m1) echo $((PORT_BASE + 5)) ;; m2) echo $((PORT_BASE + 6)) ;; q1) echo $((PORT_BASE + 7)) ;; q2) echo $((PORT_BASE + 8)) ;; esac; }
 job_dir()      { echo "$GROUP_DIR/$(lane_task "$1")"; }
 # Finished = ran out its clock (timeout's 124; 0 if CORAL ended on its own) or
 # hit the eval cap (SIGTERM: 0, or 143 if CORAL died of the signal), and not
@@ -341,7 +356,7 @@ cmd_start() {
         tmux new-session -d -s "$(lane_session "$l")" -c "$REPO_ROOT" \
             "env $env_args bash '$SELF' _lane $l 2>&1 | tee -a '$GROUP_DIR/lane_$l.log'; \
 echo; bash '$SELF' status $l; exec bash"
-        printf '%-3s tmux %-10s %-20s %s agent(s), %ss%s  ->  %s/\n' "$l" "$(lane_session "$l")" "$(lane_task "$l")" \
+        printf '%-3s tmux %-13s %-20s %s agent(s), %ss%s  ->  %s/\n' "$l" "$(lane_session "$l")" "$(lane_task "$l")" \
             "$CORAL_AGENTS" "$CORAL_SECONDS" "$( (( CORAL_MAX_EVALS > 0 )) && echo " or $CORAL_MAX_EVALS evals")" "$(job_dir "$l")"
     done
     cat <<EOF
