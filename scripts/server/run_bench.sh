@@ -55,6 +55,7 @@ BASELINE="evox"
 BENCHMARK_DIR="benchmarks/math/circle_packing"
 ITERATIONS="100"
 MODEL="openrouter/openai/gpt-5"
+REASONING_EFFORT=""   # empty = the benchmark config's / provider's default
 # baseline.yml caps the job with `timeout-minutes: 180`; mirror that as the
 # default here. blade.yml has no such cap, so blade defaults to no timeout
 # (it has its own graceful --seconds budget instead).
@@ -138,6 +139,10 @@ baseline options (defaults match baseline.yml)
   --benchmark-dir DIR         Benchmark directory. (default: benchmarks/math/circle_packing)
   --iterations N              Iterations to run. (default: 100)
   --model ID                  OpenRouter model id. (default: openrouter/openai/gpt-5)
+  --reasoning-effort LEVEL    reasoning_effort sent with every LLM call (minimal | low |
+                              medium | high). Written into a copy of the benchmark's
+                              config.yaml (llm.reasoning_effort) in the output dir.
+                              (default: unset = the config's value / provider default)
   --dollars N                 Max USD spend; the run stops itself at the next iteration
                               boundary once tracked LLM cost reaches it, keeping every
                               result written so far. Soft cap — in-flight calls still
@@ -200,6 +205,7 @@ while [[ $# -gt 0 ]]; do
         --benchmark-dir)         BENCHMARK_DIR="$2"; shift 2 ;;
         --iterations)            ITERATIONS="$2"; shift 2 ;;
         --model)                 MODEL="$2"; shift 2 ;;
+        --reasoning-effort)      REASONING_EFFORT="$2"; shift 2 ;;
         # server-only
         --tmux)                  USE_TMUX=1; shift ;;
         --session)               SESSION="$2"; shift 2 ;;
@@ -317,6 +323,7 @@ if [[ "$USE_TMUX" == "1" && "${RUN_BENCH_INSIDE_TMUX:-0}" != "1" ]]; then
     else
         INNER+=(--baseline "$BASELINE" --benchmark-dir "$BENCHMARK_DIR"
                 --iterations "$ITERATIONS" --model "$MODEL" --seconds "$SECONDS_CAP")
+        [[ -n "$REASONING_EFFORT" ]] && INNER+=(--reasoning-effort "$REASONING_EFFORT")
     fi
     # --session is passed through purely so the pane can record it in the log
     # header: the run dir is named after the run id, but what a human remembers
@@ -426,6 +433,7 @@ fi
     else
         echo " baseline    : $BASELINE"
         echo " model       : $MODEL"
+        echo " reasoning   : ${REASONING_EFFORT:-config / provider default}"
         echo " iterations  : $ITERATIONS"
         echo " budget      : dollars='${DOLLARS}' seconds='${SECONDS_CAP}'"
     fi
@@ -622,8 +630,26 @@ else
     # Graceful wall-clock budget, read by skydiscover.runner.
     export SKYDISCOVER_MAX_SECONDS="$SECONDS_CAP"
 
+    # --reasoning-effort: run on a copy of the config with llm.reasoning_effort
+    # set; skydiscover pushes it onto every model, --model's included.
+    RUN_CONFIG="$BENCHMARK_DIR/config.yaml"
+    if [[ -n "$REASONING_EFFORT" ]]; then
+        RUN_CONFIG="$OUTPUT_DIR/config.reasoning_${REASONING_EFFORT}.yaml"
+        python - "$BENCHMARK_DIR/config.yaml" "$RUN_CONFIG" "$REASONING_EFFORT" <<'PY' || die "could not write $RUN_CONFIG"
+import sys, yaml
+src, dst, effort = sys.argv[1:]
+cfg = yaml.safe_load(open(src)) or {}
+cfg.setdefault("llm", {})["reasoning_effort"] = effort
+for m in cfg["llm"].get("models") or []:
+    if isinstance(m, dict):
+        m["reasoning_effort"] = effort
+yaml.safe_dump(cfg, open(dst, "w"), sort_keys=False, allow_unicode=True)
+PY
+        echo ">>> reasoning_effort=$REASONING_EFFORT -> $RUN_CONFIG" | tee -a "$LOG_FILE"
+    fi
+
     CMD=(skydiscover-run "$INITIAL_PROGRAM" "$EVAL_FILE"
-         --config "$BENCHMARK_DIR/config.yaml"
+         --config "$RUN_CONFIG"
          --search "$BASELINE"
          --model "$MODEL"
          --iterations "$ITERATIONS"

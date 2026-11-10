@@ -47,6 +47,15 @@
 #                           Speculator call (mutate / crossover) on gpt-5 instead of
 #                           qwen3-30b ($T45_SPEC_FRONTIER_FRACTION; the bootstrap stays as is)
 #
+# Lanes t6..t9 — the four t3 baselines again, one per lane so they run side by
+# side, with gpt-5 at reasoning_effort=$T69_REASONING_EFFORT (default low). Same
+# setup as t3 otherwise: circle_packing, one LLM call at a time, T3_SECONDS (3h)
+# and T3_ITERATIONS (100) per run, whichever comes first.
+#   t6 — tmux cp_t6_evox — evox            t8 — tmux cp_t8_gepa — gepa_native
+#   t7 — tmux cp_t7_ada  — adaevolve       t9 — tmux cp_t9_oe   — openevolve_native
+#   All four write to $GROUP/t6_baselines_gpt5_<effort>/; `compare t6 t7 t8 t9`
+#   puts the table there. Started only when named: start t6 t7 t8 t9.
+#
 # Tasks: circle_packing      (26 circles in the unit square)
 #        circle_packing_rect (21 circles in a rectangle of perimeter 4)
 #
@@ -63,7 +72,7 @@
 #   T3_SECONDS [10800] T3_HARD_TIMEOUT [11700] T3_DOLLARS [40]  T3_ITERATIONS [100]
 #   T45_SECONDS [5400] T45_HARD_TIMEOUT [6300] T45_DOLLARS [25]  (runaway guard; '' = none)
 #   T45_ADVISOR_INTERVAL [10]  T45_ADVISOR_MAX_TOKENS [16000]  T45_SPEC_FRONTIER_FRACTION [0.1]
-#   BASELINE_MODEL [gpt-5]
+#   BASELINE_MODEL [gpt-5]   T69_REASONING_EFFORT [low]
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -100,13 +109,14 @@ T45_DOLLARS="${T45_DOLLARS-25}"
 T45_ADVISOR_INTERVAL="${T45_ADVISOR_INTERVAL:-10}"
 T45_ADVISOR_MAX_TOKENS="${T45_ADVISOR_MAX_TOKENS:-16000}"
 T45_SPEC_FRONTIER_FRACTION="${T45_SPEC_FRONTIER_FRACTION:-0.1}"
+T69_REASONING_EFFORT="${T69_REASONING_EFFORT:-low}"
 
 # Every knob above, so a lane started inside tmux sees the same values.
 KNOBS=(GROUP WORKERS PE_INTERVAL EVAL_TIMEOUT THREADS_PER_EVAL MUTATION_MODEL PARADIGM_MODEL GPT5 QWEN
        BASELINE_MODEL T1_SECONDS T1_HARD_TIMEOUT T1_DOLLARS T2_DOLLARS T2_SECONDS T2_HARD_TIMEOUT
        T2_ADVISOR_INTERVAL T2_ADVISOR_MAX_TOKENS T3_SECONDS T3_HARD_TIMEOUT T3_DOLLARS T3_ITERATIONS
        T45_SECONDS T45_HARD_TIMEOUT T45_DOLLARS T45_ADVISOR_INTERVAL T45_ADVISOR_MAX_TOKENS
-       T45_SPEC_FRONTIER_FRACTION)
+       T45_SPEC_FRONTIER_FRACTION T69_REASONING_EFFORT)
 
 DRY_RUN="${DRY_RUN:-0}"
 GROUP_DIR="outputs/server/$GROUP"
@@ -127,11 +137,16 @@ ts()  { date '+%Y-%m-%d %H:%M:%S'; }
 
 lane_session() { case "$1" in t1) echo cp_t1_nav ;; t2) echo cp_t2_budget ;; t3) echo cp_t3_base ;;
                                t4) echo cp_t4_circle ;; t5) echo cp_t5_rect ;;
-                               *) die "unknown lane '$1' (t1 | t2 | t3 | t4 | t5)" ;; esac; }
+                               t6) echo cp_t6_evox ;; t7) echo cp_t7_ada ;; t8) echo cp_t8_gepa ;; t9) echo cp_t9_oe ;;
+                               *) die "unknown lane '$1' (t1 | t2 | t3 | t4 | t5 | t6 | t7 | t8 | t9)" ;; esac; }
 lane_dir()     { case "$1" in t1) echo "$GROUP_DIR/t1_navigator" ;; t2) echo "$GROUP_DIR/t2_budget3usd" ;; t3) echo "$GROUP_DIR/t3_baselines" ;;
-                               t4) echo "$GROUP_DIR/t4_circle_packing_90m" ;; t5) echo "$GROUP_DIR/t5_circle_packing_rect_90m" ;; esac; }
+                               t4) echo "$GROUP_DIR/t4_circle_packing_90m" ;; t5) echo "$GROUP_DIR/t5_circle_packing_rect_90m" ;;
+                               t[6-9]) echo "$GROUP_DIR/t6_baselines_gpt5_$T69_REASONING_EFFORT" ;; esac; }
+lane_log()     { case "$1" in t[6-9]) echo "$(lane_dir "$1")/lane_$1.log" ;; *) echo "$(lane_dir "$1")/lane.log" ;; esac; }
 lane_title()   { case "$1" in t1) echo "Navigator swap, ${T1_SECONDS}s each" ;; t2) echo "\$${T2_DOLLARS} per run" ;; t3) echo "baselines vs SpecEvo, ${T3_SECONDS}s each, 1 worker" ;;
-                               t4) echo "circle_packing, 5 arms, ${T45_SECONDS}s each" ;; t5) echo "circle_packing_rect, 5 arms, ${T45_SECONDS}s each" ;; esac; }
+                               t4) echo "circle_packing, 5 arms, ${T45_SECONDS}s each" ;; t5) echo "circle_packing_rect, 5 arms, ${T45_SECONDS}s each" ;;
+                               t[6-9]) echo "$(lane_arm "$1"), gpt-5 effort=$T69_REASONING_EFFORT, ${T3_SECONDS}s / ${T3_ITERATIONS} iters" ;; esac; }
+lane_arm()     { case "$1" in t6) echo evox ;; t7) echo adaevolve ;; t8) echo gepa_native ;; t9) echo openevolve_native ;; esac; }
 
 lane_jobs() {   # lane -> "<lane> <task> <arm>" lines, in run order
     local lane="$1" arm task
@@ -141,10 +156,11 @@ lane_jobs() {   # lane -> "<lane> <task> <arm>" lines, in run order
         t3) for arm in "${T3_ARMS[@]}"; do echo "t3 circle_packing $arm"; done ;;
         t4) for arm in "${T45_ARMS[@]}"; do echo "t4 circle_packing $arm"; done ;;
         t5) for arm in "${T45_ARMS[@]}"; do echo "t5 circle_packing_rect $arm"; done ;;
+        t[6-9]) echo "$lane circle_packing $(lane_arm "$lane")" ;;
     esac
 }
 
-job_kind() { case "$1:$2" in t3:specevo) echo blade ;; t3:*) echo baseline ;; *) echo blade ;; esac; }
+job_kind() { case "$1:$2" in t3:specevo) echo blade ;; t3:*|t[6-9]:*) echo baseline ;; *) echo blade ;; esac; }
 job_dir()  { echo "$(lane_dir "$1")/$2__$3"; }
 
 job_done() {    # lane task arm -> 0 when the run left its final result
@@ -168,6 +184,7 @@ build_cmd() {   # lane task arm
              --model "$BASELINE_MODEL" --iterations "$T3_ITERATIONS"
              --seconds "$T3_SECONDS" --timeout "$T3_HARD_TIMEOUT" --dollars "$T3_DOLLARS"
              --run-id "$run_id" --output-dir "$out")
+        [[ "$lane" == t[6-9] ]] && CMD+=(--reasoning-effort "$T69_REASONING_EFFORT")
         [[ "$DRY_RUN" == 1 ]] && CMD+=(--dry-run)
         return 0
     fi
@@ -285,7 +302,8 @@ cmd_compare() {   # one lane -> its own dir; several -> $GROUP_DIR/compare_<l1>_
     local lanes out l
     lanes=("$@"); [[ ${#lanes[@]} -eq 0 ]] && lanes=(t3)
     for l in "${lanes[@]}"; do lane_session "$l" >/dev/null; done
-    if [[ ${#lanes[@]} -eq 1 ]]; then out="$(lane_dir "${lanes[0]}")"
+    # One lane, or several sharing a directory (t6..t9) -> that directory.
+    if [[ "$(for l in "${lanes[@]}"; do lane_dir "$l"; done | sort -u | wc -l)" -eq 1 ]]; then out="$(lane_dir "${lanes[0]}")"
     else out="$GROUP_DIR/compare_$(IFS=_; echo "${lanes[*]}")"; mkdir -p "$out"; fi
     report_jobs "${lanes[@]}" | py "$REPO_ROOT/scripts/server/cp_report.py" compare --out "$REPO_ROOT/$out"
 }
@@ -351,7 +369,7 @@ print("key check  : used $%.2f, limit %s, remaining %s"
     for l in "${lanes[@]}"; do
         mkdir -p "$(lane_dir "$l")"
         tmux new-session -d -s "$(lane_session "$l")" -c "$REPO_ROOT" \
-            "env $env_args bash '$SELF' _lane $l 2>&1 | tee -a '$(lane_dir "$l")/lane.log'; \
+            "env $env_args bash '$SELF' _lane $l 2>&1 | tee -a '$(lane_log "$l")'; \
 echo; bash '$SELF' status $l; exec bash"
         printf '%-3s tmux %-13s %s  ->  %s/\n' "$l" "$(lane_session "$l")" "$(lane_title "$l")" "$(lane_dir "$l")"
     done
@@ -359,7 +377,7 @@ echo; bash '$SELF' status $l; exec bash"
 
 watch      : tmux attach -t $(lane_session "${lanes[0]}")     (detach: Ctrl-b then d)
 progress   : $0 status            (live: watch -n 60 $0 status)
-tables     : $0 compare t3      $0 compare t4 t5
+tables     : $0 compare t3      $0 compare t4 t5      $0 compare t6 t7 t8 t9
 stop       : $0 stop [lane ...]
 EOF
 }
